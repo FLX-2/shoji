@@ -96,6 +96,8 @@ export const bridge = {
     invoke<string>("commit_thread", { repo, branch, message, thread }),
   /** Every thread in the ledger with its runs and calls, newest first. */
   ledgerThreads: () => invoke<LedgerThread[]>("ledger_threads"),
+  /** Asks where to save a CSV file and writes it there. Returns the path, or null if cancelled. */
+  exportCsv: (name: string, contents: string) => invoke<string | null>("export_csv", { name, contents }),
   onEvent: (handler: (run: number, event: RuntimeEvent) => void) =>
     listen<{ run: number; event: RuntimeEvent }>("runtime-event", (e) => handler(e.payload.run, e.payload.event)),
   onExit: (handler: (exit: RunExit) => void) => listen<RunExit>("runtime-exit", (e) => handler(e.payload)),
