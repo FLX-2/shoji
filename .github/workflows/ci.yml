@@ -62,6 +62,9 @@ jobs:
           workspaces: src-tauri
       - run: pnpm install --frozen-lockfile
       - run: pnpm tauri build
+      - name: Test the Rust side
+        if: runner.os == 'Linux'
+        run: cargo test --manifest-path src-tauri/Cargo.toml
       - uses: actions/upload-artifact@v4
         with:
           name: shoji-${{ matrix.name }}

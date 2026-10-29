@@ -4,9 +4,11 @@ import type { Bridge, KeyStatus, RunExit, RunRequest } from "../bridge";
 
 /** Stands in for the Rust side: records what the app asks for and plays back runtime events. */
 export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
+  /** The project's changes as git would report them; tests set these. */
+  const project = { diff: "", accepted: [] as string[] };
   const onEvent: ((run: number, event: RuntimeEvent) => void)[] = [];
   const onExit: ((exit: RunExit) => void)[] = [];
-  const calls = { starts: [] as RunRequest[], stops: 0 };
+  const calls = { starts: [] as RunRequest[], stops: 0, accepted: [] as string[], reverted: [] as string[] };
   let runs = 0;
 
   const bridge: Bridge = {
@@ -21,6 +23,14 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     stopRun: async () => {
       calls.stops++;
     },
+    changes: async () => ({ ...project }),
+    acceptFile: async (_, path) => {
+      calls.accepted.push(path);
+      project.accepted.push(path);
+    },
+    revertFile: async (_, path) => {
+      calls.reverted.push(path);
+    },
     onEvent: async (handler) => {
       onEvent.push(handler);
       return () => onEvent.splice(onEvent.indexOf(handler), 1);
@@ -34,6 +44,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   return {
     bridge,
     calls,
+    project,
     /** Sends events from the latest run. */
     emit: (...events: RuntimeEvent[]) =>
       act(() => events.forEach((event) => onEvent.forEach((h) => h(runs, event)))),

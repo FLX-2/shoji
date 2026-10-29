@@ -26,6 +26,13 @@ export interface RunExit {
   error: string;
 }
 
+export interface ProjectChanges {
+  /** Every change against the project's last commit, as a unified diff. */
+  diff: string;
+  /** Changed files the person has accepted. Git holds them as staged. */
+  accepted: string[];
+}
+
 export const bridge = {
   keyStatus: () => invoke<KeyStatus>("key_status"),
   saveKey: (key: string) => invoke<void>("save_key", { key }),
@@ -34,6 +41,11 @@ export const bridge = {
   /** Starts a run and returns its number, which its events and exit carry. */
   startRun: (request: RunRequest) => invoke<number>("start_run", { request }),
   stopRun: () => invoke<void>("stop_run"),
+  changes: (repo: string) => invoke<ProjectChanges>("changes", { repo }),
+  /** Keeps a file's changes by staging it. */
+  acceptFile: (repo: string, path: string) => invoke<void>("accept_file", { repo, path }),
+  /** Puts a file back as it was at the last commit. */
+  revertFile: (repo: string, path: string) => invoke<void>("revert_file", { repo, path }),
   onEvent: (handler: (run: number, event: RuntimeEvent) => void) =>
     listen<{ run: number; event: RuntimeEvent }>("runtime-event", (e) => handler(e.payload.run, e.payload.event)),
   onExit: (handler: (exit: RunExit) => void) => listen<RunExit>("runtime-exit", (e) => handler(e.payload)),

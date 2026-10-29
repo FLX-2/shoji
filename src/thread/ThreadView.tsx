@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { CheckResult } from "../../runtime/src/events";
 import { MODELS } from "../../runtime/src/models";
+import type { Bridge } from "../bridge";
+import { CodeView } from "../code/CodeView";
+import { useChanges } from "../code/useChanges";
 import { Composer } from "../shell/Composer";
 import { Mark } from "../shell/Mark";
 import {
@@ -17,6 +20,7 @@ import {
 import { isRunning, threadCost, type Thread, type Turn } from "./useThread";
 
 interface ThreadViewProps {
+  bridge: Bridge;
   thread: Thread;
   onStop: () => void;
   onRequestChanges: (notes: string) => void;
@@ -29,8 +33,9 @@ const STATUS = {
   failed: "Failed",
 };
 
-/** The thread's Conversation: each ask, then the steps that answered it. */
-export function ThreadView({ thread, onStop, onRequestChanges }: ThreadViewProps) {
+/** A thread: its Conversation, where each ask is followed by the steps that answered it,
+ *  and its Code, the files it changed. */
+export function ThreadView({ bridge, thread, onStop, onRequestChanges }: ThreadViewProps) {
   const last = thread.turns[thread.turns.length - 1];
   const running = isRunning(last);
   const runs = thread.turns.map((turn) => foldRun(turn.events));
@@ -38,6 +43,11 @@ export function ThreadView({ thread, onStop, onRequestChanges }: ThreadViewProps
   const spent = threadCost(thread);
   const [asking, setAsking] = useState(false);
   const scroller = useFollow(thread);
+  const [mode, setMode] = useState<"conversation" | "code">("conversation");
+  // Read the project again whenever a run ends or Code opens.
+  const ended = thread.turns.filter((t) => t.exit || t.error).length;
+  const { changes, error, act } = useChanges(bridge, thread.repo, `${ended}-${mode}`);
+  const fileCount = changes?.files.length ?? 0;
 
   const now = lastRun.steps.findLast((s) => s.running);
   const stage = running
@@ -56,6 +66,25 @@ export function ThreadView({ thread, onStop, onRequestChanges }: ThreadViewProps
     <section className="thread">
       <div className="tbar solid">
         <h1>{thread.task.split("\n")[0]}</h1>
+        <nav className="modes" aria-label="Views of this thread">
+          <button
+            type="button"
+            className="mode"
+            aria-current={mode === "conversation" ? "page" : undefined}
+            onClick={() => setMode("conversation")}
+          >
+            Conversation
+          </button>
+          <button
+            type="button"
+            className="mode"
+            aria-current={mode === "code" ? "page" : undefined}
+            onClick={() => setMode("code")}
+          >
+            Code
+            {fileCount > 0 && <span className="cnt">{count(fileCount, "file")}</span>}
+          </button>
+        </nav>
         <span className="stage">
           <span className="dot live" aria-hidden="true" />
           {stage}
@@ -67,7 +96,17 @@ export function ThreadView({ thread, onStop, onRequestChanges }: ThreadViewProps
         )}
       </div>
 
-      <div className="scroll" ref={scroller}>
+      {mode === "code" && (
+        <CodeView
+          changes={changes}
+          error={error}
+          running={running}
+          onAccept={(path) => act(bridge.acceptFile(thread.repo, path))}
+          onRevert={(path) => act(bridge.revertFile(thread.repo, path))}
+        />
+      )}
+
+      <div className="scroll" ref={scroller} hidden={mode !== "conversation"}>
         <div className="tcol">
           {thread.turns.map((turn, i) => (
             <TurnView key={i} turn={turn} run={runs[i]} live={running && i === thread.turns.length - 1} />
@@ -75,7 +114,8 @@ export function ThreadView({ thread, onStop, onRequestChanges }: ThreadViewProps
         </div>
       </div>
 
-      {!running &&
+      {mode === "conversation" &&
+        !running &&
         (asking ? (
           <Composer
             label="Changes"

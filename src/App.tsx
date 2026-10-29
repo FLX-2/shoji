@@ -72,7 +72,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
               }}
             />
           ) : section === "threads" && thread ? (
-            <ThreadView thread={thread} onStop={stop} onRequestChanges={requestChanges} />
+            <ThreadView bridge={bridge} thread={thread} onStop={stop} onRequestChanges={requestChanges} />
           ) : (
             <>
               <div className="mh">

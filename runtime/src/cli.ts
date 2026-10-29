@@ -90,7 +90,11 @@ async function main() {
   if (!isGitRepo(root)) fail(`${root} isn't a git repository.`);
   // Changes build on the thread's own uncommitted work, so only a fresh thread needs a clean project.
   if (!changes && hasChanges(root) && !values["allow-dirty"]) {
-    fail("The project has uncommitted changes. Commit or stash them, or pass --allow-dirty.");
+    fail(
+      values.json
+        ? "The project has uncommitted changes. Commit or stash them, then start the thread again."
+        : "The project has uncommitted changes. Commit or stash them, or pass --allow-dirty.",
+    );
   }
 
   const log = values.log ? fs.openSync(values.log, "a") : null;
