@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   web:
-    name: Typecheck, test and build the front end
+    name: Typecheck, test and build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -20,10 +20,13 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - uses: oven-sh/setup-bun@v2
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - name: Compile the agent runtime
+        run: pnpm runtime:compile && ./dist-runtime/shoji-runtime --help
 
   desktop:
     name: Desktop app (${{ matrix.name }})

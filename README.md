@@ -27,6 +27,16 @@ Other commands:
 | `pnpm typecheck` | Checks types |
 | `pnpm tauri build` | Builds the installable app for this computer |
 
+### The agent runtime
+
+The loop that plans, builds and checks a change lives in `runtime/`. Until the app drives it, you can run it on any git project from the command line. It needs [Bun](https://bun.sh) and an Anthropic API key in `SHOJI_API_KEY` or `ANTHROPIC_API_KEY`.
+
+```sh
+pnpm runtime --repo ../my-project --task "Add a dark mode toggle" --cap 0.50
+```
+
+`--stack haiku` runs every step on Haiku 5.5, which costs a fraction of a cent per task. `--help` lists every option. The runtime stops before any call that could take the thread past its `--cap`.
+
 Every push to a pull request also builds the app for Mac, Windows and Linux. The builds are attached to the CI run.
 
 Builds aren't signed yet. The first time you open Shoji on a Mac, Control-click the app and choose Open. If macOS still blocks it, allow it under System Settings, Privacy & Security.
