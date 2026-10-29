@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { Stack } from "../../runtime/src/stack";
 import type { TrialOutcome } from "../../runtime/src/trial";
 import type { Bridge, LedgerThread, TrialRequest } from "../bridge";
+import { HunkView } from "../code/CodeView";
+import { parseDiff } from "../code/diff";
 import { folderName } from "../home/HomeView";
 import { formatCost } from "../thread/fold";
 import { changedRoles, ROLE_NAMES, seatLabel } from "./lock";
@@ -37,17 +39,20 @@ export function trialLabel(saved: Stack, candidate: Stack): string {
 
 /** The project's accepted threads, newest first, as tasks a trial can replay. */
 export function replayable(threads: LedgerThread[], repo: string) {
-  return threads
-    .filter((t) => t.repo === repo && t.committed && t.runs[0]?.kind === "task")
-    .map((t) => ({
-      task: t.task,
-      // Shoji commits a thread's work as one commit, so its parent is where the task started.
-      base: `${t.committed}^`,
-      // Only the first run: a trial replays the task, not later requests for changes.
-      was: t.runs
-        .filter((run) => run.kind === "task")
-        .reduce((sum, run) => sum + run.calls.reduce((s, c) => s + c.cost, 0), 0),
-    }));
+  return threads.flatMap((t) =>
+    t.repo === repo && t.committed && t.runs[0]?.kind === "task"
+      ? [
+          {
+            task: t.task,
+            commit: t.committed,
+            // Only the first run: a trial replays the task, not later requests for changes.
+            was: t.runs
+              .filter((run) => run.kind === "task")
+              .reduce((sum, run) => sum + run.calls.reduce((s, c) => s + c.cost, 0), 0),
+          },
+        ]
+      : [],
+  );
 }
 
 /** Replays recent accepted tasks on the stack above, and briefs on how it went. */
@@ -177,6 +182,7 @@ function Briefing({
   trial: Trial;
   briefing: NonNullable<ReturnType<typeof trialProgress>["briefing"]>;
 }) {
+  const [open, setOpen] = useState<number | null>(null);
   const n = briefing.outcomes.length;
   const done = briefing.outcomes.filter((o) => o.status === "ready" || o.status === "needs-work");
   const cost = done.reduce((sum, o) => sum + o.cost, 0);
@@ -228,10 +234,50 @@ function Briefing({
             <span className="n">
               {formatCost(o.cost)} <span className="meta">was {formatCost(o.was)}</span>
             </span>
+            {(o.diff || o.accepted) && (
+              <button
+                type="button"
+                className="btn sm ghost"
+                aria-expanded={open === i}
+                onClick={() => setOpen(open === i ? null : i)}
+              >
+                Compare
+              </button>
+            )}
             {o.reason && <span className="why">{o.reason}</span>}
+            {open === i && (
+              <div className="cmp">
+                <DiffFiles label="This trial" diff={o.diff} empty="The trial changed nothing." />
+                <DiffFiles label="What you accepted" diff={o.accepted} empty="The accepted commit couldn't be read." />
+              </div>
+            )}
           </li>
         ))}
       </ul>
     </>
+  );
+}
+
+/** One side of a comparison: each file the diff touches, with its changes. */
+function DiffFiles({ label, diff, empty }: { label: string; diff: string; empty: string }) {
+  const files = parseDiff(diff);
+  return (
+    <section aria-label={label}>
+      <h3>{label}</h3>
+      <div className="diff">
+        {files.length === 0 && <p className="note">{empty}</p>}
+        {files.map((file) => (
+          <div key={file.path} className="cf">
+            <p className="cfh">
+              <span className="path">{file.path}</span>
+              <span className="meta">{file.binary ? "binary" : `+${file.additions} −${file.deletions}`}</span>
+            </p>
+            {file.hunks.map((hunk, i) => (
+              <HunkView key={i} hunk={hunk} gap={i > 0} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

@@ -298,7 +298,7 @@ struct TrialRequest {
     stack: serde_json::Value,
     /// Dollars the whole trial may spend.
     cap: f64,
-    /// The accepted tasks to replay: {task, base, was}, as the runtime's --trial-file takes them.
+    /// The accepted tasks to replay: {task, commit, was}, as the runtime's --trial-file takes them.
     tasks: Vec<serde_json::Value>,
 }
 

@@ -48,6 +48,10 @@ function thread(id: number, task: string, extra: Partial<LedgerThread> = {}): Le
   };
 }
 
+/** A diff that adds one line to a new file. */
+const diff = (path: string, line: string) =>
+  `diff --git a/${path} b/${path}\nnew file mode 100644\n--- /dev/null\n+++ b/${path}\n@@ -0,0 +1 @@\n+${line}\n`;
+
 const LEDGER = [
   thread(1, "Add a toggle", { runs: [run("task", 0.1), run("changes", 0.05)] }),
   thread(2, "Fix the header"),
@@ -96,8 +100,8 @@ describe("trials in Stack", () => {
         stack: { ...STACKS.balanced, review: { model: "claude-sonnet-5-5", effort: "low" } },
         cap: 0.5,
         tasks: [
-          { task: "Add a toggle", base: "c0ffee1^", was: 0.1 },
-          { task: "Fix the header", base: "c0ffee2^", was: 0.1 },
+          { task: "Add a toggle", commit: "c0ffee1", was: 0.1 },
+          { task: "Fix the header", commit: "c0ffee2", was: 0.1 },
         ],
       },
     ]);
@@ -128,21 +132,25 @@ describe("trials in Stack", () => {
       outcomes: [
         {
           task: "Add a toggle",
-          base: "c0ffee1^",
+          commit: "c0ffee1",
           was: 0.1,
           cost: 0.04,
           status: "ready",
           checksPassed: true,
           approved: true,
+          diff: diff("src/Toggle.tsx", "export const on = true;"),
+          accepted: diff("src/Toggle.tsx", "export const on = false;"),
         },
         {
           task: "Fix the header",
-          base: "c0ffee2^",
+          commit: "c0ffee2",
           was: 0.1,
           cost: 0.06,
           status: "needs-work",
           checksPassed: false,
           approved: false,
+          diff: "",
+          accepted: diff("src/Header.tsx", "export const tall = false;"),
         },
       ],
       cost: 0.1,
@@ -157,6 +165,20 @@ describe("trials in Stack", () => {
     expect(within(region).getAllByText("1 of 2")).toHaveLength(2);
     expect(within(region).getByText("Needs work")).toBeTruthy();
     expect(document.querySelector(".app")?.getAttribute("data-state")).toBe("idle");
+
+    // Each task's work can be set beside the work that was accepted.
+    const [first, second] = within(region).getAllByRole("button", { name: "Compare" });
+    fireEvent.click(first);
+    expect(first.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      within(screen.getByRole("region", { name: "This trial" })).getByText("export const on = true;"),
+    ).toBeTruthy();
+    expect(
+      within(screen.getByRole("region", { name: "What you accepted" })).getByText("export const on = false;"),
+    ).toBeTruthy();
+    fireEvent.click(second);
+    expect(first.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.getByText("The trial changed nothing.")).toBeTruthy();
   });
 
   it("stops when asked", async () => {

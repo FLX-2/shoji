@@ -148,7 +148,7 @@ function FilePane(props: {
 }
 
 /** One stretch of change. `gap` marks the unchanged lines skipped since the last one. */
-function HunkView({ hunk, gap }: { hunk: Hunk; gap: boolean }) {
+export function HunkView({ hunk, gap }: { hunk: Hunk; gap: boolean }) {
   return (
     <div className="hunk">
       {gap && <div className="hk" aria-label="Unchanged lines" />}

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { RuntimeEvent, ThreadResult } from "./events";
+import { commitDiff } from "./git";
 import { approves, runThread } from "./pipeline";
 import { defaultChecks } from "./project";
 import type { ModelProvider } from "./provider";
@@ -12,8 +13,11 @@ import { Workspace } from "./workspace";
 /** An accepted task to replay. */
 export interface TrialTask {
   task: string;
-  /** The commit the task started from. */
-  base: string;
+  /**
+   * The commit the person accepted. Shoji commits a thread's work as one commit, so its parent is
+   * where the task started.
+   */
+  commit: string;
   /** What the task cost when it first ran, in dollars. */
   was: number;
 }
@@ -25,6 +29,10 @@ export interface TrialOutcome extends TrialTask {
   /** The task finished and every check passed, or the project has none. */
   checksPassed: boolean;
   approved: boolean;
+  /** What the candidate changed, empty if it changed nothing. */
+  diff: string;
+  /** What the accepted commit changed, to set beside it. */
+  accepted: string;
 }
 
 /** What a trial found: each replayed task, and the totals to set against how they first ran. */
@@ -81,8 +89,10 @@ export async function runTrial(input: TrialInput): Promise<Briefing> {
     emit({ type: "task", index, total: tasks.length, task: task.task });
     let outcome: TrialOutcome;
     let copy: string | null = null;
+    let accepted = "";
     try {
-      copy = scratchCopy(input.root, task.base);
+      copy = scratchCopy(input.root, `${task.commit}^`);
+      accepted = commitDiff(copy, task.commit);
       const result = await runThread({
         task: task.task,
         stack,
@@ -99,10 +109,21 @@ export async function runTrial(input: TrialInput): Promise<Briefing> {
         reason: result.reason,
         checksPassed: finished(result.status) && result.checks.every((c) => c.ok),
         approved: approves(result.review),
+        diff: result.diff,
+        accepted,
       };
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      outcome = { ...task, cost: 0, status: "failed", reason, checksPassed: false, approved: false };
+      outcome = {
+        ...task,
+        cost: 0,
+        status: "failed",
+        reason,
+        checksPassed: false,
+        approved: false,
+        diff: "",
+        accepted,
+      };
     } finally {
       if (copy) removeCopy(copy);
     }

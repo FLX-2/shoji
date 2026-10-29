@@ -1483,7 +1483,7 @@ button.rrow:focus-visible {
 
 .outcomes li {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto 72px;
   gap: 4px 16px;
   align-items: baseline;
   padding: 10px 0;
@@ -1507,4 +1507,81 @@ button.rrow:focus-visible {
   grid-column: 1 / -1;
   font-size: 12.5px;
   color: var(--z6);
+}
+
+.outcomes .btn {
+  grid-column: 4;
+  grid-row: 1;
+  justify-self: end;
+  align-self: center;
+}
+
+/* A trial task's work beside the work the person accepted. */
+.cmp {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 6px 0 4px;
+}
+
+.smain .cmp section {
+  display: block;
+  min-width: 0;
+  border: 1px solid var(--hair2);
+  border-radius: 6px;
+  background: var(--z0);
+}
+
+.cmp h3 {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--z8);
+  border-bottom: 1px solid var(--hair2);
+}
+
+.cmp .diff {
+  max-height: 360px;
+  padding: 8px 0 10px;
+  font-size: 11.5px;
+}
+
+.cmp .diff .l {
+  grid-template-columns: 34px 34px minmax(0, 1fr);
+}
+
+.cmp .diff .tx {
+  padding-left: 10px;
+}
+
+.cmp .hk {
+  margin-left: 68px;
+}
+
+.cf + .cf {
+  margin-top: 12px;
+}
+
+.cfh {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 0 12px 4px;
+  font-size: 11px;
+}
+
+.cfh .path {
+  color: var(--z9);
+}
+
+.cfh .meta {
+  color: var(--z6);
+}
+
+@media (max-width: 1220px) {
+  .cmp {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

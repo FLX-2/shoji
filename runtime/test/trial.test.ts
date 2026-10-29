@@ -14,22 +14,22 @@ function project() {
   const base = git("rev-parse", "HEAD");
   fs.writeFileSync(path.join(root, "src/hello.js"), "export default 'hello, shoji';\n");
   git("-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qam", "Accepted work");
-  return { root, base, git };
+  return { root, base, commit: git("rev-parse", "HEAD"), git };
 }
 
 const TASK = "Make the greeting say hello to Shoji.";
 
 describe("trials", () => {
   it("replays each task from its starting commit on the candidate stack, leaving the project alone", async () => {
-    const { root, base, git } = project();
+    const { root, commit, git } = project();
     const provider = team(() => true);
     const events: TrialEvent[] = [];
     const candidate = { ...STACKS.balanced, review: STACKS.opus.review };
     const briefing = await runTrial({
       root,
       tasks: [
-        { task: TASK, base, was: 0.05 },
-        { task: TASK, base, was: 0.07 },
+        { task: TASK, commit, was: 0.05 },
+        { task: TASK, commit, was: 0.07 },
       ],
       stack: candidate,
       provider,
@@ -43,6 +43,10 @@ describe("trials", () => {
       ["ready", true, true],
     ]);
     expect(briefing.was).toBeCloseTo(0.12);
+    // Each outcome carries the candidate's work and the accepted commit's, to set side by side.
+    expect(briefing.outcomes[0].diff).toContain("+export default 'hello, shoji';");
+    expect(briefing.outcomes[0].accepted).toContain("-export default 'hello';");
+    expect(briefing.outcomes[0].accepted).toContain("+export default 'hello, shoji';");
     expect(briefing.cost).toBeCloseTo(briefing.outcomes[0].cost + briefing.outcomes[1].cost);
     // The review ran on the candidate's model.
     const reviews = provider.requests.filter((r) => roleOf(r) === "reviewer");
@@ -58,26 +62,32 @@ describe("trials", () => {
   });
 
   it("records what the checks and the review said when the candidate falls short", async () => {
-    const { root, base } = project();
+    const { root, commit } = project();
     const briefing = await runTrial({
       root,
-      tasks: [{ task: TASK, base, was: 0.05 }],
+      tasks: [{ task: TASK, commit, was: 0.05 }],
       stack: STACKS.haiku,
       provider: team(() => false, "VERDICT: CHANGES\nThe greeting is unchanged."),
       cap: 1,
       checks: () => [CHECK],
       emit: () => {},
     });
-    expect(briefing.outcomes[0]).toMatchObject({ status: "needs-work", checksPassed: false, approved: false });
+    expect(briefing.outcomes[0]).toMatchObject({
+      status: "needs-work",
+      checksPassed: false,
+      approved: false,
+      diff: "",
+    });
+    expect(briefing.outcomes[0].accepted).toContain("+export default 'hello, shoji';");
     expect(describeBriefing(briefing)).toContain("The review approved 0 of 1.");
     expect(describeBriefing(briefing)).toContain("The 1 that finished cost");
   });
 
   it("stops at the trial's cap and says how many tasks it skipped", async () => {
-    const { root, base } = project();
+    const { root, commit } = project();
     const briefing = await runTrial({
       root,
-      tasks: [0, 1, 2].map(() => ({ task: TASK, base, was: 0.05 })),
+      tasks: [0, 1, 2].map(() => ({ task: TASK, commit, was: 0.05 })),
       stack: STACKS.balanced,
       provider: team(() => true),
       cap: 0.02,
@@ -91,12 +101,12 @@ describe("trials", () => {
   });
 
   it("fails a task whose starting commit is gone, and goes on to the next", async () => {
-    const { root, base } = project();
+    const { root, commit } = project();
     const briefing = await runTrial({
       root,
       tasks: [
-        { task: TASK, base: "0".repeat(40), was: 0.05 },
-        { task: TASK, base, was: 0.05 },
+        { task: TASK, commit: "0".repeat(40), was: 0.05 },
+        { task: TASK, commit, was: 0.05 },
       ],
       stack: STACKS.balanced,
       provider: team(() => true),
@@ -104,7 +114,7 @@ describe("trials", () => {
       checks: () => [CHECK],
       emit: () => {},
     });
-    expect(briefing.outcomes[0]).toMatchObject({ status: "failed", cost: 0, checksPassed: false });
+    expect(briefing.outcomes[0]).toMatchObject({ status: "failed", cost: 0, checksPassed: false, accepted: "" });
     expect(briefing.outcomes[0].reason).toMatch(/isn't in the project any more/);
     expect(briefing.outcomes[1].status).toBe("ready");
   });
