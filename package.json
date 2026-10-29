@@ -14,7 +14,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "runtime": "bun runtime/src/cli.ts",
-    "runtime:compile": "bun build runtime/src/cli.ts --compile --outfile dist-runtime/shoji-runtime"
+    "runtime:compile": "bun build runtime/src/cli.ts --compile --outfile dist-runtime/shoji-runtime",
+    "sidecar": "node scripts/sidecar.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",

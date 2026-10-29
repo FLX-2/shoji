@@ -1,0 +1,57 @@
+import { useState, type ReactNode } from "react";
+
+interface ComposerProps {
+  label: string;
+  placeholder: string;
+  /** Why sending isn't possible yet, if it isn't. */
+  blocked?: boolean;
+  onSend: (text: string) => void;
+  /** Controls beside the send button, such as the project. */
+  children?: ReactNode;
+  hero?: boolean;
+  autoFocus?: boolean;
+}
+
+/** Where the person writes a task or the changes they want. Enter sends; Shift+Enter adds a line. */
+export function Composer({ label, placeholder, blocked, onSend, children, hero, autoFocus }: ComposerProps) {
+  const [text, setText] = useState("");
+  const ready = text.trim() !== "" && !blocked;
+  const send = () => {
+    if (!ready) return;
+    onSend(text.trim());
+    setText("");
+  };
+
+  return (
+    <form
+      className={hero ? "composer hero" : "composer"}
+      onSubmit={(e) => {
+        e.preventDefault();
+        send();
+      }}
+    >
+      <textarea
+        aria-label={label}
+        placeholder={placeholder}
+        value={text}
+        autoFocus={autoFocus}
+        rows={hero ? 3 : 2}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            send();
+          }
+        }}
+      />
+      <div className="row">
+        {children}
+        <button type="submit" className="send" aria-label="Send" disabled={!ready}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 19V5M5 12l7-7 7 7" />
+          </svg>
+        </button>
+      </div>
+    </form>
+  );
+}

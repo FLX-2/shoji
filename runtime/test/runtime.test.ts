@@ -109,7 +109,7 @@ function team(goodBuild: (request: ModelRequest) => boolean, verdict = "VERDICT:
 
 const CHECK = `node -e "process.exit(require('fs').readFileSync('src/hello.js','utf8').includes('shoji') ? 0 : 1)"`;
 
-async function run(provider: ScriptedProvider, cap = 1) {
+async function run(provider: ScriptedProvider, cap = 1, changes?: { plan: string; notes: string }) {
   const root = tempRepo({ "src/hello.js": "export default 'hello';\n" });
   const events: RuntimeEvent[] = [];
   const result = await runThread({
@@ -119,6 +119,7 @@ async function run(provider: ScriptedProvider, cap = 1) {
     workspace: new Workspace(root),
     checks: [CHECK],
     cap,
+    changes,
     emit: (e) => events.push(e),
   });
   return { result, events, root };
@@ -145,6 +146,28 @@ describe("thread pipeline", () => {
     expect(calls).toHaveLength(provider.requests.length);
     expect(result.cost).toBeGreaterThan(0);
     expect(result.cost).toBeCloseTo(Object.values(result.costByRole).reduce((a, b) => a + b, 0));
+  });
+
+  it("reports each tool call and what each step wrote", async () => {
+    const { events } = await run(team(() => true));
+
+    const tools = events.flatMap((e) => (e.type === "tool" ? [`${e.step} ${e.tool} ${e.target}`] : []));
+    expect(tools).toEqual(["scout read_file src/hello.js", "build write_file src/hello.js"]);
+    const outputs = Object.fromEntries(events.flatMap((e) => (e.type === "step" && e.status === "done" ? [[e.step, e.output]] : [])));
+    expect(outputs.plan).toMatch(/^Change the greeting/);
+    expect(outputs.review).toBe("VERDICT: APPROVE");
+  });
+
+  it("builds requested changes on the earlier plan, without scouting or planning again", async () => {
+    const provider = team(() => true);
+    const { result, events } = await run(provider, 1, { plan: "Change the greeting.", notes: "Say hello to Shoji." });
+
+    expect(result.status).toBe("ready");
+    expect(result.plan).toBe("Change the greeting.");
+    const steps = events.flatMap((e) => (e.type === "step" && e.status === "running" ? [e.step] : []));
+    expect(steps).toEqual(["changes", "review"]);
+    const build = provider.requests.find((r) => roleOf(r) === "builder")!;
+    expect(build.messages[0].content).toContain("asked for these changes:\nSay hello to Shoji.");
   });
 
   it("moves the build up to the plan model after checks fail twice", async () => {

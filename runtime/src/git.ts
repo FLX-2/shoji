@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 
 function git(root: string, args: string[]) {
-  return spawnSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 50_000_000 });
+  return spawnSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 50_000_000, windowsHide: true });
 }
 
 export function isGitRepo(root: string): boolean {

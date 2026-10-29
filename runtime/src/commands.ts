@@ -10,6 +10,7 @@ export function runCommand(root: string, command: string): CheckResult {
     cwd: root,
     shell: true,
     encoding: "utf8",
+    windowsHide: true,
     timeout: TIMEOUT_MS,
     maxBuffer: 20_000_000,
     env: { ...process.env, CI: "1", FORCE_COLOR: "0" },
