@@ -1,0 +1,22 @@
+name: Experiment
+on:
+  push:
+    branches: [exp/windows-checks]
+jobs:
+  checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@v2
+      - run: pnpm install --frozen-lockfile
+      - run: bun --version
+      - name: Under bun
+        run: bun scripts/exp/checks.ts "${{ github.workspace }}"
+      - name: Compiled
+        run: |
+          bun build scripts/exp/checks.ts --compile --outfile exp.exe
+          ./exp.exe "${{ github.workspace }}"
