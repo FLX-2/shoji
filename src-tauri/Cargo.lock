@@ -3509,6 +3509,8 @@ name = "shoji"
 version = "0.1.0"
 dependencies = [
  "keyring",
+ "objc2-app-kit",
+ "objc2-foundation",
  "rusqlite",
  "serde",
  "serde_json",

@@ -1,4 +1,6 @@
 mod ledger;
+#[cfg(target_os = "macos")]
+mod titlebar;
 
 use std::fs;
 use std::path::{Component, Path};
@@ -702,6 +704,10 @@ pub fn run() {
                 Ledger::open(&path).map_err(|e| e.to_string())
             })?;
             app.manage(ledger);
+            #[cfg(target_os = "macos")]
+            if let Some(window) = app.get_webview_window("main") {
+                titlebar::keep_buttons_centred(&window);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
