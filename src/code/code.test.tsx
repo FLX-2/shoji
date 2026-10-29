@@ -93,6 +93,19 @@ describe("the thread's Code", () => {
     expect(within(again).getByRole("button", { name: /Badge\.tsx/ }).getAttribute("aria-current")).toBe("true");
   });
 
+  it("switches views with Ctrl+1 and Ctrl+2", async () => {
+    await finishedThread();
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "1", ctrlKey: true });
+    });
+    expect(screen.queryByRole("navigation", { name: "Changed files" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Conversation" }).getAttribute("aria-current")).toBe("page");
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "2", ctrlKey: true });
+    });
+    expect(screen.getByRole("navigation", { name: "Changed files" })).toBeTruthy();
+  });
+
   it("accepts a file, and reverts one only after asking", async () => {
     const fake = await finishedThread();
     await act(async () => {

@@ -26,6 +26,9 @@ interface ThreadViewProps {
   onCommit: () => Promise<void>;
 }
 
+const MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
+const SHORTCUT = MAC ? "⌘" : "Ctrl+";
+
 const STATUS = {
   ready: "Ready to accept",
   "needs-work": "Needs work",
@@ -44,6 +47,7 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit 
   const [asking, setAsking] = useState(false);
   const scroller = useFollow(thread);
   const [mode, setMode] = useState<"conversation" | "code">("conversation");
+  useModeKeys(setMode);
   // Held here so the chosen file outlives switching to Conversation.
   const [chosenFile, setChosenFile] = useState<string | null>(null);
   // Read the project again whenever a run ends or Code opens.
@@ -83,6 +87,7 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit 
             type="button"
             className="mode"
             aria-current={mode === "conversation" ? "page" : undefined}
+            title={`Conversation (${SHORTCUT}1)`}
             onClick={() => setMode("conversation")}
           >
             Conversation
@@ -91,21 +96,24 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit 
             type="button"
             className="mode"
             aria-current={mode === "code" ? "page" : undefined}
+            title={`Code (${SHORTCUT}2)`}
             onClick={() => setMode("code")}
           >
             Code
             {fileCount > 0 && <span className="cnt">{count(fileCount, "file")}</span>}
           </button>
         </nav>
-        <span className="stage">
-          <span className="dot live" aria-hidden="true" />
-          {stage}
-        </span>
-        {running && (
-          <button type="button" className="btn sm" onClick={onStop} disabled={last.stoppedByYou}>
-            Stop
-          </button>
-        )}
+        <div className="tend">
+          <span className="stage">
+            <span className="dot live" aria-hidden="true" />
+            {stage}
+          </span>
+          {running && (
+            <button type="button" className="btn sm" onClick={onStop} disabled={last.stoppedByYou}>
+              Stop
+            </button>
+          )}
+        </div>
       </div>
 
       {mode === "code" && (
@@ -349,6 +357,21 @@ function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean 
     text = "This still needs work. The review's notes are above; request changes to carry on.";
   else text = result.reason ?? STATUS[result.status];
   return <p className={result?.status === "ready" ? "outcome" : "outcome warn"}>{text}</p>;
+}
+
+/** Ctrl+1 and Ctrl+2 (⌘ on a Mac) switch between Conversation and Code. */
+function useModeKeys(setMode: (mode: "conversation" | "code") => void) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(MAC ? e.metaKey : e.ctrlKey) || e.altKey || e.shiftKey) return;
+      if (e.key === "1") setMode("conversation");
+      else if (e.key === "2") setMode("code");
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setMode]);
 }
 
 /** Keeps the conversation at its end while new work arrives, unless the person scrolled up. */
