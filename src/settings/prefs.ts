@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import type { StackName } from "../../runtime/src/stack";
+import type { FieldId } from "../look/fields";
 
 export interface Prefs {
   /** The open project's folder. */
@@ -10,8 +11,14 @@ export interface Prefs {
   cap: number;
   /** Shoji asks before a thread or trial could take a day's spend past this, in dollars. */
   dailyLimit: number;
-  /** Interface motion. Off removes every transition. */
+  /** Interface motion. Off removes every transition and holds the background still. */
   motion: boolean;
+  /** The background behind the main stage. */
+  field: FieldId;
+  /** How frosted the main stage's glass is, 0 to 100. */
+  frost: number;
+  /** Every surface solid, with no background and no blur. */
+  opaque: boolean;
   /** The first-run setup was finished once, so it doesn't open on its own again. */
   setupDone: boolean;
 }
@@ -22,6 +29,9 @@ export const DEFAULT_PREFS: Prefs = {
   cap: 0.5,
   dailyLimit: 25,
   motion: true,
+  field: "code",
+  frost: 23,
+  opaque: false,
   setupDone: false,
 };
 
