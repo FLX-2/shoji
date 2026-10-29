@@ -5,7 +5,6 @@ import type { Bridge } from "../bridge";
 import { CodeView } from "../code/CodeView";
 import { useChanges } from "../code/useChanges";
 import { Composer } from "../shell/Composer";
-import { Mark } from "../shell/Mark";
 import {
   approves,
   foldRun,
@@ -28,7 +27,7 @@ interface ThreadViewProps {
 }
 
 const STATUS = {
-  ready: "Ready for review",
+  ready: "Ready to accept",
   "needs-work": "Needs work",
   stopped: "Stopped",
   failed: "Failed",
@@ -184,9 +183,6 @@ function TurnView({ turn, run, live }: { turn: Turn; run: RunView; live: boolean
     <>
       <div className="umsg">{turn.ask}</div>
       <div className="amsg">
-        <span className="av">
-          <Mark />
-        </span>
         <div className="bd">
           {run.steps.length > 0 && (
             <ol className="steps">
@@ -204,7 +200,6 @@ function TurnView({ turn, run, live }: { turn: Turn; run: RunView; live: boolean
 
 function StepRow({ steps, index, live }: { steps: StepView[]; index: number; live: boolean }) {
   const step = steps[index];
-  const handoff = index > 0 && steps[index - 1].model !== step.model;
   const now = live && step.running;
   const finished = !step.running && !step.unfinished;
   return (
@@ -215,10 +210,8 @@ function StepRow({ steps, index, live }: { steps: StepView[]; index: number; liv
       <div className="sb">
         <div className="sl">
           {stepLabel(steps, index)}
-          <span className="m" title={MODELS[step.model].label}>
-            {handoff && <Mark className="ho" />}
+          <span className="m" title={step.cost > 0 ? `${MODELS[step.model].label} · ${formatCost(step.cost)}` : MODELS[step.model].label}>
             {modelName(step.model)}
-            {step.cost > 0 && <span className="cost"> · {formatCost(step.cost)}</span>}
           </span>
         </div>
         {step.escalation && (
@@ -350,8 +343,8 @@ function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean 
   else if (!result) text = turn.stoppedByYou ? "You stopped this thread." : turn.exit?.error || "The runtime quit before it finished.";
   else if (result.status === "ready")
     text = result.checks.length
-      ? "Ready for review. The checks pass and the review approved the change."
-      : "Ready for review. The review approved the change. This project has no checks to run.";
+      ? "Ready to accept. The checks pass and the review approved the change."
+      : "Ready to accept. The review approved the change. This project has no checks to run.";
   else if (result.status === "needs-work")
     text = "This still needs work. The review's notes are above; request changes to carry on.";
   else text = result.reason ?? STATUS[result.status];

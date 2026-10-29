@@ -143,10 +143,9 @@ describe("a thread in the app", () => {
     const steps = Array.from(document.querySelectorAll(".st"));
     expect(steps.map((s) => s.className)).toEqual(["st done", "st now"]);
     expect(steps[0].textContent).toContain("Read the code");
-    expect(steps[0].textContent).toContain("haiku");
+    expect(steps[0].textContent).toContain("Haiku");
     expect(steps[1].textContent).toContain("Planning the change");
-    expect(steps[1].textContent).toContain("opus");
-    expect(steps[1].querySelector(".ho")).toBeTruthy();
+    expect(steps[1].textContent).toContain("Opus");
     expect(screen.getByText("Planning the change · Opus 5.5")).toBeTruthy();
   });
 
@@ -184,7 +183,7 @@ describe("a thread in the app", () => {
     fake.emit(running("review", "review", HAIKU), done("review", "review", HAIKU, "VERDICT: APPROVE"));
     fake.emit(result("ready", 0.12));
     fake.exit(0);
-    expect(screen.getByText(/^Ready for review\. The checks pass/)).toBeTruthy();
+    expect(screen.getByText(/^Ready to accept\. The checks pass/)).toBeTruthy();
     expect(document.querySelector(".review .sum")?.textContent).toBe("1 check passed · $0.12 in all");
 
     fireEvent.click(screen.getByRole("button", { name: "Request changes" }));
