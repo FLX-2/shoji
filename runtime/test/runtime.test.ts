@@ -1,5 +1,6 @@
 // @vitest-environment node
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,7 +8,7 @@ import type { RuntimeEvent } from "../src/events";
 import { costOf } from "../src/models";
 import { runThread } from "../src/pipeline";
 import { defaultChecks } from "../src/project";
-import type { ModelRequest } from "../src/provider";
+import { AnthropicProvider, type ModelProvider, type ModelRequest } from "../src/provider";
 import { STACKS } from "../src/stack";
 import { runTool } from "../src/tools";
 import { Workspace } from "../src/workspace";
@@ -113,7 +114,7 @@ function team(goodBuild: (request: ModelRequest) => boolean, verdict = "VERDICT:
 
 const CHECK = `node -e "process.exit(require('fs').readFileSync('src/hello.js','utf8').includes('shoji') ? 0 : 1)"`;
 
-async function run(provider: ScriptedProvider, cap = 1, changes?: { plan: string; notes: string }) {
+async function run(provider: ModelProvider, cap = 1, changes?: { plan: string; notes: string }) {
   const root = tempRepo({ "src/hello.js": "export default 'hello';\n" });
   const events: RuntimeEvent[] = [];
   const result = await runThread({
@@ -192,6 +193,23 @@ describe("thread pipeline", () => {
     const { result } = await run(team(() => true, "VERDICT: FIX\n1. Say it louder."));
     expect(result.status).toBe("needs-work");
     expect(result.review).toMatch(/^VERDICT: FIX/);
+  });
+
+  it("shows a friendly message when Anthropic rejects the API key", async () => {
+    const server = http.createServer((_req, res) => {
+      res.writeHead(401, { "content-type": "application/json" });
+      res.end('{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}');
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const { port } = server.address() as { port: number };
+      const { result } = await run(new AnthropicProvider("bad-key", `http://127.0.0.1:${port}`));
+      expect(result.status).toBe("failed");
+      expect(result.reason).toBe("Anthropic didn't accept your API key. Check it in Settings.");
+      expect(result.reason).not.toContain("authentication_error");
+    } finally {
+      server.close();
+    }
   });
 
   it("stops before a call could pass the cap, and never goes over it", async () => {

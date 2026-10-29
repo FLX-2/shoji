@@ -15,6 +15,10 @@ export interface ModelProvider {
   send(request: ModelRequest): Promise<Anthropic.Message>;
 }
 
+export const KEY_REJECTED = "Anthropic didn't accept your API key. Check it in Settings.";
+
+export class KeyRejectedError extends Error {}
+
 export class AnthropicProvider implements ModelProvider {
   private client: Anthropic;
 
@@ -22,16 +26,21 @@ export class AnthropicProvider implements ModelProvider {
     this.client = new Anthropic({ apiKey, baseURL, maxRetries: 4 });
   }
 
-  send({ model, effort, system, messages, tools, maxTokens }: ModelRequest) {
-    return this.client.messages.create({
-      model,
-      max_tokens: maxTokens,
-      system,
-      messages,
-      tools,
-      output_config: { effort },
-      // Each role keeps one model for a whole step, so its cache stays warm.
-      cache_control: { type: "ephemeral" },
-    });
+  async send({ model, effort, system, messages, tools, maxTokens }: ModelRequest) {
+    try {
+      return await this.client.messages.create({
+        model,
+        max_tokens: maxTokens,
+        system,
+        messages,
+        tools,
+        output_config: { effort },
+        // Each role keeps one model for a whole step, so its cache stays warm.
+        cache_control: { type: "ephemeral" },
+      });
+    } catch (error) {
+      if (error instanceof Anthropic.AuthenticationError) throw new KeyRejectedError(KEY_REJECTED);
+      throw error;
+    }
   }
 }
