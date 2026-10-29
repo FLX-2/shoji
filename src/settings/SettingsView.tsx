@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Stack } from "../../runtime/src/stack";
 import type { KeyStatus } from "../bridge";
-import { BackgroundRow, FrostRow, MotionRow, OpaqueRow } from "../look/LookRows";
+import { AccentRow, BackgroundRow, DensityRow, FrostRow, MotionRow, OpaqueRow, SwitchRow } from "../look/LookRows";
 import { describeStack } from "../stack/lock";
 import { MoneyRow } from "./MoneyRow";
 import type { Prefs } from "./prefs";
@@ -71,6 +71,34 @@ export function SettingsView({
             <FrostRow prefs={prefs} onChange={onChange} />
             <OpaqueRow prefs={prefs} onChange={onChange} />
             <MotionRow prefs={prefs} onChange={onChange} />
+            <AccentRow prefs={prefs} onChange={onChange} />
+            <DensityRow prefs={prefs} onChange={onChange} />
+          </div>
+        </section>
+
+        <section className="sg" aria-labelledby="s-show">
+          <h2 id="s-show" className="k">
+            Show
+          </h2>
+          <div className="card">
+            <SwitchRow
+              label="Costs"
+              description="What a thread or trial has spent, while it runs and on the review bar. Receipts always shows them."
+              on={prefs.showCosts}
+              onToggle={() => onChange({ showCosts: !prefs.showCosts })}
+            />
+            <SwitchRow
+              label="Model names"
+              description="Which model takes each step of a thread, beside the step."
+              on={prefs.showModels}
+              onToggle={() => onChange({ showModels: !prefs.showModels })}
+            />
+            <SwitchRow
+              label="Status bar"
+              description="The project, branch and running cost along the bottom of the window."
+              on={prefs.statusBar}
+              onToggle={() => onChange({ statusBar: !prefs.statusBar })}
+            />
           </div>
         </section>
 
@@ -107,7 +135,11 @@ function KeyRow({
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const attempt = (work: Promise<void>) => work.then(() => setError(null), (e) => setError(String(e)));
+  const attempt = (work: Promise<void>) =>
+    work.then(
+      () => setError(null),
+      (e) => setError(String(e)),
+    );
 
   return (
     <div className="srow">

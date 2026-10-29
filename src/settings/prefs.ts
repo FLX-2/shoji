@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import type { StackName } from "../../runtime/src/stack";
+import type { AccentId } from "../look/accent";
 import type { FieldId } from "../look/fields";
 
 export interface Prefs {
@@ -19,6 +20,15 @@ export interface Prefs {
   frost: number;
   /** Every surface solid, with no background and no blur. */
   opaque: boolean;
+  /** The color for running and spending. */
+  accent: AccentId;
+  density: "comfortable" | "compact";
+  /** The bar along the bottom of the window. */
+  statusBar: boolean;
+  /** What threads cost, shown as they run and on the review bar. */
+  showCosts: boolean;
+  /** Which model takes each step, shown beside it. */
+  showModels: boolean;
   /** The first-run setup was finished once, so it doesn't open on its own again. */
   setupDone: boolean;
 }
@@ -32,6 +42,11 @@ export const DEFAULT_PREFS: Prefs = {
   field: "code",
   frost: 23,
   opaque: false,
+  accent: "safelight",
+  density: "comfortable",
+  statusBar: true,
+  showCosts: true,
+  showModels: true,
   setupDone: false,
 };
 

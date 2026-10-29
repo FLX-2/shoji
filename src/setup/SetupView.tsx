@@ -3,7 +3,7 @@ import { MODELS } from "../../runtime/src/models";
 import { ROLES, STACKS, type Stack, type StackName } from "../../runtime/src/stack";
 import type { Bridge, KeyStatus } from "../bridge";
 import { folderName } from "../home/HomeView";
-import { BackgroundRow, MotionRow } from "../look/LookRows";
+import { AccentRow, BackgroundRow, MotionRow } from "../look/LookRows";
 import { MoneyRow } from "../settings/MoneyRow";
 import type { Prefs } from "../settings/prefs";
 import { Mark } from "../shell/Mark";
@@ -355,6 +355,7 @@ function Look({ prefs, onChange }: { prefs: Prefs; onChange: (change: Partial<Pr
       <div className="card">
         <BackgroundRow prefs={prefs} onChange={onChange} />
         <MotionRow prefs={prefs} onChange={onChange} />
+        <AccentRow prefs={prefs} onChange={onChange} />
       </div>
     </div>
   );
