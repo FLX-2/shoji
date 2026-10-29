@@ -1,6 +1,6 @@
 import { MODELS, type ModelId } from "../../runtime/src/models";
-import { STACKS, type StackName } from "../../runtime/src/stack";
 import type { LedgerCall, LedgerThread } from "../bridge";
+import { stackOf, stackSummary } from "../stack/lock";
 
 /** Cache writes cost this much more than plain input, as in the runtime's pricing. */
 const CACHE_WRITE = 1.25;
@@ -23,8 +23,7 @@ export function priceAs(model: ModelId, call: LedgerCall): number {
 
 /** The one model a thread is compared against: its stack's Plan model. */
 export function baselineModel(thread: LedgerThread): ModelId {
-  const stack = STACKS[thread.stack as StackName];
-  return stack ? stack.plan.model : "claude-opus-5-5";
+  return stackOf(thread.stack)?.plan.model ?? "claude-opus-5-5";
 }
 
 export function callsOf(thread: LedgerThread): LedgerCall[] {
@@ -183,7 +182,7 @@ export function toCsv(threads: LedgerThread[]): string {
     t.task.split("\n")[0],
     t.repo,
     t.branch,
-    t.stack,
+    stackSummary(t.stack),
     outcome(t),
     t.committed ?? "",
     t.runs.filter((run) => run.kind === "changes").length,

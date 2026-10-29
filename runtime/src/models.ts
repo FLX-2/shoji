@@ -1,6 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 
-export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+export const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+
+export type Effort = (typeof EFFORTS)[number];
 
 export interface ModelInfo {
   label: string;

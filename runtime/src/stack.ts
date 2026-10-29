@@ -1,4 +1,4 @@
-import { type Effort, MODELS, type ModelId } from "./models";
+import { EFFORTS, type Effort, MODELS, type ModelId } from "./models";
 
 export type Role = "scout" | "plan" | "build" | "review";
 
@@ -36,6 +36,25 @@ export const STACKS = {
 } satisfies Record<string, Stack>;
 
 export type StackName = keyof typeof STACKS;
+
+/** A stack given as data, such as the app's stack.lock choice. Throws on anything malformed. */
+export function parseStack(json: string): Stack {
+  const value: unknown = JSON.parse(json);
+  if (typeof value !== "object" || value === null) throw new Error("A stack must be an object of roles.");
+  const roles = value as Record<string, unknown>;
+  const stack = {} as Stack;
+  for (const role of ROLES) {
+    const seat = roles[role] as Partial<Seat> | undefined;
+    if (!seat || typeof seat.model !== "string" || !(seat.model in MODELS)) {
+      throw new Error(`The stack's ${role} role needs a model: ${Object.keys(MODELS).join(", ")}.`);
+    }
+    if (!EFFORTS.includes(seat.effort as Effort)) {
+      throw new Error(`The stack's ${role} role needs an effort: ${EFFORTS.join(", ")}.`);
+    }
+    stack[role] = { model: seat.model as ModelId, effort: seat.effort as Effort };
+  }
+  return stack;
+}
 
 /** A table of each stack's model and effort for every role, built from STACKS and MODELS. */
 export function describeStacks(): string {

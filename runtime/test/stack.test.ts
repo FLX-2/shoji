@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { MODELS } from "../src/models";
-import { describeStacks, ROLES, STACKS } from "../src/stack";
+import { describeStacks, parseStack, ROLES, STACKS } from "../src/stack";
 
 describe("describeStacks", () => {
   const lines = describeStacks().split("\n");
@@ -26,5 +26,29 @@ describe("describeStacks", () => {
       expect(at).toBeGreaterThanOrEqual(from);
       from = at + 1;
     }
+  });
+});
+
+describe("parseStack", () => {
+  it("reads each role's model and effort", () => {
+    const stack = { ...STACKS.balanced, build: { model: "claude-opus-5-5", effort: "high" } };
+    expect(parseStack(JSON.stringify(stack))).toEqual(stack);
+  });
+
+  it("ignores anything but the four roles", () => {
+    expect(parseStack(JSON.stringify({ ...STACKS.haiku, note: "mine" }))).toEqual(STACKS.haiku);
+  });
+
+  it("refuses a missing role, an unknown model or a bad effort", () => {
+    const { review: _, ...noReview } = STACKS.balanced;
+    expect(() => parseStack(JSON.stringify(noReview))).toThrow(/review role needs a model/);
+    expect(() => parseStack(JSON.stringify({ ...STACKS.balanced, plan: { model: "gpt-9", effort: "low" } }))).toThrow(
+      /plan role needs a model/,
+    );
+    expect(() =>
+      parseStack(JSON.stringify({ ...STACKS.balanced, scout: { model: "claude-haiku-5-5", effort: "fast" } })),
+    ).toThrow(/scout role needs an effort/);
+    expect(() => parseStack("[]")).toThrow();
+    expect(() => parseStack("null")).toThrow(/object of roles/);
   });
 });
