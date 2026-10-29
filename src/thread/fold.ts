@@ -121,5 +121,5 @@ export function reviewNotes(review: string): string {
 }
 
 export function formatCost(dollars: number): string {
-  return `$${dollars.toFixed(dollars < 0.01 ? 4 : dollars < 0.1 ? 3 : 2)}`;
+  return `$${dollars.toFixed(dollars === 0 || dollars >= 0.1 ? 2 : dollars < 0.01 ? 4 : 3)}`;
 }

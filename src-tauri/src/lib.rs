@@ -1,4 +1,6 @@
 use std::fs;
+use std::path::{Component, Path};
+use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -209,6 +211,95 @@ fn stop_run(run: State<Run>) -> Result<(), String> {
     Ok(())
 }
 
+/// Runs the person's own git in the project. Paths are taken literally, never as patterns.
+fn git(repo: &str, args: &[&str]) -> Result<String, String> {
+    let mut command = Command::new("git");
+    command
+        .args(["--literal-pathspecs", "-c", "core.quotePath=false"])
+        .args(args)
+        .current_dir(repo);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let out = command.output().map_err(|e| format!("Couldn't run git: {e}"))?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
+fn names(list: &str) -> Vec<String> {
+    list.lines().filter(|l| !l.is_empty()).map(str::to_string).collect()
+}
+
+#[derive(Debug, Serialize)]
+struct ProjectChanges {
+    /// Every change against the last commit, as a unified diff.
+    diff: String,
+    /// Changed files the person has accepted, which git holds as staged.
+    accepted: Vec<String>,
+}
+
+/// What the project changed since its last commit. New files are marked as intended,
+/// so they show in the diff without being staged.
+#[tauri::command]
+async fn changes(repo: String) -> Result<ProjectChanges, String> {
+    read_changes(&repo)
+}
+
+fn read_changes(repo: &str) -> Result<ProjectChanges, String> {
+    git(repo, &["add", "--all", "--intent-to-add", "."])?;
+    let diff = git(repo, &["diff", "HEAD", "--no-color", "--no-ext-diff", "--no-renames"])?;
+    let changed = names(&git(repo, &["diff", "HEAD", "--name-only", "--no-renames"])?);
+    let unstaged = names(&git(repo, &["diff", "--name-only", "--no-renames"])?);
+    let accepted = changed.into_iter().filter(|f| !unstaged.contains(f)).collect();
+    Ok(ProjectChanges { diff, accepted })
+}
+
+/// Refuses a path that isn't one of the project's current changes.
+fn changed_file(repo: &str, path: &str) -> Result<(), String> {
+    let inside = Path::new(path)
+        .components()
+        .all(|c| matches!(c, Component::Normal(_)));
+    let changed = names(&git(repo, &["diff", "HEAD", "--name-only", "--no-renames"])?);
+    if inside && changed.iter().any(|f| f == path) {
+        Ok(())
+    } else {
+        Err(format!("{path} isn't one of this project's changes."))
+    }
+}
+
+/// Keeps a file's changes by staging it, ready for the commit.
+#[tauri::command]
+async fn accept_file(repo: String, path: String) -> Result<(), String> {
+    changed_file(&repo, &path)?;
+    git(&repo, &["add", "--", &path]).map(|_| ())
+}
+
+/// Puts a file back as it was at the last commit. A file the thread created is removed.
+#[tauri::command]
+async fn revert_file(repo: String, path: String) -> Result<(), String> {
+    revert(&repo, &path)
+}
+
+fn revert(repo: &str, path: &str) -> Result<(), String> {
+    changed_file(repo, path)?;
+    if git(repo, &["cat-file", "-e", &format!("HEAD:{path}")]).is_ok() {
+        git(repo, &["restore", "--source=HEAD", "--staged", "--worktree", "--", path])?;
+    } else {
+        git(repo, &["rm", "--cached", "--force", "--quiet", "--", path])?;
+        match fs::remove_file(Path::new(repo).join(path)) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -221,8 +312,69 @@ pub fn run() {
             forget_key,
             pick_project,
             start_run,
-            stop_run
+            stop_run,
+            changes,
+            accept_file,
+            revert_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A throwaway repository with two committed files.
+    fn repo(name: &str) -> String {
+        let dir = std::env::temp_dir().join(format!("shoji-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let root = dir.display().to_string();
+        fs::write(dir.join("a.txt"), "one\n").unwrap();
+        fs::write(dir.join("b.txt"), "two\n").unwrap();
+        git(&root, &["init", "-q"]).unwrap();
+        git(&root, &["add", "."]).unwrap();
+        git(&root, &["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "start"]).unwrap();
+        root
+    }
+
+    #[test]
+    fn lists_changes_and_accepts_one_file() {
+        let root = repo("accept");
+        fs::write(Path::new(&root).join("a.txt"), "one, changed\n").unwrap();
+        fs::write(Path::new(&root).join("new.txt"), "new\n").unwrap();
+
+        let before = read_changes(&root).unwrap();
+        assert!(before.diff.contains("+one, changed"));
+        assert!(before.diff.contains("+new"));
+        assert!(before.accepted.is_empty());
+
+        changed_file(&root, "a.txt").unwrap();
+        git(&root, &["add", "--", "a.txt"]).unwrap();
+        assert_eq!(read_changes(&root).unwrap().accepted, vec!["a.txt"]);
+    }
+
+    #[test]
+    fn reverts_edited_and_new_files() {
+        let root = repo("revert");
+        fs::write(Path::new(&root).join("a.txt"), "one, changed\n").unwrap();
+        fs::write(Path::new(&root).join("new.txt"), "new\n").unwrap();
+        read_changes(&root).unwrap();
+
+        revert(&root, "a.txt").unwrap();
+        revert(&root, "new.txt").unwrap();
+        assert_eq!(fs::read_to_string(Path::new(&root).join("a.txt")).unwrap(), "one\n");
+        assert!(!Path::new(&root).join("new.txt").exists());
+        assert_eq!(read_changes(&root).unwrap().diff, "");
+    }
+
+    #[test]
+    fn refuses_files_outside_the_changes() {
+        let root = repo("refuse");
+        fs::write(Path::new(&root).join("a.txt"), "changed\n").unwrap();
+        assert!(revert(&root, "b.txt").is_err());
+        assert!(revert(&root, "../a.txt").is_err());
+        assert_eq!(fs::read_to_string(Path::new(&root).join("b.txt")).unwrap(), "two\n");
+    }
 }
