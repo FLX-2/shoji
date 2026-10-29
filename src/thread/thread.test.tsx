@@ -5,7 +5,7 @@ import type { ModelId } from "../../runtime/src/models";
 import type { Role } from "../../runtime/src/stack";
 import App from "../App";
 import { fakeBridge } from "../test/fakeBridge";
-import { foldRun, stepLabel } from "./fold";
+import { foldRun, formatCost, stepLabel } from "./fold";
 
 const OPUS = "claude-opus-5-5";
 const SONNET = "claude-sonnet-5-5";
@@ -68,6 +68,29 @@ describe("folding a run", () => {
     expect(run.cost).toBeCloseTo(0.07);
     expect(stepLabel(run.steps, 0)).toBe("Made the change");
     expect(stepLabel(run.steps, 1)).toBe("Fixing the failing checks");
+  });
+});
+
+describe("formatting a cost", () => {
+  it("shows nothing spent with two decimals", () => {
+    expect(formatCost(0)).toBe("$0.00");
+  });
+
+  it("shows amounts under a cent with four decimals", () => {
+    expect(formatCost(0.005)).toBe("$0.0050");
+    expect(formatCost(0.0001)).toBe("$0.0001");
+  });
+
+  it("shows amounts under ten cents with three decimals", () => {
+    expect(formatCost(0.01)).toBe("$0.010");
+    expect(formatCost(0.05)).toBe("$0.050");
+    expect(formatCost(0.099)).toBe("$0.099");
+  });
+
+  it("shows ten cents or more with two decimals", () => {
+    expect(formatCost(0.1)).toBe("$0.10");
+    expect(formatCost(1)).toBe("$1.00");
+    expect(formatCost(1.5)).toBe("$1.50");
   });
 });
 
