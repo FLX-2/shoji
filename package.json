@@ -19,7 +19,8 @@
     "runtime": "bun runtime/src/cli.ts",
     "runtime:compile": "bun build runtime/src/cli.ts --compile --outfile dist-runtime/shoji-runtime",
     "sidecar": "node scripts/sidecar.mjs",
-    "review-check": "bun runtime/eval/review-check.ts"
+    "review-check": "bun runtime/eval/review-check.ts",
+    "estimate-check": "bun scripts/estimate-check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
