@@ -5,6 +5,7 @@ import { usePrefs } from "./settings/prefs";
 import { SettingsView } from "./settings/SettingsView";
 import { Mark } from "./shell/Mark";
 import { Rail } from "./shell/Rail";
+import { WindowControls } from "./shell/WindowControls";
 import { SECTIONS, type SectionId } from "./shell/sections";
 import { formatCost } from "./thread/fold";
 import { ThreadView } from "./thread/ThreadView";
@@ -50,6 +51,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
             <span className="dot live" aria-hidden="true" />
             {running ? "running" : "idle"}
           </span>
+          {!isMac && <WindowControls />}
         </div>
       </header>
 

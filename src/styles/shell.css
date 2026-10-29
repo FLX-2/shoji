@@ -65,6 +65,47 @@ button {
   padding-left: 78px;
 }
 
+/* Elsewhere Shoji draws the window buttons, flush with the right edge. */
+.app[data-platform="other"] .titlebar {
+  padding-right: 0;
+}
+
+.winctl {
+  display: flex;
+  align-self: stretch;
+  margin-left: 8px;
+}
+
+.winctl button {
+  all: unset;
+  width: 46px;
+  display: grid;
+  place-items: center;
+  color: var(--z7);
+  transition:
+    color var(--d-quick) var(--e-out),
+    background-color var(--d-quick) var(--e-out);
+}
+
+.winctl button:hover {
+  color: var(--z10);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.winctl button:focus-visible {
+  outline: 2px solid var(--z10);
+  outline-offset: -2px;
+}
+
+.winctl svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
 .titlebar .center {
   display: flex;
   justify-content: center;

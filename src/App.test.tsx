@@ -28,4 +28,11 @@ describe("app shell", () => {
     expect(document.querySelector(".app")?.getAttribute("data-state")).toBe("idle");
     expect(screen.getByRole("status").textContent).toBe("idle");
   });
+
+  it("draws its own window buttons where the system's title bar is off", () => {
+    render(<App bridge={fakeBridge().bridge} />);
+    const titlebar = document.querySelector(".titlebar")!;
+    const buttons = Array.from(titlebar.querySelectorAll("button")).map((b) => b.getAttribute("aria-label"));
+    expect(buttons).toEqual(["Minimize", "Maximize", "Close"]);
+  });
 });
