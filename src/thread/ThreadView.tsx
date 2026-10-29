@@ -23,6 +23,16 @@ interface ThreadViewProps {
   thread: Thread;
   onStop: () => void;
   onRequestChanges: (notes: string) => void;
+  /** Gives a thread that stopped at its limit more to spend, and carries on. */
+  onKeepGoing: () => void;
+  /** How much more Keep going allows, in dollars. */
+  more: number;
+  /** Starts a thread that couldn't start over again. */
+  onRetry: () => void;
+  /** Builds the plan the person has read. */
+  onBuild: () => void;
+  /** Plans again from the person's notes on the plan. */
+  onReplan: (notes: string) => void;
   onCommit: () => Promise<void>;
   /** What the thread has cost, on the review bar. Off in Settings hides it. */
   showCosts: boolean;
@@ -36,11 +46,24 @@ const STATUS = {
   "needs-work": "Needs work",
   stopped: "Stopped",
   failed: "Failed",
+  planned: "Plan ready",
 };
 
 /** A thread: its Conversation, where each ask is followed by the steps that answered it,
  *  and its Code, the files it changed. */
-export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit, showCosts }: ThreadViewProps) {
+export function ThreadView({
+  bridge,
+  thread,
+  onStop,
+  onRequestChanges,
+  onKeepGoing,
+  more,
+  onRetry,
+  onBuild,
+  onReplan,
+  onCommit,
+  showCosts,
+}: ThreadViewProps) {
   const last = thread.turns[thread.turns.length - 1];
   const running = isRunning(last);
   const runs = thread.turns.map((turn) => foldRun(turn.events));
@@ -58,6 +81,11 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit,
   const fileCount = changes?.files.length ?? 0;
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
+
+  // Stopped at its limit, so the way on is more to spend.
+  const stopped = lastRun.result?.status === "stopped";
+  // Paused after the plan, for the person to build it or ask for a different one.
+  const planned = lastRun.result?.status === "planned";
 
   const commit = () => {
     setCommitting(true);
@@ -138,7 +166,13 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit,
       <div className="scroll" ref={scroller} hidden={mode !== "conversation"}>
         <div className="tcol">
           {thread.turns.map((turn, i) => (
-            <TurnView key={i} turn={turn} run={runs[i]} live={running && i === thread.turns.length - 1} />
+            <TurnView
+              key={i}
+              turn={turn}
+              run={runs[i]}
+              live={running && i === thread.turns.length - 1}
+              waiting={planned && i === thread.turns.length - 1}
+            />
           ))}
         </div>
       </div>
@@ -147,16 +181,34 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit,
         !running &&
         (asking ? (
           <Composer
-            label="Changes"
-            placeholder="Describe the changes you want…"
+            label={planned ? "Plan changes" : "Changes"}
+            placeholder={planned ? "What should the plan do differently?" : "Describe the changes you want…"}
             autoFocus
             onCancel={() => setAsking(false)}
             blocked={spent >= thread.cap}
             onSend={(notes) => {
               setAsking(false);
-              onRequestChanges(notes);
+              (planned ? onReplan : onRequestChanges)(notes);
             }}
           />
+        ) : planned ? (
+          <div className="review">
+            <button type="button" className="btn solid" onClick={onBuild}>
+              Build it
+            </button>
+            <button type="button" className="btn" onClick={() => setAsking(true)} disabled={spent >= thread.cap}>
+              Change the plan
+            </button>
+            <span className="sum">
+              {dotted([
+                showCosts && (
+                  <>
+                    <b>{formatCost(spent)}</b> so far
+                  </>
+                ),
+              ])}
+            </span>
+          </div>
         ) : (
           <div className="review">
             {thread.committed ? (
@@ -165,13 +217,28 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit,
               </span>
             ) : (
               <>
+                {thread.id === undefined && last.error && (
+                  <button type="button" className="btn solid" onClick={onRetry}>
+                    Try again
+                  </button>
+                )}
+                {stopped && (
+                  <button type="button" className="btn solid" onClick={onKeepGoing}>
+                    Keep going, up to {formatCost(more)} more
+                  </button>
+                )}
                 {runs.some((run) => run.result?.plan) && (
                   <button type="button" className="btn" onClick={() => setAsking(true)} disabled={spent >= thread.cap}>
                     Request changes
                   </button>
                 )}
                 {thread.branch && fileCount > 0 && (
-                  <button type="button" className="btn solid" onClick={commit} disabled={committing}>
+                  <button
+                    type="button"
+                    className={stopped ? "btn" : "btn solid"}
+                    onClick={commit}
+                    disabled={committing}
+                  >
                     Accept and commit
                   </button>
                 )}
@@ -195,7 +262,8 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit,
   );
 }
 
-function TurnView({ turn, run, live }: { turn: Turn; run: RunView; live: boolean }) {
+/** `waiting` marks the turn whose plan is waiting for the person, so the plan shows open. */
+function TurnView({ turn, run, live, waiting }: { turn: Turn; run: RunView; live: boolean; waiting: boolean }) {
   return (
     <>
       <div className="umsg">{turn.ask}</div>
@@ -204,7 +272,7 @@ function TurnView({ turn, run, live }: { turn: Turn; run: RunView; live: boolean
           {run.steps.length > 0 && (
             <ol className="steps">
               {run.steps.map((_, i) => (
-                <StepRow key={i} steps={run.steps} index={i} live={live} />
+                <StepRow key={i} steps={run.steps} index={i} live={live} showPlan={waiting} />
               ))}
             </ol>
           )}
@@ -215,7 +283,17 @@ function TurnView({ turn, run, live }: { turn: Turn; run: RunView; live: boolean
   );
 }
 
-function StepRow({ steps, index, live }: { steps: StepView[]; index: number; live: boolean }) {
+function StepRow({
+  steps,
+  index,
+  live,
+  showPlan,
+}: {
+  steps: StepView[];
+  index: number;
+  live: boolean;
+  showPlan: boolean;
+}) {
   const step = steps[index];
   const now = live && step.running;
   const finished = !step.running && !step.unfinished;
@@ -236,7 +314,7 @@ function StepRow({ steps, index, live }: { steps: StepView[]; index: number; liv
             Moved up to {MODELS[step.escalation.to].label}. {step.escalation.reason}
           </p>
         )}
-        <Work step={step} />
+        <Work step={step} showPlan={showPlan} />
       </div>
     </li>
   );
@@ -245,7 +323,7 @@ function StepRow({ steps, index, live }: { steps: StepView[]; index: number; liv
 const READS = new Set(["read_file", "list_files", "search"]);
 const EDITS = new Set(["write_file", "replace_in_file"]);
 
-function Work({ step }: { step: StepView }) {
+function Work({ step, showPlan }: { step: StepView; showPlan: boolean }) {
   const reads = step.tools.filter((t) => READS.has(t.tool));
   const edits = unique(step.tools.filter((t) => EDITS.has(t.tool)).map((t) => t.target));
   const commands = step.tools.filter((t) => t.tool === "run_command").map((t) => t.target);
@@ -286,7 +364,7 @@ function Work({ step }: { step: StepView }) {
       </Item>
     ),
     output && step.role === "plan" && step.name === "plan" && (
-      <Item key="out" icon={ICONS.note} summary="The plan">
+      <Item key="out" icon={ICONS.note} summary="The plan" open={showPlan}>
         <div className="text">{output}</div>
       </Item>
     ),
@@ -363,7 +441,12 @@ function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean 
       ? "Ready to accept. The checks pass and the review approved the change."
       : "Ready to accept. The review approved the change. This project has no checks to run.";
   else if (result.status === "needs-work")
-    text = "This still needs work. The review's notes are above; request changes to carry on.";
+    text = result.reason ?? "This still needs work. The review's notes are above; request changes to carry on.";
+  else if (result.status === "planned")
+    text = "Here's the plan. Build it as it is, or say what to change first. Nothing in the project has changed yet.";
+  else if (result.status === "stopped")
+    text =
+      "Shoji stopped before the next step could take this thread past its limit. Keep going gives it more to spend, or you can accept the work as it is.";
   else text = result.reason ?? STATUS[result.status];
   return <p className={result?.status === "ready" ? "outcome" : "outcome warn"}>{text}</p>;
 }

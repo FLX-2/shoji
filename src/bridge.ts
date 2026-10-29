@@ -18,8 +18,10 @@ export interface RunRequest {
   stack: Stack;
   /** Dollars this run may spend. */
   cap: number;
-  /** Set for a request for changes, with the thread, its work's plan and its branch. */
+  /** Set for a run that carries on a thread, with the thread, its plan and its branch. */
   changes?: ChangesRequest;
+  /** Stop once the plan is written, for the person to build or change it. */
+  planOnly?: boolean;
 }
 
 export interface ChangesRequest {
@@ -28,6 +30,8 @@ export interface ChangesRequest {
   notes: string;
   plan: string;
   branch: string;
+  /** Changes to the work (the default), building an approved plan, or planning again from notes on it. */
+  kind?: "changes" | "build" | "replan";
 }
 
 export interface TrialRequest {
@@ -87,10 +91,10 @@ export interface LedgerThread {
 
 export interface LedgerRun {
   id: number;
-  kind: "task" | "changes" | "trial" | "notes";
+  kind: "task" | "changes" | "build" | "replan" | "trial" | "notes";
   startedAt: number;
   /** How the run ended; null while it's going. */
-  status: "ready" | "needs-work" | "stopped" | "failed" | null;
+  status: "ready" | "needs-work" | "stopped" | "failed" | "planned" | null;
   calls: LedgerCall[];
 }
 

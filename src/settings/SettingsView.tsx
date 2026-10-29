@@ -59,6 +59,12 @@ export function SettingsView({
               value={prefs.dailyLimit}
               onChange={(dailyLimit) => onChange({ dailyLimit })}
             />
+            <SwitchRow
+              label="Check the plan first"
+              description="Each thread pauses once its plan is written, so you can build it or change it first."
+              on={prefs.planFirst}
+              onToggle={() => onChange({ planFirst: !prefs.planFirst })}
+            />
           </div>
         </section>
 

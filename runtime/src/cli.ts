@@ -26,7 +26,12 @@ Options:
                       typecheck, lint and test scripts)
   --changes <notes>   Build the person's requested changes on top of finished work,
                       skipping scout and plan; needs --plan-file
-  --plan-file <file>  The plan of the work being changed
+  --plan-file <file>  The plan of the work being changed, built or planned again
+  --plan-only         Stop once the plan is written, for the person to build or change
+  --build             Build the plan in --plan-file, which the person approved, skipping
+                      scout and plan
+  --replan <notes>    Scout and plan again from the plan in --plan-file and the person's
+                      notes on it
   --trial-file <file> Replay accepted tasks on the stack instead of running one, each in a
                       scratch copy of the project at the parent of its accepted commit. The
                       file holds {"tasks":[{"task":…,"commit":<accepted>,"was":<dollars>},…]};
@@ -116,6 +121,9 @@ async function main() {
       cap: { type: "string", default: "0.50" },
       check: { type: "string", multiple: true },
       changes: { type: "string" },
+      "plan-only": { type: "boolean", default: false },
+      build: { type: "boolean", default: false },
+      replan: { type: "string" },
       "plan-file": { type: "string" },
       "trial-file": { type: "string" },
       notes: { type: "boolean", default: false },
@@ -142,11 +150,12 @@ async function main() {
   const apiKey = process.env.SHOJI_API_KEY || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) fail("Set SHOJI_API_KEY or ANTHROPIC_API_KEY.");
 
-  if (values.changes !== undefined && !values["plan-file"]) fail("--changes needs --plan-file.");
-  const changes =
-    values.changes !== undefined && values["plan-file"]
-      ? { notes: values.changes, plan: fs.readFileSync(values["plan-file"], "utf8") }
-      : undefined;
+  const continuing = [values.changes !== undefined, values.build, values.replan !== undefined].filter(Boolean).length;
+  if (continuing > 1) fail("Use one of --changes, --build and --replan.");
+  if (continuing && !values["plan-file"]) fail("--changes, --build and --replan need --plan-file.");
+  const plan = values["plan-file"] ? fs.readFileSync(values["plan-file"], "utf8") : "";
+  const changes = values.changes !== undefined ? { notes: values.changes, plan } : undefined;
+  const replan = values.replan !== undefined ? { notes: values.replan, plan } : undefined;
 
   const root = path.resolve(values.repo);
   if (!isGitRepo(root)) fail(`${root} isn't a git repository.`);
@@ -185,8 +194,8 @@ async function main() {
     return;
   }
   if (!values.task) fail(USAGE);
-  // Changes build on the thread's own uncommitted work, so only a fresh thread needs a clean project.
-  if (!changes && hasChanges(root) && !values["allow-dirty"]) {
+  // Later runs build on the thread's own uncommitted work, so only a fresh thread needs a clean project.
+  if (!continuing && hasChanges(root) && !values["allow-dirty"]) {
     fail(
       values.json
         ? "The project has uncommitted changes. Commit or stash them, then start the thread again."
@@ -202,9 +211,12 @@ async function main() {
     checks: values.check ?? defaultChecks(root),
     cap,
     changes,
+    planOnly: values["plan-only"],
+    approved: values.build ? plan : undefined,
+    replan,
     emit: (event) => write(event, describe(event)),
   });
-  process.exitCode = result.status === "ready" ? 0 : 1;
+  process.exitCode = result.status === "ready" || result.status === "planned" ? 0 : 1;
 }
 
 main();

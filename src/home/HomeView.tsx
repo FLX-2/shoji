@@ -7,12 +7,27 @@ interface HomeViewProps {
   busy: boolean;
   onPickProject: () => void;
   onOpenSettings: () => void;
-  /** Returns false when the task didn't start, so the composer keeps it. */
-  onStart: (task: string) => void | boolean;
+  /** New threads pause after the plan. */
+  planFirst: boolean;
+  onTogglePlanFirst: () => void;
+  /** Why the last task couldn't start in this folder, if it couldn't. */
+  problem?: string | null;
+  /** Resolves to false when the task didn't start, so the composer keeps it. */
+  onStart: (task: string) => void | boolean | Promise<void | boolean>;
 }
 
 /** Start: pick a project and describe a change. */
-export function HomeView({ repo, hasKey, busy, onPickProject, onOpenSettings, onStart }: HomeViewProps) {
+export function HomeView({
+  repo,
+  hasKey,
+  busy,
+  onPickProject,
+  onOpenSettings,
+  planFirst,
+  onTogglePlanFirst,
+  problem,
+  onStart,
+}: HomeViewProps) {
   return (
     <div className="home">
       <div className="hwrap">
@@ -30,8 +45,24 @@ export function HomeView({ repo, hasKey, busy, onPickProject, onOpenSettings, on
             </svg>
             {repo ? folderName(repo) : "Choose a project"}
           </button>
+          <button
+            type="button"
+            className="chip"
+            aria-pressed={planFirst}
+            onClick={onTogglePlanFirst}
+            title="Pause after the plan, to build it or change it first"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {planFirst ? <path d="M5 12l5 5 9-10" /> : <path d="M6 12h12" />}
+            </svg>
+            Check the plan first
+          </button>
         </Composer>
-        {!hasKey ? (
+        {problem ? (
+          <p className="hint" role="alert">
+            {problem}
+          </p>
+        ) : !hasKey ? (
           <p className="hint">
             Shoji needs your Anthropic API key to run.{" "}
             <button type="button" className="link" onClick={onOpenSettings}>

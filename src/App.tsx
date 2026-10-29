@@ -21,6 +21,18 @@ import { formatCost } from "./thread/fold";
 import { ThreadView } from "./thread/ThreadView";
 import { isRunning, threadCost, useThread } from "./thread/useThread";
 
+/** Why a thread can't start in this folder yet, or null when it can. */
+async function folderProblem(bridge: Bridge, repo: string): Promise<string | null> {
+  try {
+    const changes = await bridge.changes(repo);
+    return changes.diff
+      ? `${folderName(repo)} has uncommitted changes. Commit or stash them, then send the task again.`
+      : null;
+  } catch {
+    return `${folderName(repo)} isn't a git repository. Shoji works in git so every change can be reviewed and undone.`;
+  }
+}
+
 const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent);
 
 function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
@@ -28,7 +40,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
   const [prefs, setPrefs] = usePrefs();
   const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
   const stack = useStack(bridge, prefs.stack);
-  const { thread, start, requestChanges, stop, commit } = useThread(bridge);
+  const { thread, start, requestChanges, keepGoing, build, replan, stop, commit } = useThread(bridge);
   const trials = useTrial(bridge);
   const trialRunning = !!trials.trial && trialProgress(trials.trial).running;
   const notes = useNotes(bridge);
@@ -73,9 +85,13 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
     return false;
   };
 
+  const [startProblem, setStartProblem] = useState<string | null>(null);
   const pickProject = async () => {
     const repo = await bridge.pickProject();
-    if (repo) setPrefs({ repo });
+    if (repo) {
+      setPrefs({ repo });
+      setStartProblem(null);
+    }
   };
 
   return (
@@ -140,12 +156,19 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 busy={running}
                 onPickProject={pickProject}
                 onOpenSettings={() => setSection("settings")}
-                onStart={(task) => {
+                problem={startProblem}
+                planFirst={prefs.planFirst}
+                onTogglePlanFirst={() => setPrefs({ planFirst: !prefs.planFirst })}
+                onStart={async (task) => {
                   const repo = prefs.repo;
                   if (!repo) return false;
+                  // Checked here so the task stays in the composer while the person sorts the folder out.
+                  const problem = await folderProblem(bridge, repo);
+                  setStartProblem(problem);
+                  if (problem) return false;
                   return withinDay("This thread", prefs.cap, () => {
                     setSection("threads");
-                    start(task, repo, stack.stack, prefs.cap);
+                    start(task, repo, stack.stack, prefs.cap, prefs.planFirst);
                   });
                 }}
               />
@@ -169,6 +192,15 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 thread={thread}
                 onStop={stop}
                 onRequestChanges={requestChanges}
+                onKeepGoing={() => withinDay("Keeping this thread going", prefs.cap, () => keepGoing(prefs.cap))}
+                more={prefs.cap}
+                onRetry={() =>
+                  withinDay("This thread", thread.cap, () =>
+                    start(thread.task, thread.repo, thread.stack, thread.cap, prefs.planFirst),
+                  )
+                }
+                onBuild={build}
+                onReplan={replan}
                 onCommit={commit}
                 showCosts={prefs.showCosts}
               />

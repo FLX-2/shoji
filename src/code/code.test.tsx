@@ -126,13 +126,14 @@ describe("the thread's Code", () => {
 
   it("holds accept and revert while a run is editing the project", async () => {
     const fake = fakeBridge();
-    fake.project.diff = DIFF;
     render(<App bridge={fake.bridge} />);
     const task = await screen.findByRole("textbox", { name: "Task" });
     fireEvent.change(task, { target: { value: "Add annual pricing" } });
     await act(async () => {
       fireEvent.keyDown(task, { key: "Enter" });
     });
+    // The run has started editing.
+    fake.project.diff = DIFF;
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /^Code/ }));
     });

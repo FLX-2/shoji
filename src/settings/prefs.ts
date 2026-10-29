@@ -12,6 +12,8 @@ export interface Prefs {
   cap: number;
   /** Shoji asks before a thread or trial could take a day's spend past this, in dollars. */
   dailyLimit: number;
+  /** Threads pause after the plan, for the person to build it or change it. */
+  planFirst: boolean;
   /** Interface motion. Off removes every transition and holds the background still. */
   motion: boolean;
   /** The background behind the main stage. */
@@ -38,6 +40,7 @@ export const DEFAULT_PREFS: Prefs = {
   stack: "balanced",
   cap: 0.5,
   dailyLimit: 25,
+  planFirst: true,
   motion: true,
   field: "code",
   frost: 23,
