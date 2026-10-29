@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Shoji app icon: logo C, "Sliding panels", on the matte tile. The tile follows
+       the macOS icon grid (824 px inside a 1024 px canvas). -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d1c1a"/>
+      <stop offset="1" stop-color="#0c0b0b"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(100 100) scale(8.24)">
+    <rect x="2" y="2" width="96" height="96" rx="21" fill="url(#tile)"/>
+    <rect x="2.5" y="2.5" width="95" height="95" rx="20.5" fill="none" stroke="#fff" stroke-opacity=".09"/>
+    <svg x="18" y="24" width="64" height="52" viewBox="0 0 72 52">
+      <rect x="12" y="5" width="30" height="42" rx="1.5" fill="#6f6c68"/>
+      <rect x="30" y="5" width="30" height="42" rx="1.5" fill="#6f6c68"/>
+      <rect x="30" y="5" width="12" height="42" fill="#57544f"/>
+      <rect x="48" y="35" width="6" height="6" rx="1" fill="#ff5b3a"/>
+    </svg>
+  </g>
+</svg>

@@ -1,0 +1,271 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--matte);
+  color: var(--z9);
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+button {
+  font: inherit;
+}
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr) 28px;
+}
+
+.solid {
+  background: var(--solid);
+}
+
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--z5);
+  flex: none;
+}
+
+.app[data-state="running"] .dot.live {
+  background: var(--safe);
+  box-shadow:
+    0 0 0 3px rgba(var(--safe-rgb), 0.18),
+    0 0 10px var(--safe);
+}
+
+/* Title bar. On macOS the window's own buttons sit in the left gap. */
+.titlebar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.app[data-platform="mac"] .titlebar {
+  padding-left: 78px;
+}
+
+.titlebar .center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.titlebar .right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--z9);
+  white-space: nowrap;
+}
+
+.lockup svg {
+  width: 13px;
+  height: 11.4px;
+  flex: none;
+}
+
+.runlight {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 62px;
+  padding: 4px 2px 4px 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--z7);
+}
+
+.app[data-state="running"] .runlight {
+  color: var(--z9);
+}
+
+/* Body */
+.body {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  min-height: 0;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0 12px;
+  border-right: 1px solid var(--hair);
+}
+
+.rail button {
+  all: unset;
+  cursor: pointer;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 3px;
+  color: var(--z6);
+  position: relative;
+  transition:
+    color var(--d-quick) var(--e-out),
+    background-color var(--d-quick) var(--e-out);
+}
+
+.rail button:hover {
+  color: var(--z10);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.rail button[aria-current="page"] {
+  color: var(--z10);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.rail button[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--z10);
+}
+
+.rail button:focus-visible {
+  outline: 2px solid var(--z10);
+}
+
+.rail svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.rail button span {
+  font-size: 9.5px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+}
+
+.rail .rsep {
+  width: 22px;
+  height: 1px;
+  background: var(--hair);
+  margin: 6px 0;
+  flex: none;
+}
+
+.rail .sp {
+  flex: 1;
+}
+
+/* Main stage */
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.mh {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+  height: 46px;
+  flex: none;
+  border-bottom: 1px solid var(--hair);
+}
+
+.mh h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.empty {
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+}
+
+.empty svg {
+  width: 44px;
+  height: 38px;
+  margin-bottom: 6px;
+}
+
+.empty h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--z10);
+}
+
+.empty p {
+  margin: 0;
+  max-width: 420px;
+  color: var(--z7);
+}
+
+/* Status bar */
+.status {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 14px;
+  border-top: 1px solid var(--hair);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--z6);
+}
+
+.status .r {
+  margin-left: auto;
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
