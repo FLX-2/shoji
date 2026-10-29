@@ -53,3 +53,40 @@ export function tempRepo(files: Record<string, string>): string {
   git("-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "-q", "-m", "start");
   return root;
 }
+
+/** The role a request is for, read from its system prompt. */
+export function roleOf(request: ModelRequest) {
+  return request.system.match(/You are the (\w+)/)![1];
+}
+
+/** A scripted team that adds a greeting file. `goodBuild` decides whether its first build passes. */
+export function team(goodBuild: (request: ModelRequest) => boolean, verdict = "VERDICT: APPROVE") {
+  return new ScriptedProvider((request) => {
+    const last = request.messages[request.messages.length - 1];
+    const answered = Array.isArray(last.content) && last.content.some((b) => b.type === "tool_result");
+    switch (roleOf(request)) {
+      case "scout":
+        return answered
+          ? reply([{ text: "The greeting lives in src/hello.js.\nFILES: src/hello.js" }])
+          : reply([{ tool: "read_file", input: { path: "src/hello.js" } }]);
+      case "planner":
+        return reply([{ text: "Change the greeting to 'hello, shoji'.\nDONE WHEN: the check passes." }]);
+      case "builder":
+        return answered
+          ? reply([{ text: "Changed the greeting." }])
+          : reply([
+              {
+                tool: "write_file",
+                input: {
+                  path: "src/hello.js",
+                  content: goodBuild(request) ? "export default 'hello, shoji';\n" : "export default 'hello';\n",
+                },
+              },
+            ]);
+      default:
+        return reply([{ text: verdict }]);
+    }
+  });
+}
+
+export const CHECK = `node -e "process.exit(require('fs').readFileSync('src/hello.js','utf8').includes('shoji') ? 0 : 1)"`;

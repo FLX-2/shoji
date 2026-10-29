@@ -43,6 +43,9 @@ export function oneModelCost(thread: LedgerThread): number {
 
 export const accepted = (thread: LedgerThread) => thread.committed !== null;
 
+/** A trial replays accepted tasks on another stack. It spends, but it isn't work to accept. */
+export const isTrial = (thread: LedgerThread) => thread.runs[0]?.kind === "trial";
+
 /** Accepted without a request for changes. */
 export const firstTry = (thread: LedgerThread) => accepted(thread) && thread.runs.every((run) => run.kind === "task");
 
@@ -65,8 +68,9 @@ export interface MonthSummary {
   accepted: number;
   /** Spend over accepted threads; rejected and abandoned threads still count as spend. */
   perAccepted: number | null;
-  /** Share of the month's threads accepted without a request for changes. */
+  /** Share of the month's threads accepted without a request for changes. Trials don't count. */
   firstTry: number | null;
+  trials: number;
 }
 
 export function summarize(threads: LedgerThread[], month: string): MonthSummary {
@@ -74,13 +78,15 @@ export function summarize(threads: LedgerThread[], month: string): MonthSummary 
   const spent = inMonth.reduce((sum, t) => sum + threadSpend(t), 0);
   const oneModel = inMonth.reduce((sum, t) => sum + oneModelCost(t), 0);
   const acceptedCount = inMonth.filter(accepted).length;
+  const work = inMonth.filter((t) => !isTrial(t));
   return {
     threads: inMonth,
     spent,
     saved: oneModel - spent,
     accepted: acceptedCount,
     perAccepted: acceptedCount ? spent / acceptedCount : null,
-    firstTry: inMonth.length ? inMonth.filter(firstTry).length / inMonth.length : null,
+    firstTry: work.length ? work.filter(firstTry).length / work.length : null,
+    trials: inMonth.length - work.length,
   };
 }
 
@@ -141,6 +147,7 @@ export function receipt(thread: LedgerThread): Receipt {
 /** How a thread ended, in a word or two. */
 export function outcome(thread: LedgerThread): string {
   if (accepted(thread)) return "Accepted";
+  if (isTrial(thread)) return thread.runs[0].status === null ? "Running" : "Trial";
   const last = thread.runs[thread.runs.length - 1];
   switch (last?.status) {
     case null:

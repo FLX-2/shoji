@@ -1,6 +1,7 @@
 import { act } from "@testing-library/react";
 import type { RuntimeEvent } from "../../runtime/src/events";
-import type { Bridge, KeyStatus, LedgerThread, RunExit, RunRequest } from "../bridge";
+import type { TrialEvent } from "../../runtime/src/trial";
+import type { Bridge, KeyStatus, LedgerThread, RunExit, RunRequest, TrialRequest } from "../bridge";
 
 /** Stands in for the Rust side: records what the app asks for and plays back runtime events. */
 export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
@@ -11,9 +12,11 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   /** stack.lock as the app would find it on disk. */
   const files = { stackLock: null as string | null };
   const onEvent: ((run: number, event: RuntimeEvent) => void)[] = [];
+  const onTrialEvent: ((run: number, event: TrialEvent) => void)[] = [];
   const onExit: ((exit: RunExit) => void)[] = [];
   const calls = {
     starts: [] as RunRequest[],
+    trials: [] as TrialRequest[],
     stops: 0,
     forgot: 0,
     accepted: [] as string[],
@@ -35,6 +38,10 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     startRun: async (request) => {
       calls.starts.push(request);
       return { run: ++runs, thread: request.changes?.thread ?? 1, branch: request.changes?.branch ?? "shoji/thread" };
+    },
+    startTrial: async (request) => {
+      calls.trials.push(request);
+      return ++runs;
     },
     stopRun: async () => {
       calls.stops++;
@@ -67,6 +74,10 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       onEvent.push(handler);
       return () => onEvent.splice(onEvent.indexOf(handler), 1);
     },
+    onTrialEvent: async (handler) => {
+      onTrialEvent.push(handler);
+      return () => onTrialEvent.splice(onTrialEvent.indexOf(handler), 1);
+    },
     onExit: async (handler) => {
       onExit.push(handler);
       return () => onExit.splice(onExit.indexOf(handler), 1);
@@ -82,6 +93,9 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     /** Sends events from the latest run. */
     emit: (...events: RuntimeEvent[]) =>
       act(() => events.forEach((event) => onEvent.forEach((h) => h(runs, event)))),
+    /** Sends trial events from the latest run. */
+    emitTrial: (...events: TrialEvent[]) =>
+      act(() => events.forEach((event) => onTrialEvent.forEach((h) => h(runs, event)))),
     exit: (code: number | null = 0, error = "") => act(() => onExit.forEach((h) => h({ run: runs, code, error }))),
   };
 }
