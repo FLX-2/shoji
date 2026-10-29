@@ -1,7 +1,8 @@
 import { act } from "@testing-library/react";
 import type { RuntimeEvent } from "../../runtime/src/events";
+import type { NotesEvent } from "../../runtime/src/notes";
 import type { TrialEvent } from "../../runtime/src/trial";
-import type { Bridge, KeyStatus, LedgerThread, RunExit, RunRequest, TrialRequest } from "../bridge";
+import type { Bridge, KeyStatus, LedgerThread, NotesRequest, RunExit, RunRequest, TrialRequest } from "../bridge";
 
 /** Stands in for the Rust side: records what the app asks for and plays back runtime events. */
 export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
@@ -10,13 +11,15 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   /** What the ledger holds; tests fill it. */
   const ledger: LedgerThread[] = [];
   /** stack.lock as the app would find it on disk. */
-  const files = { stackLock: null as string | null };
+  const files = { stackLock: null as string | null, hasNotes: false };
   const onEvent: ((run: number, event: RuntimeEvent) => void)[] = [];
   const onTrialEvent: ((run: number, event: TrialEvent) => void)[] = [];
+  const onNotesEvent: ((run: number, event: NotesEvent) => void)[] = [];
   const onExit: ((exit: RunExit) => void)[] = [];
   const calls = {
     starts: [] as RunRequest[],
     trials: [] as TrialRequest[],
+    notes: [] as NotesRequest[],
     stops: 0,
     forgot: 0,
     savedKeys: [] as string[],
@@ -51,6 +54,10 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     startTrial: async (request) => {
       calls.trials.push(request);
       return ++runs;
+    },
+    startNotes: async (request) => {
+      calls.notes.push(request);
+      return files.hasNotes ? null : ++runs;
     },
     stopRun: async () => {
       calls.stops++;
@@ -87,6 +94,10 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       onTrialEvent.push(handler);
       return () => onTrialEvent.splice(onTrialEvent.indexOf(handler), 1);
     },
+    onNotesEvent: async (handler) => {
+      onNotesEvent.push(handler);
+      return () => onNotesEvent.splice(onNotesEvent.indexOf(handler), 1);
+    },
     onExit: async (handler) => {
       onExit.push(handler);
       return () => onExit.splice(onExit.indexOf(handler), 1);
@@ -104,6 +115,9 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     /** Sends trial events from the latest run. */
     emitTrial: (...events: TrialEvent[]) =>
       act(() => events.forEach((event) => onTrialEvent.forEach((h) => h(runs, event)))),
+    /** Sends project notes events from the latest run. */
+    emitNotes: (...events: NotesEvent[]) =>
+      act(() => events.forEach((event) => onNotesEvent.forEach((h) => h(runs, event)))),
     exit: (code: number | null = 0, error = "") => act(() => onExit.forEach((h) => h({ run: runs, code, error }))),
   };
 }

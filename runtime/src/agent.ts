@@ -6,6 +6,9 @@ import type { Workspace } from "./workspace";
 
 export const MAX_TOKENS = 16000;
 
+/** What a step answers when it used every turn without finishing. */
+export const OUT_OF_TURNS = "(The step ran out of turns before it finished.)";
+
 export interface AgentRun {
   meter: Meter;
   workspace: Workspace;
@@ -60,5 +63,5 @@ export async function runAgent(run: AgentRun): Promise<string> {
       }),
     });
   }
-  return "(The step ran out of turns before it finished.)";
+  return OUT_OF_TURNS;
 }

@@ -96,6 +96,20 @@ describe("receipts", () => {
     expect(firstTry(threads[1])).toBe(false);
   });
 
+  it("counts trials and project notes as spend, but not as work to accept", () => {
+    const threads = [
+      thread(1, "First try", [run("task", "ready", routed())], { committed: "a1" }),
+      thread(2, "Review on Sonnet 5.5", [run("trial", "ready", routed())], { branch: "" }),
+      thread(3, "Project notes", [run("notes", "ready", [call("notes", "scout", "claude-haiku-5-5")])], {
+        branch: "",
+      }),
+    ];
+    const s = summarize(threads, monthOf(OCT));
+    expect([s.trials, s.notes, s.firstTry]).toEqual([1, 1, 1]);
+    expect(s.spent).toBeCloseTo(2 * routed().reduce((sum, c) => sum + c.cost, 0) + threads[2].runs[0].calls[0].cost);
+    expect(outcome(threads[2])).toBe("Notes written");
+  });
+
   it("writes a receipt line per step and model, in order", () => {
     const t = thread(1, "Add a toggle", [
       run("task", "ready", routed()),
@@ -119,6 +133,7 @@ describe("receipts", () => {
     expect(outcome(thread(1, "t", [run("task", "ready", [])]))).toBe("Not accepted");
     expect(outcome(thread(1, "t", [run("task", "stopped", [])]))).toBe("Stopped");
     expect(outcome(thread(1, "t", [run("task", null, [])]))).toBe("Running");
+    expect(outcome(thread(1, "Project notes", [run("notes", "stopped", [])]))).toBe("Stopped");
   });
 
   it("exports one CSV row per thread, quoting what needs it", () => {

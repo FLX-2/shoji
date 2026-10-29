@@ -370,6 +370,76 @@ fn start_trial(
     Ok(id)
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NotesRequest {
+    repo: String,
+    /// The stack, as the runtime's --stack-json takes it. Its scout reads the project.
+    stack: serde_json::Value,
+    /// Dollars the notes may cost.
+    cap: f64,
+}
+
+/// Has the scout read the project and write SHOJI.md, the notes Plan reads before every task.
+/// Returns None when the project already has notes, since there's nothing to write. Otherwise
+/// its events and exit arrive like a thread's, under the returned run number.
+#[tauri::command]
+fn start_notes(
+    app: AppHandle,
+    run: State<Run>,
+    ledger: State<Ledger>,
+    request: NotesRequest,
+) -> Result<Option<u64>, String> {
+    if Path::new(&request.repo).join("SHOJI.md").exists() {
+        return Ok(None);
+    }
+    let mut slot = run.child.lock().unwrap();
+    if slot.is_some() {
+        return Err("Something is already running. Let it finish or stop it first.".into());
+    }
+    let key = saved_key()
+        .or_else(env_key)
+        .ok_or("Add your Anthropic API key in Settings first.")?;
+    let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let runs = data.join("runs");
+    fs::create_dir_all(&runs).map_err(|e| e.to_string())?;
+    let stamp = now_ms();
+    let log = runs.join(format!("{stamp}.jsonl"));
+
+    let stack = request.stack.to_string();
+    let thread = ledger
+        .start_thread("Project notes", &request.repo, "", &stack, stamp)
+        .map_err(|e| e.to_string())?;
+    let entry = ledger
+        .start_run(thread, "notes", &log.display().to_string(), stamp)
+        .map_err(|e| e.to_string())?;
+    let args = vec![
+        "--json".to_string(),
+        "--repo".into(),
+        request.repo,
+        "--notes".into(),
+        "--stack-json".into(),
+        stack,
+        "--cap".into(),
+        format!("{:.4}", request.cap),
+        "--log".into(),
+        log.display().to_string(),
+    ];
+    let command = app.shell().sidecar("shoji-runtime").map_err(|e| e.to_string())?;
+    let (events, child) = command
+        .args(args)
+        .env("SHOJI_API_KEY", key)
+        .spawn()
+        .map_err(|e| {
+            noted(ledger.end_run(entry, "failed"));
+            e.to_string()
+        })?;
+    let id = run.count.fetch_add(1, Ordering::Relaxed) + 1;
+    *slot = Some((id, child, entry));
+    watch(app, events, id, entry);
+    Ok(Some(id))
+}
+
 #[tauri::command]
 fn stop_run(run: State<Run>, ledger: State<Ledger>) -> Result<(), String> {
     if let Some((_, child, entry)) = run.child.lock().unwrap().take() {
@@ -642,6 +712,7 @@ pub fn run() {
             pick_project,
             start_run,
             start_trial,
+            start_notes,
             stop_run,
             changes,
             accept_file,

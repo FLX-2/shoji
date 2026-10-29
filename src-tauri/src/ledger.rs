@@ -68,7 +68,7 @@ pub struct ThreadRecord {
 #[serde(rename_all = "camelCase")]
 pub struct RunRecord {
     pub id: i64,
-    /// "task" or "changes".
+    /// "task", "changes", "trial" or "notes".
     pub kind: String,
     pub started_at: i64,
     /// ready, needs-work, stopped or failed; none while the run is going.
@@ -193,7 +193,8 @@ impl Ledger {
                     params![run, if finished { "ready" } else { "failed" }],
                 )?;
             }
-            Some("result") => {
+            // A thread ends with its result; project notes end with theirs, in the same shape.
+            Some("result" | "notes") => {
                 if let Some(status) = event["result"]["status"].as_str() {
                     self.0.lock().unwrap().execute(
                         "UPDATE runs SET status = ?2 WHERE id = ?1",
@@ -398,6 +399,23 @@ mod tests {
         assert_eq!(runs[0].kind, "trial");
         assert_eq!(runs[0].calls.len(), 1);
         assert_eq!(runs[0].status.as_deref(), Some("failed"));
+    }
+
+    #[test]
+    fn keeps_how_project_notes_ended() {
+        let ledger = Ledger::in_memory().unwrap();
+        let thread = ledger.start_thread("Project notes", "/r", "", "{}", 1).unwrap();
+        let run = ledger.start_run(thread, "notes", "/logs/3.jsonl", 2).unwrap();
+        ledger
+            .record(run, &call("scout", "claude-haiku-5-5", 0.002), 3)
+            .unwrap();
+        ledger
+            .record(run, &json!({ "type": "notes", "result": { "status": "ready" } }), 4)
+            .unwrap();
+
+        let runs = &ledger.threads().unwrap()[0].runs;
+        assert_eq!((runs[0].kind.as_str(), runs[0].calls.len()), ("notes", 1));
+        assert_eq!(runs[0].status.as_deref(), Some("ready"));
     }
 
     #[test]
