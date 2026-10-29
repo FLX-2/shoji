@@ -117,7 +117,10 @@ describe("trials", () => {
     expect(fs.existsSync(path.join(copy, "node_modules/x/index.js"))).toBe(true);
     const status = spawnSync("git", ["status", "--porcelain"], { cwd: copy, encoding: "utf8" }).stdout;
     expect(status).toBe("");
-    expect(fs.readFileSync(path.join(copy, "src/hello.js"), "utf8")).toBe("export default 'hello';\n");
+    // Git on Windows may check the copy out with CRLF line endings.
+    expect(fs.readFileSync(path.join(copy, "src/hello.js"), "utf8").replace(/\r\n/g, "\n")).toBe(
+      "export default 'hello';\n",
+    );
     removeCopy(copy);
     expect(fs.existsSync(copy)).toBe(false);
     expect(fs.existsSync(path.join(root, "node_modules/x/index.js"))).toBe(true);
