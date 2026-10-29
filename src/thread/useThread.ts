@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { RuntimeEvent } from "../../runtime/src/events";
 import { MODELS } from "../../runtime/src/models";
 import type { StackName } from "../../runtime/src/stack";
-import type { Bridge, RunExit } from "../bridge";
+import type { Bridge, ChangesRequest, RunExit } from "../bridge";
 import { foldRun } from "./fold";
 
 /** One ask and the run that answered it: the task itself, or a request for changes. */
@@ -18,6 +18,8 @@ export interface Turn {
 }
 
 export interface Thread {
+  /** The thread's id in the ledger, once its first run has started. */
+  id?: number;
   task: string;
   repo: string;
   stack: StackName;
@@ -90,13 +92,13 @@ export function useThread(bridge: Bridge) {
   }, [bridge, updateLast]);
 
   const run = useCallback(
-    async (next: Thread, turn: Turn, changes?: { notes: string; plan: string; branch: string }) => {
+    async (next: Thread, turn: Turn, changes?: ChangesRequest) => {
       const spent = threadCost(next);
       setThread({ ...next, turns: [...next.turns, turn] });
       current.current = "starting";
       early.current.clear();
       try {
-        const { run: id, branch } = await bridge.startRun({
+        const { run: id, thread: threadId, branch } = await bridge.startRun({
           repo: next.repo,
           task: next.task,
           stack: next.stack,
@@ -106,7 +108,7 @@ export function useThread(bridge: Bridge) {
         const held = early.current.get(id);
         early.current.clear();
         current.current = held?.exit ? null : id;
-        setThread((t) => (t ? { ...t, branch } : t));
+        setThread((t) => (t ? { ...t, id: threadId, branch } : t));
         if (held) updateLast((t) => ({ ...t, events: [...t.events, ...held.events], exit: held.exit }));
       } catch (error) {
         current.current = null;
@@ -124,9 +126,13 @@ export function useThread(bridge: Bridge) {
 
   const requestChanges = useCallback(
     (notes: string) => {
-      if (!thread) return;
+      if (thread?.id === undefined) return;
       const plan = thread.turns.map((t) => foldRun(t.events).result?.plan).findLast(Boolean) ?? "";
-      run(thread, { ask: notes, kind: "changes", events: [] }, { notes, plan, branch: thread.branch ?? "" });
+      run(
+        thread,
+        { ask: notes, kind: "changes", events: [] },
+        { thread: thread.id, notes, plan, branch: thread.branch ?? "" },
+      );
     },
     [thread, run],
   );
@@ -138,8 +144,8 @@ export function useThread(bridge: Bridge) {
 
   /** Accepts all of the thread's work as one commit on its branch. */
   const commit = useCallback(async () => {
-    if (!thread?.branch) return;
-    const sha = await bridge.commitThread(thread.repo, thread.branch, commitMessage(thread));
+    if (!thread?.branch || thread.id === undefined) return;
+    const sha = await bridge.commitThread(thread.repo, thread.branch, commitMessage(thread), thread.id);
     setThread((t) => (t ? { ...t, committed: sha } : t));
   }, [bridge, thread]);
 

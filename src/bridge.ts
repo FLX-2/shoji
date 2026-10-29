@@ -1,7 +1,7 @@
 // The app's only way to the Rust side: the keychain, the folder picker and the runtime.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { RuntimeEvent } from "../runtime/src/events";
+import type { CallRecord, RuntimeEvent } from "../runtime/src/events";
 import type { StackName } from "../runtime/src/stack";
 
 export interface KeyStatus {
@@ -16,12 +16,22 @@ export interface RunRequest {
   stack: StackName;
   /** Dollars this run may spend. */
   cap: number;
-  /** Set for a request for changes, with the work's plan and the thread's branch. */
-  changes?: { notes: string; plan: string; branch: string };
+  /** Set for a request for changes, with the thread, its work's plan and its branch. */
+  changes?: ChangesRequest;
+}
+
+export interface ChangesRequest {
+  /** The thread's id in the ledger. */
+  thread: number;
+  notes: string;
+  plan: string;
+  branch: string;
 }
 
 export interface StartedRun {
   run: number;
+  /** The thread's id in the ledger, which keeps its runs and calls for Receipts. */
+  thread: number;
   /** The thread's branch: a new one for a task, the same one for changes. */
   branch: string;
 }
@@ -40,6 +50,34 @@ export interface ProjectChanges {
   accepted: string[];
 }
 
+/** A thread as the ledger keeps it. Times are milliseconds since 1970. */
+export interface LedgerThread {
+  id: number;
+  task: string;
+  repo: string;
+  branch: string;
+  stack: string;
+  startedAt: number;
+  committed: string | null;
+  committedAt: number | null;
+  runs: LedgerRun[];
+}
+
+export interface LedgerRun {
+  id: number;
+  kind: "task" | "changes";
+  startedAt: number;
+  /** How the run ended; null while it's going. */
+  status: "ready" | "needs-work" | "stopped" | "failed" | null;
+  calls: LedgerCall[];
+}
+
+export interface LedgerCall extends Omit<CallRecord, "model"> {
+  at: number;
+  /** A model id; a ledger can hold models this version no longer lists. */
+  model: string;
+}
+
 export const bridge = {
   keyStatus: () => invoke<KeyStatus>("key_status"),
   saveKey: (key: string) => invoke<void>("save_key", { key }),
@@ -54,8 +92,10 @@ export const bridge = {
   /** Puts a file back as it was at the last commit. */
   revertFile: (repo: string, path: string) => invoke<void>("revert_file", { repo, path }),
   /** Commits all of the thread's work on its branch and returns the commit's short hash. */
-  commitThread: (repo: string, branch: string, message: string) =>
-    invoke<string>("commit_thread", { repo, branch, message }),
+  commitThread: (repo: string, branch: string, message: string, thread: number) =>
+    invoke<string>("commit_thread", { repo, branch, message, thread }),
+  /** Every thread in the ledger with its runs and calls, newest first. */
+  ledgerThreads: () => invoke<LedgerThread[]>("ledger_threads"),
   onEvent: (handler: (run: number, event: RuntimeEvent) => void) =>
     listen<{ run: number; event: RuntimeEvent }>("runtime-event", (e) => handler(e.payload.run, e.payload.event)),
   onExit: (handler: (exit: RunExit) => void) => listen<RunExit>("runtime-exit", (e) => handler(e.payload)),

@@ -195,7 +195,7 @@ describe("a thread in the app", () => {
 
     expect(fake.calls.starts[1]).toMatchObject({
       task: "Add an annual toggle to the pricing cards",
-      changes: { notes: "Make the badge smaller", plan: "1. Add a billing toggle.", branch: "shoji/thread" },
+      changes: { thread: 1, notes: "Make the badge smaller", plan: "1. Add a billing toggle.", branch: "shoji/thread" },
     });
     expect(fake.calls.starts[1].cap).toBeCloseTo(0.38);
     expect(screen.getByText("Make the badge smaller").className).toBe("umsg");
@@ -240,6 +240,7 @@ describe("a thread in the app", () => {
         message:
           "Add an annual toggle to the pricing cards\n\n" +
           "Shoji-Models: Opus 5.5 plan; Sonnet 5.5 build; Haiku 5.5 review\nShoji-Cost: $0.1200",
+        thread: 1,
       },
     ]);
     expect(document.querySelector(".review")?.textContent).toBe("Committed a1b2c3d on shoji/thread$0.12 in all");
