@@ -1,0 +1,48 @@
+name: macOS title bar
+
+on:
+  pull_request:
+    paths:
+      - "src-tauri/**"
+      - "src/styles/shell.css"
+      - "scripts/mac-titlebar.py"
+      - ".github/workflows/mac-titlebar.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  titlebar:
+    name: Title bar (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm tauri build --debug --bundles app
+      # Open Shoji, bring it to the front, and photograph the screen once it has drawn.
+      - name: Screenshot
+        run: |
+          open src-tauri/target/debug/bundle/macos/Shoji.app
+          sleep 15
+          osascript -e 'tell application "Shoji" to activate'
+          sleep 3
+          screencapture -x shot.png
+      - name: Check the window buttons are centred
+        run: |
+          python3 -m pip install --quiet --break-system-packages pillow
+          python3 scripts/mac-titlebar.py shot.png
