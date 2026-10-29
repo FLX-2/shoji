@@ -26,8 +26,8 @@ Options:
                       skipping scout and plan; needs --plan-file
   --plan-file <file>  The plan of the work being changed
   --trial-file <file> Replay accepted tasks on the stack instead of running one, each in a
-                      scratch copy of the project at the commit it started from. The file
-                      holds {"tasks":[{"task":…,"base":<commit>,"was":<dollars>},…]};
+                      scratch copy of the project at the parent of its accepted commit. The
+                      file holds {"tasks":[{"task":…,"commit":<accepted>,"was":<dollars>},…]};
                       --cap covers the whole trial
   --log <file>        Append every event to a JSON lines file
   --json              Print events as JSON lines, for the app
@@ -87,9 +87,9 @@ function readTrialTasks(file: string): TrialTask[] {
     fail(`Couldn't read the trial file: ${e instanceof Error ? e.message : String(e)}`);
   }
   const valid = (t: Partial<TrialTask>) =>
-    typeof t?.task === "string" && typeof t.base === "string" && typeof t.was === "number";
+    typeof t?.task === "string" && typeof t.commit === "string" && typeof t.was === "number";
   if (!Array.isArray(tasks) || tasks.length === 0 || !tasks.every(valid)) {
-    fail('The trial file needs {"tasks":[{"task":…,"base":<commit>,"was":<dollars>},…]}.');
+    fail('The trial file needs {"tasks":[{"task":…,"commit":<accepted>,"was":<dollars>},…]}.');
   }
   return tasks;
 }
