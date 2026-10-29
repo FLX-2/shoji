@@ -1,11 +1,13 @@
 # Shoji
 
-A Tauri 2 desktop app: a React and TypeScript front end in `src/`, and the Rust shell in `src-tauri/`.
+A Tauri 2 desktop app: a React and TypeScript front end in `src/`, the Rust shell in `src-tauri/`, and the agent runtime in `runtime/`. The runtime is TypeScript compiled with Bun, and runs the plan, build, check and review loop.
 
 ## Commands
 
 - `pnpm test`, `pnpm typecheck` and `pnpm build` must pass before every push. CI runs them, then builds the app on macOS, Windows and Linux.
 - `pnpm tauri dev` runs the app. On Linux it needs `libwebkit2gtk-4.1-dev`.
+- `pnpm runtime --repo <path> --task "…" --stack haiku --cap 0.05` runs the runtime live on a git project.
+- Runtime tests use `ScriptedProvider` in `runtime/test/helpers.ts` to answer as each role. They never call a model.
 
 ## Design
 
