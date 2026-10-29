@@ -177,7 +177,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   }
 }
 
-function approves(review: string): boolean {
+export function approves(review: string): boolean {
   return /^\s*VERDICT:\s*APPROVE/i.test(review);
 }
 
@@ -201,7 +201,7 @@ function filesFrom(workspace: Workspace, brief: string): string {
   return out.slice(0, MAX_FILES_CHARS) || "(none)";
 }
 
-function reviewPrompt(task: string, diff: string, checks: CheckResult[]): string {
+export function reviewPrompt(task: string, diff: string, checks: CheckResult[]): string {
   const results = checks.length
     ? checks.map((c) => `${c.command}: ${c.ok ? "passed" : `failed\n${c.output}`}`).join("\n")
     : "No check commands are set for this project.";
