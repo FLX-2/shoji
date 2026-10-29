@@ -4,8 +4,10 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { MAX_TOKENS } from "../src/agent";
 import type { RuntimeEvent } from "../src/events";
 import { commandEnv, runCommand } from "../src/commands";
+import { LEAST_OUTPUT } from "../src/meter";
 import { costOf } from "../src/models";
 import { runThread } from "../src/pipeline";
 import { defaultChecks } from "../src/project";
@@ -97,7 +99,7 @@ describe("default checks", () => {
 });
 
 
-async function run(provider: ModelProvider, cap = 1, changes?: { plan: string; notes: string }) {
+async function run(provider: ModelProvider, cap = 1, changes?: { plan: string; notes: string }, checks = [CHECK]) {
   const root = tempRepo({ "src/hello.js": "export default 'hello';\n" });
   const events: RuntimeEvent[] = [];
   const result = await runThread({
@@ -105,7 +107,7 @@ async function run(provider: ModelProvider, cap = 1, changes?: { plan: string; n
     stack: STACKS.balanced,
     provider,
     workspace: new Workspace(root),
-    checks: [CHECK],
+    checks,
     cap,
     changes,
     emit: (e) => events.push(e),
@@ -196,7 +198,7 @@ describe("thread pipeline", () => {
   });
 
   it("stops before a call could pass the cap, and never goes over it", async () => {
-    const cap = 0.3; // Enough for the scout, but not for the planner's worst case: 16k tokens of Opus, $0.32.
+    const cap = 0.05; // Enough for the scout, but the planner couldn't write 4k tokens of Opus, $0.08.
     const provider = team(() => true);
     const { result } = await run(provider, cap);
 
@@ -204,5 +206,32 @@ describe("thread pipeline", () => {
     expect(result.reason).toMatch(/limit/);
     expect(result.cost).toBeLessThanOrEqual(cap);
     expect(provider.requests.every((r) => roleOf(r) === "scout")).toBe(true);
+  });
+
+  it("says when a check can't run at all, and spends nothing trying to fix it", async () => {
+    const provider = team(() => true);
+    const { result, events } = await run(provider, 1, undefined, ["shoji-no-such-program --version"]);
+
+    expect(result.status).toBe("needs-work");
+    expect(result.reason).toMatch(/couldn't run shoji-no-such-program --version: its program isn't on this computer/);
+    expect(result.checks[0].missing).toBe(true);
+    expect(result.escalated).toBe(false);
+    expect(events.some((e) => e.type === "step" && e.step.startsWith("fix"))).toBe(false);
+    expect(provider.requests.filter((r) => roleOf(r) === "reviewer")).toHaveLength(1);
+    expect(JSON.stringify(provider.requests.at(-1)!.messages)).toContain(
+      "couldn't run, its program isn't installed here",
+    );
+  });
+
+  it("shortens a call near the cap instead of stopping, while it still has room to work", async () => {
+    const cap = 0.3; // The planner's worst case is 16k tokens of Opus, $0.32, so it gets a little less.
+    const provider = team(() => true);
+    const { result } = await run(provider, cap);
+
+    expect(result.status).toBe("ready");
+    const plan = provider.requests.find((r) => roleOf(r) === "planner")!;
+    expect(plan.maxTokens).toBeLessThan(MAX_TOKENS);
+    expect(plan.maxTokens).toBeGreaterThanOrEqual(LEAST_OUTPUT);
+    expect(result.cost).toBeLessThanOrEqual(cap);
   });
 });

@@ -55,6 +55,9 @@ export function commitMessage(thread: Thread): string {
   return [subject.trim(), body.join("\n").trim(), trailers.filter(Boolean).join("\n")].filter(Boolean).join("\n\n");
 }
 
+const KEEP_GOING =
+  "The last run stopped at its spending limit before it finished. Carry on from where it stopped: finish the task and get the checks passing.";
+
 /** Runs one thread through the runtime: the task, then any changes the person asks for. */
 export function useThread(bridge: Bridge) {
   const [thread, setThread] = useState<Thread | null>(null);
@@ -124,18 +127,24 @@ export function useThread(bridge: Bridge) {
     [run],
   );
 
-  const requestChanges = useCallback(
-    (notes: string) => {
+  /** Builds on the thread's work: the person's own notes, or carrying on with more to spend. */
+  const carryOn = useCallback(
+    (ask: string, notes: string, extra = 0) => {
       if (thread?.id === undefined) return;
       const plan = thread.turns.map((t) => foldRun(t.events).result?.plan).findLast(Boolean) ?? "";
       run(
-        thread,
-        { ask: notes, kind: "changes", events: [] },
+        { ...thread, cap: thread.cap + extra },
+        { ask, kind: "changes", events: [] },
         { thread: thread.id, notes, plan, branch: thread.branch ?? "" },
       );
     },
     [thread, run],
   );
+
+  const requestChanges = useCallback((notes: string) => carryOn(notes, notes), [carryOn]);
+
+  /** Raises the thread's limit by `extra` dollars and picks the work up where it stopped. */
+  const keepGoing = useCallback((extra: number) => carryOn("Keep going", KEEP_GOING, extra), [carryOn]);
 
   const stop = useCallback(async () => {
     updateLast((turn) => ({ ...turn, stoppedByYou: true }));
@@ -149,5 +158,5 @@ export function useThread(bridge: Bridge) {
     setThread((t) => (t ? { ...t, committed: sha } : t));
   }, [bridge, thread]);
 
-  return { thread, start, requestChanges, stop, commit };
+  return { thread, start, requestChanges, keepGoing, stop, commit };
 }

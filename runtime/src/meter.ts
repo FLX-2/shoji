@@ -6,6 +6,9 @@ import type { Role } from "./stack";
 
 export class BudgetExceeded extends Error {}
 
+/** The shortest answer a call is cut to near the cap. Any less and a step can't do useful work. */
+export const LEAST_OUTPUT = 4000;
+
 export class RefusedError extends Error {}
 
 /** Sends every call through one place, so each is costed, logged and held to the cap. */
@@ -21,11 +24,15 @@ export class Meter {
   ) {}
 
   async send(role: Role, step: string, request: ModelRequest): Promise<Anthropic.Message> {
-    const worst = worstCaseOutput(request.model, request.maxTokens);
-    if (this.spent + worst > this.cap) {
-      throw new BudgetExceeded(
-        `Stopped at $${this.spent.toFixed(2)}: the next call could pass the $${this.cap.toFixed(2)} limit.`,
-      );
+    if (this.spent + worstCaseOutput(request.model, request.maxTokens) > this.cap) {
+      // Near the cap, a call may still answer at shorter length, as long as that leaves it room to work.
+      const room = Math.floor(((this.cap - this.spent) / worstCaseOutput(request.model, 1e6)) * 1e6);
+      if (room < LEAST_OUTPUT) {
+        throw new BudgetExceeded(
+          `Stopped at $${this.spent.toFixed(2)}: the next call could pass the $${this.cap.toFixed(2)} limit.`,
+        );
+      }
+      request = { ...request, maxTokens: room };
     }
     const started = Date.now();
     const response = await this.provider.send(request);

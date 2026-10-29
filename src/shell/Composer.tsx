@@ -5,8 +5,8 @@ interface ComposerProps {
   placeholder: string;
   /** Why sending isn't possible yet, if it isn't. */
   blocked?: boolean;
-  /** Returns false to keep the text, when sending was held back. */
-  onSend: (text: string) => void | boolean;
+  /** Returns, or resolves to, false to keep the text, when sending was held back. */
+  onSend: (text: string) => void | boolean | Promise<void | boolean>;
   /** Controls beside the send button, such as the project. */
   children?: ReactNode;
   hero?: boolean;
@@ -19,9 +19,9 @@ interface ComposerProps {
 export function Composer({ label, placeholder, blocked, onSend, children, hero, autoFocus, onCancel }: ComposerProps) {
   const [text, setText] = useState("");
   const ready = text.trim() !== "" && !blocked;
-  const send = () => {
+  const send = async () => {
     if (!ready) return;
-    if (onSend(text.trim()) !== false) setText("");
+    if ((await onSend(text.trim())) !== false) setText("");
   };
 
   return (

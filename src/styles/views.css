@@ -399,6 +399,7 @@
   line-height: 1.65;
   color: var(--z9);
   max-width: 68ch;
+  white-space: pre-line;
 }
 
 .wk {

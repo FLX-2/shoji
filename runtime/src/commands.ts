@@ -26,11 +26,21 @@ export function runCommand(root: string, command: string): CheckResult {
     env: commandEnv(),
   });
   const output = `${run.stdout ?? ""}${run.stderr ?? ""}${run.error ? `\n${run.error.message}` : ""}`;
-  return {
+  const result: CheckResult = {
     command,
     ok: run.status === 0,
     output: output.length > KEEP_CHARS ? `…${output.slice(-KEEP_CHARS)}` : output,
   };
+  return notFound(run.status, output) ? { ...result, missing: true } : result;
+}
+
+/** Shells answer a program they can't find with 127 on macOS and Linux and 9009 on Windows. */
+function notFound(status: number | null, output: string): boolean {
+  return (
+    status === 127 ||
+    status === 9009 ||
+    (status !== 0 && /command not found|is not recognized as an internal or external command/.test(output))
+  );
 }
 
 export function runChecks(root: string, commands: string[]): CheckResult[] {

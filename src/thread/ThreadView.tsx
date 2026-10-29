@@ -23,6 +23,12 @@ interface ThreadViewProps {
   thread: Thread;
   onStop: () => void;
   onRequestChanges: (notes: string) => void;
+  /** Gives a thread that stopped at its limit more to spend, and carries on. */
+  onKeepGoing: () => void;
+  /** How much more Keep going allows, in dollars. */
+  more: number;
+  /** Starts a thread that couldn't start over again. */
+  onRetry: () => void;
   onCommit: () => Promise<void>;
   /** What the thread has cost, on the review bar. Off in Settings hides it. */
   showCosts: boolean;
@@ -40,7 +46,17 @@ const STATUS = {
 
 /** A thread: its Conversation, where each ask is followed by the steps that answered it,
  *  and its Code, the files it changed. */
-export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit, showCosts }: ThreadViewProps) {
+export function ThreadView({
+  bridge,
+  thread,
+  onStop,
+  onRequestChanges,
+  onKeepGoing,
+  more,
+  onRetry,
+  onCommit,
+  showCosts,
+}: ThreadViewProps) {
   const last = thread.turns[thread.turns.length - 1];
   const running = isRunning(last);
   const runs = thread.turns.map((turn) => foldRun(turn.events));
@@ -58,6 +74,9 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit,
   const fileCount = changes?.files.length ?? 0;
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
+
+  // Stopped at its limit, so the way on is more to spend.
+  const stopped = lastRun.result?.status === "stopped";
 
   const commit = () => {
     setCommitting(true);
@@ -165,13 +184,28 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit,
               </span>
             ) : (
               <>
+                {thread.id === undefined && last.error && (
+                  <button type="button" className="btn solid" onClick={onRetry}>
+                    Try again
+                  </button>
+                )}
+                {stopped && (
+                  <button type="button" className="btn solid" onClick={onKeepGoing}>
+                    Keep going, up to {formatCost(more)} more
+                  </button>
+                )}
                 {runs.some((run) => run.result?.plan) && (
                   <button type="button" className="btn" onClick={() => setAsking(true)} disabled={spent >= thread.cap}>
                     Request changes
                   </button>
                 )}
                 {thread.branch && fileCount > 0 && (
-                  <button type="button" className="btn solid" onClick={commit} disabled={committing}>
+                  <button
+                    type="button"
+                    className={stopped ? "btn" : "btn solid"}
+                    onClick={commit}
+                    disabled={committing}
+                  >
                     Accept and commit
                   </button>
                 )}
@@ -363,7 +397,10 @@ function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean 
       ? "Ready to accept. The checks pass and the review approved the change."
       : "Ready to accept. The review approved the change. This project has no checks to run.";
   else if (result.status === "needs-work")
-    text = "This still needs work. The review's notes are above; request changes to carry on.";
+    text = result.reason ?? "This still needs work. The review's notes are above; request changes to carry on.";
+  else if (result.status === "stopped")
+    text =
+      "Shoji stopped before the next step could take this thread past its limit. Keep going gives it more to spend, or you can accept the work as it is.";
   else text = result.reason ?? STATUS[result.status];
   return <p className={result?.status === "ready" ? "outcome" : "outcome warn"}>{text}</p>;
 }

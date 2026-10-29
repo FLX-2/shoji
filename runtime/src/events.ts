@@ -20,6 +20,8 @@ export interface CheckResult {
   command: string;
   ok: boolean;
   output: string;
+  /** The command's program couldn't be found, so the check never ran. */
+  missing?: boolean;
 }
 
 export type RuntimeEvent =

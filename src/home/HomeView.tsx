@@ -7,12 +7,14 @@ interface HomeViewProps {
   busy: boolean;
   onPickProject: () => void;
   onOpenSettings: () => void;
-  /** Returns false when the task didn't start, so the composer keeps it. */
-  onStart: (task: string) => void | boolean;
+  /** Why the last task couldn't start in this folder, if it couldn't. */
+  problem?: string | null;
+  /** Resolves to false when the task didn't start, so the composer keeps it. */
+  onStart: (task: string) => void | boolean | Promise<void | boolean>;
 }
 
 /** Start: pick a project and describe a change. */
-export function HomeView({ repo, hasKey, busy, onPickProject, onOpenSettings, onStart }: HomeViewProps) {
+export function HomeView({ repo, hasKey, busy, onPickProject, onOpenSettings, problem, onStart }: HomeViewProps) {
   return (
     <div className="home">
       <div className="hwrap">
@@ -31,7 +33,11 @@ export function HomeView({ repo, hasKey, busy, onPickProject, onOpenSettings, on
             {repo ? folderName(repo) : "Choose a project"}
           </button>
         </Composer>
-        {!hasKey ? (
+        {problem ? (
+          <p className="hint" role="alert">
+            {problem}
+          </p>
+        ) : !hasKey ? (
           <p className="hint">
             Shoji needs your Anthropic API key to run.{" "}
             <button type="button" className="link" onClick={onOpenSettings}>

@@ -270,6 +270,59 @@ describe("a thread in the app", () => {
     expect((screen.getByRole("button", { name: "Accept and commit" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("offers to keep going with more when a thread stops at its limit", async () => {
+    const fake = await startThread();
+    fake.emit(running("plan", "plan", OPUS), done("plan", "plan", OPUS), call("build", "build", SONNET, 0.45));
+    fake.emit(result("stopped", 0.45, { reason: "Stopped at $0.45: the next call could pass the $0.50 limit." }));
+    fake.exit(1);
+
+    expect(screen.getByText(/^Shoji stopped before the next step could take this thread past its limit/)).toBeTruthy();
+    const keep = screen.getByRole("button", { name: "Keep going, up to $0.50 more" });
+    expect(keep.className).toBe("btn solid");
+    await act(async () => {
+      fireEvent.click(keep);
+    });
+
+    expect(fake.calls.starts[1]).toMatchObject({ changes: { thread: 1, plan: "1. Add a billing toggle." } });
+    expect(fake.calls.starts[1].changes!.notes).toMatch(/^The last run stopped at its spending limit/);
+    // What was left of the first limit, and the same again.
+    expect(fake.calls.starts[1].cap).toBeCloseTo(0.55);
+    expect(screen.getByText("Keep going").className).toBe("umsg");
+  });
+
+  it("says why the work needs more, in the runtime's words", async () => {
+    const fake = await startThread();
+    fake.emit(
+      result("needs-work", 0.1, { reason: "Shoji couldn't run npm run lint: its program isn't on this computer." }),
+    );
+    fake.exit(1);
+    expect(screen.getByText(/^Shoji couldn't run npm run lint/)).toBeTruthy();
+  });
+
+  it("offers to start again when the thread couldn't start", async () => {
+    const fake = fakeBridge();
+    let fail = true;
+    const startRun = fake.bridge.startRun;
+    fake.bridge.startRun = async (request) => {
+      if (fail) throw new Error("The project has uncommitted changes.");
+      return startRun(request);
+    };
+    render(<App bridge={fake.bridge} />);
+    const task = await screen.findByRole("textbox", { name: "Task" });
+    fireEvent.change(task, { target: { value: "Add a FAQ" } });
+    await act(async () => {
+      fireEvent.keyDown(task, { key: "Enter" });
+    });
+    expect(screen.getByText(/uncommitted changes/)).toBeTruthy();
+
+    fail = false;
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    });
+    expect(fake.calls.starts.map((s) => s.task)).toEqual(["Add a FAQ"]);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
   it("shows why the runtime couldn't start", async () => {
     const fake = await startThread();
     fake.exit(2, "The project has uncommitted changes. Commit or stash them, or pass --allow-dirty.");
@@ -282,6 +335,29 @@ describe("home", () => {
   afterEach(() => {
     cleanup();
     localStorage.clear();
+  });
+
+  it("checks the folder before starting, and keeps the task until it's sorted out", async () => {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", setupDone: true }));
+    const fake = fakeBridge();
+    fake.project.diff = "diff --git a/x b/x";
+    render(<App bridge={fake.bridge} />);
+    const task = await screen.findByRole("textbox", { name: "Task" });
+    fireEvent.change(task, { target: { value: "Add a FAQ" } });
+    await act(async () => {
+      fireEvent.keyDown(task, { key: "Enter" });
+    });
+    expect(screen.getByRole("alert").textContent).toBe(
+      "pricing-page has uncommitted changes. Commit or stash them, then send the task again.",
+    );
+    expect(fake.calls.starts).toEqual([]);
+    expect((task as HTMLTextAreaElement).value).toBe("Add a FAQ");
+
+    fake.project.diff = "";
+    await act(async () => {
+      fireEvent.keyDown(task, { key: "Enter" });
+    });
+    expect(fake.calls.starts.map((s) => s.task)).toEqual(["Add a FAQ"]);
   });
 
   it("asks for a key before anything can run", async () => {

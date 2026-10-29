@@ -96,12 +96,14 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     let fixRounds = 0;
     let seat = stack.build;
     let passing = check(buildStep);
-    if (!passing) {
+    // A check whose program isn't on this computer fails whatever the code says, so fixing can't help.
+    const missing = state.checks.filter((c) => c.missing).map((c) => c.command);
+    if (!passing && !missing.length) {
       await fix("fix-1", seat, failures());
       fixRounds++;
       passing = check("fix-1");
     }
-    if (!passing && stack.plan.model !== seat.model) {
+    if (!passing && !missing.length && stack.plan.model !== seat.model) {
       emit({ type: "escalate", step: "fix-2", from: seat.model, to: stack.plan.model, reason: "Checks failed twice." });
       seat = stack.plan;
       state.escalated = true;
@@ -130,6 +132,13 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
       state.review = await review();
     }
 
+    if (missing.length) {
+      const which = missing.length === 1 ? "its program isn't" : "their programs aren't";
+      return finish(
+        "needs-work",
+        `Shoji couldn't run ${missing.join(" or ")}: ${which} on this computer, so it didn't try to fix the checks. The review judged the change without them.`,
+      );
+    }
     return finish(passing && approves(state.review) ? "ready" : "needs-work");
   } catch (error) {
     if (error instanceof BudgetExceeded) return finish("stopped", error.message);
@@ -203,7 +212,12 @@ function filesFrom(workspace: Workspace, brief: string): string {
 
 export function reviewPrompt(task: string, diff: string, checks: CheckResult[]): string {
   const results = checks.length
-    ? checks.map((c) => `${c.command}: ${c.ok ? "passed" : `failed\n${c.output}`}`).join("\n")
+    ? checks
+        .map(
+          (c) =>
+            `${c.command}: ${c.ok ? "passed" : c.missing ? "couldn't run, its program isn't installed here" : `failed\n${c.output}`}`,
+        )
+        .join("\n")
     : "No check commands are set for this project.";
   return `Task: ${task}\n\nDiff:\n${diff || "(no changes)"}\n\nChecks:\n${results}`;
 }
