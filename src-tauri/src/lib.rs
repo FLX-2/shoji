@@ -80,6 +80,14 @@ fn save_key(key: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Keeps the key from the shell in the keychain, so Shoji has it however it's opened. The key itself
+/// never goes to the window.
+#[tauri::command]
+fn use_shell_key() -> Result<(), String> {
+    let key = env_key().ok_or("No key was found in the shell.")?;
+    save_key(key)
+}
+
 #[tauri::command]
 fn forget_key() -> Result<(), String> {
     match key_entry().and_then(|entry| entry.delete_credential()) {
@@ -629,6 +637,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             key_status,
             save_key,
+            use_shell_key,
             forget_key,
             pick_project,
             start_run,
