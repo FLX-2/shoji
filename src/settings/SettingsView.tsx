@@ -1,23 +1,20 @@
 import { useState } from "react";
-import { STACKS, type StackName } from "../../runtime/src/stack";
+import type { Stack } from "../../runtime/src/stack";
 import type { KeyStatus } from "../bridge";
+import { describeStack } from "../stack/lock";
 import type { Prefs } from "./prefs";
 
 interface SettingsViewProps {
   prefs: Prefs;
   onChange: (change: Partial<Prefs>) => void;
+  stack: Stack;
+  onOpenStack: () => void;
   keyStatus: KeyStatus | null;
   onSaveKey: (key: string) => Promise<void>;
   onForgetKey: () => Promise<void>;
 }
 
-const STACK_NAMES: Record<StackName, { label: string; detail: string }> = {
-  balanced: { label: "Balanced", detail: "Opus 5.5 plans, Sonnet 5.5 builds, and Haiku 5.5 scouts and reviews." },
-  opus: { label: "Opus", detail: "Opus 5.5 takes every step. It costs about twice as much as Balanced." },
-  haiku: { label: "Haiku", detail: "Haiku 5.5 takes every step, for a fraction of a cent. Good for trying Shoji out." },
-};
-
-export function SettingsView({ prefs, onChange, keyStatus, onSaveKey, onForgetKey }: SettingsViewProps) {
+export function SettingsView({ prefs, onChange, stack, onOpenStack, keyStatus, onSaveKey, onForgetKey }: SettingsViewProps) {
   // The field keeps what's typed, so "0.0" can become "0.05"; only a positive amount is saved.
   const [cap, setCap] = useState(String(prefs.cap));
   return (
@@ -32,21 +29,11 @@ export function SettingsView({ prefs, onChange, keyStatus, onSaveKey, onForgetKe
             <div className="srow">
               <div>
                 <b>Stack</b>
-                <span className="d">{STACK_NAMES[prefs.stack].detail}</span>
+                <span className="d">{describeStack(stack)}</span>
               </div>
-              <div className="seg" role="radiogroup" aria-label="Stack">
-                {(Object.keys(STACKS) as StackName[]).map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    role="radio"
-                    aria-checked={prefs.stack === name}
-                    onClick={() => onChange({ stack: name })}
-                  >
-                    {STACK_NAMES[name].label}
-                  </button>
-                ))}
-              </div>
+              <button type="button" className="btn sm" onClick={onOpenStack}>
+                Change in Stack
+              </button>
             </div>
             <div className="srow">
               <label htmlFor="s-cap">

@@ -2,7 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { CallRecord, RuntimeEvent } from "../runtime/src/events";
-import type { StackName } from "../runtime/src/stack";
+import type { Stack } from "../runtime/src/stack";
 
 export interface KeyStatus {
   saved: boolean;
@@ -13,7 +13,7 @@ export interface KeyStatus {
 export interface RunRequest {
   repo: string;
   task: string;
-  stack: StackName;
+  stack: Stack;
   /** Dollars this run may spend. */
   cap: number;
   /** Set for a request for changes, with the thread, its work's plan and its branch. */
@@ -56,6 +56,7 @@ export interface LedgerThread {
   task: string;
   repo: string;
   branch: string;
+  /** The stack as JSON, or a preset name for threads from before stack.lock. */
   stack: string;
   startedAt: number;
   committed: string | null;
@@ -98,6 +99,9 @@ export const bridge = {
   ledgerThreads: () => invoke<LedgerThread[]>("ledger_threads"),
   /** Asks where to save a CSV file and writes it there. Returns the path, or null if cancelled. */
   exportCsv: (name: string, contents: string) => invoke<string | null>("export_csv", { name, contents }),
+  /** stack.lock's contents, or null before anything has been saved. */
+  readStackLock: () => invoke<string | null>("read_stack_lock"),
+  writeStackLock: (contents: string) => invoke<void>("write_stack_lock", { contents }),
   onEvent: (handler: (run: number, event: RuntimeEvent) => void) =>
     listen<{ run: number; event: RuntimeEvent }>("runtime-event", (e) => handler(e.payload.run, e.payload.event)),
   onExit: (handler: (exit: RunExit) => void) => listen<RunExit>("runtime-exit", (e) => handler(e.payload)),

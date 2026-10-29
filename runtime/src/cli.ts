@@ -7,7 +7,7 @@ import { MODELS } from "./models";
 import { runThread } from "./pipeline";
 import { defaultChecks } from "./project";
 import { AnthropicProvider } from "./provider";
-import { describeStacks, STACKS, type StackName } from "./stack";
+import { describeStacks, parseStack, type Stack, STACKS, type StackName } from "./stack";
 import { Workspace } from "./workspace";
 
 const USAGE = `Usage: shoji-runtime --task "<what to change>" [options]
@@ -15,6 +15,8 @@ const USAGE = `Usage: shoji-runtime --task "<what to change>" [options]
 Options:
   --repo <path>       Project folder, a git repository (default: current folder)
   --stack <name>      ${Object.keys(STACKS).join(", ")} (default: balanced)
+  --stack-json <json> Each role's model and effort, as {"plan":{"model":…,"effort":…},…};
+                      takes the place of --stack
   --cap <dollars>     Hard spending limit for this thread (default: 0.50)
   --check <command>   A command that must pass; repeat for more (default: the project's
                       typecheck, lint and test scripts)
@@ -64,6 +66,7 @@ async function main() {
       task: { type: "string" },
       repo: { type: "string", default: process.cwd() },
       stack: { type: "string", default: "balanced" },
+      "stack-json": { type: "string" },
       cap: { type: "string", default: "0.50" },
       check: { type: "string", multiple: true },
       changes: { type: "string" },
@@ -77,7 +80,15 @@ async function main() {
   });
   if (values.help) return void process.stdout.write(`${USAGE}\n`);
   if (!values.task) fail(USAGE);
-  if (!(values.stack in STACKS)) fail(`Unknown stack "${values.stack}". Choose ${Object.keys(STACKS).join(", ")}.`);
+  let stack: Stack;
+  if (values["stack-json"] !== undefined) {
+    try {
+      stack = parseStack(values["stack-json"]);
+    } catch (e) {
+      fail(e instanceof Error ? e.message : String(e));
+    }
+  } else if (values.stack in STACKS) stack = STACKS[values.stack as StackName];
+  else fail(`Unknown stack "${values.stack}". Choose ${Object.keys(STACKS).join(", ")}.`);
   const cap = Number(values.cap);
   if (!(cap > 0)) fail("--cap must be a positive number of dollars.");
   const apiKey = process.env.SHOJI_API_KEY || process.env.ANTHROPIC_API_KEY;
@@ -103,7 +114,7 @@ async function main() {
   const log = values.log ? fs.openSync(values.log, "a") : null;
   const result = await runThread({
     task: values.task,
-    stack: STACKS[values.stack as StackName],
+    stack,
     provider: new AnthropicProvider(apiKey, values["base-url"]),
     workspace: new Workspace(root),
     checks: values.check ?? defaultChecks(root),

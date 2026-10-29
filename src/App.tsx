@@ -4,6 +4,8 @@ import { folderName, HomeView } from "./home/HomeView";
 import { ReceiptsView } from "./receipts/ReceiptsView";
 import { usePrefs } from "./settings/prefs";
 import { SettingsView } from "./settings/SettingsView";
+import { StackView } from "./stack/StackView";
+import { useStack } from "./stack/useStack";
 import { Mark } from "./shell/Mark";
 import { Rail } from "./shell/Rail";
 import { WindowControls } from "./shell/WindowControls";
@@ -18,6 +20,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
   const [section, setSection] = useState<SectionId>("home");
   const [prefs, setPrefs] = usePrefs();
   const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
+  const stack = useStack(bridge, prefs.stack);
   const { thread, start, requestChanges, stop, commit } = useThread(bridge);
   const running = isRunning(thread?.turns[thread.turns.length - 1]);
   const current = SECTIONS[section];
@@ -69,11 +72,13 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
               onStart={(task) => {
                 if (!prefs.repo) return;
                 setSection("threads");
-                start(task, prefs.repo, prefs.stack, prefs.cap);
+                start(task, prefs.repo, stack.stack, prefs.cap);
               }}
             />
           ) : section === "receipts" ? (
             <ReceiptsView bridge={bridge} />
+          ) : section === "stack" ? (
+            <StackView stack={stack.stack} lock={stack.lock} error={stack.error} onSave={stack.save} />
           ) : section === "threads" && thread ? (
             <ThreadView
               bridge={bridge}
@@ -91,6 +96,8 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 <SettingsView
                   prefs={prefs}
                   onChange={setPrefs}
+                  stack={stack.stack}
+                  onOpenStack={() => setSection("stack")}
                   keyStatus={keyStatus}
                   onSaveKey={(key) => bridge.saveKey(key).then(refreshKey)}
                   onForgetKey={() => bridge.forgetKey().then(refreshKey)}

@@ -4,6 +4,7 @@ import type { StackName } from "../../runtime/src/stack";
 export interface Prefs {
   /** The open project's folder. */
   repo: string | null;
+  /** The preset chosen here before stack.lock held the stack; used until a stack is saved there. */
   stack: StackName;
   /** Most a thread may spend, in dollars, across its runs. */
   cap: number;

@@ -102,7 +102,8 @@ async fn pick_project(app: AppHandle) -> Option<String> {
 struct RunRequest {
     repo: String,
     task: String,
-    stack: String,
+    /// Each role's model and effort, as the runtime's --stack-json takes it.
+    stack: serde_json::Value,
     /// Dollars this run may spend.
     cap: f64,
     /// Set when the person asks for changes to finished work, with that work's plan.
@@ -182,7 +183,7 @@ fn start_run(
     };
 
     let task = request.task.clone();
-    let stack = request.stack.clone();
+    let stack = request.stack.to_string();
     let thread = request.changes.as_ref().map(|c| c.thread);
     let mut args = vec![
         "--json".to_string(),
@@ -190,8 +191,8 @@ fn start_run(
         repo.clone(),
         "--task".into(),
         request.task,
-        "--stack".into(),
-        request.stack,
+        "--stack-json".into(),
+        stack.clone(),
         "--cap".into(),
         format!("{:.4}", request.cap),
         "--log".into(),
@@ -415,6 +416,27 @@ async fn export_csv(app: AppHandle, name: String, contents: String) -> Result<Op
     Ok(Some(path.display().to_string()))
 }
 
+/// The person's stack choice and its history, as the app wrote it; none before the first choice.
+#[tauri::command]
+fn read_stack_lock(app: AppHandle) -> Result<Option<String>, String> {
+    let path = app.path().app_data_dir().map_err(|e| e.to_string())?.join("stack.lock");
+    match fs::read_to_string(path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Replaces stack.lock whole, through a temporary file so a crash never leaves half of one.
+#[tauri::command]
+fn write_stack_lock(app: AppHandle, contents: String) -> Result<(), String> {
+    let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&data).map_err(|e| e.to_string())?;
+    let partial = data.join("stack.lock.partial");
+    fs::write(&partial, contents).map_err(|e| e.to_string())?;
+    fs::rename(&partial, data.join("stack.lock")).map_err(|e| e.to_string())
+}
+
 /// Every thread in the ledger with its runs and calls, newest first, for Receipts.
 #[tauri::command]
 async fn ledger_threads(ledger: State<'_, Ledger>) -> Result<Vec<ThreadRecord>, String> {
@@ -538,7 +560,9 @@ pub fn run() {
             revert_file,
             commit_thread,
             ledger_threads,
-            export_csv
+            export_csv,
+            read_stack_lock,
+            write_stack_lock
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

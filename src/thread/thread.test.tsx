@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { CallRecord, RuntimeEvent, ThreadResult } from "../../runtime/src/events";
 import type { ModelId } from "../../runtime/src/models";
-import type { Role } from "../../runtime/src/stack";
+import { STACKS, type Role } from "../../runtime/src/stack";
 import App from "../App";
 import { fakeBridge } from "../test/fakeBridge";
 import { foldRun, formatCost, stepLabel } from "./fold";
@@ -132,7 +132,7 @@ describe("a thread in the app", () => {
   it("starts the runtime on the open project and lights the running step with its model", async () => {
     const fake = await startThread();
     expect(fake.calls.starts).toEqual([
-      { repo: "/work/pricing-page", task: "Add an annual toggle to the pricing cards", stack: "balanced", cap: 0.5 },
+      { repo: "/work/pricing-page", task: "Add an annual toggle to the pricing cards", stack: STACKS.balanced, cap: 0.5 },
     ]);
 
     fake.emit(running("scout", "scout", HAIKU), call("scout", "scout", HAIKU, 0.001), done("scout", "scout", HAIKU));

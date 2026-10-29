@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RuntimeEvent } from "../../runtime/src/events";
 import { MODELS } from "../../runtime/src/models";
-import type { StackName } from "../../runtime/src/stack";
+import type { Stack } from "../../runtime/src/stack";
 import type { Bridge, ChangesRequest, RunExit } from "../bridge";
 import { foldRun } from "./fold";
 
@@ -22,7 +22,7 @@ export interface Thread {
   id?: number;
   task: string;
   repo: string;
-  stack: StackName;
+  stack: Stack;
   /** Most the whole thread may spend, in dollars. */
   cap: number;
   /** The branch the thread works on, once its first run has started. */
@@ -119,7 +119,7 @@ export function useThread(bridge: Bridge) {
   );
 
   const start = useCallback(
-    (task: string, repo: string, stack: StackName, cap: number) =>
+    (task: string, repo: string, stack: Stack, cap: number) =>
       run({ task, repo, stack, cap, turns: [] }, { ask: task, kind: "task", events: [] }),
     [run],
   );
