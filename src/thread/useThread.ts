@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RuntimeEvent } from "../../runtime/src/events";
+import { MODELS } from "../../runtime/src/models";
 import type { StackName } from "../../runtime/src/stack";
 import type { Bridge, RunExit } from "../bridge";
 import { foldRun } from "./fold";
@@ -22,6 +23,10 @@ export interface Thread {
   stack: StackName;
   /** Most the whole thread may spend, in dollars. */
   cap: number;
+  /** The branch the thread works on, once its first run has started. */
+  branch?: string;
+  /** The short hash of the commit that accepted the thread's work. */
+  committed?: string;
   turns: Turn[];
 }
 
@@ -31,6 +36,21 @@ export function isRunning(turn: Turn | undefined): boolean {
 
 export function threadCost(thread: Thread): number {
   return thread.turns.reduce((sum, turn) => sum + foldRun(turn.events).cost, 0);
+}
+
+/** The commit's message: the task, then which models did the work and what it cost. */
+export function commitMessage(thread: Thread): string {
+  const [subject, ...body] = thread.task.trim().split("\n");
+  const roles = new Map<string, Set<string>>();
+  for (const turn of thread.turns) {
+    for (const step of foldRun(turn.events).steps) {
+      const label = MODELS[step.model].label;
+      roles.set(label, (roles.get(label) ?? new Set()).add(step.role));
+    }
+  }
+  const models = [...roles].map(([label, did]) => `${label} ${[...did].join(", ")}`).join("; ");
+  const trailers = [models && `Shoji-Models: ${models}`, `Shoji-Cost: $${threadCost(thread).toFixed(4)}`];
+  return [subject.trim(), body.join("\n").trim(), trailers.filter(Boolean).join("\n")].filter(Boolean).join("\n\n");
 }
 
 /** Runs one thread through the runtime: the task, then any changes the person asks for. */
@@ -70,13 +90,13 @@ export function useThread(bridge: Bridge) {
   }, [bridge, updateLast]);
 
   const run = useCallback(
-    async (next: Thread, turn: Turn, changes?: { notes: string; plan: string }) => {
+    async (next: Thread, turn: Turn, changes?: { notes: string; plan: string; branch: string }) => {
       const spent = threadCost(next);
       setThread({ ...next, turns: [...next.turns, turn] });
       current.current = "starting";
       early.current.clear();
       try {
-        const id = await bridge.startRun({
+        const { run: id, branch } = await bridge.startRun({
           repo: next.repo,
           task: next.task,
           stack: next.stack,
@@ -86,6 +106,7 @@ export function useThread(bridge: Bridge) {
         const held = early.current.get(id);
         early.current.clear();
         current.current = held?.exit ? null : id;
+        setThread((t) => (t ? { ...t, branch } : t));
         if (held) updateLast((t) => ({ ...t, events: [...t.events, ...held.events], exit: held.exit }));
       } catch (error) {
         current.current = null;
@@ -105,7 +126,7 @@ export function useThread(bridge: Bridge) {
     (notes: string) => {
       if (!thread) return;
       const plan = thread.turns.map((t) => foldRun(t.events).result?.plan).findLast(Boolean) ?? "";
-      run(thread, { ask: notes, kind: "changes", events: [] }, { notes, plan });
+      run(thread, { ask: notes, kind: "changes", events: [] }, { notes, plan, branch: thread.branch ?? "" });
     },
     [thread, run],
   );
@@ -115,5 +136,12 @@ export function useThread(bridge: Bridge) {
     await bridge.stopRun();
   }, [bridge, updateLast]);
 
-  return { thread, start, requestChanges, stop };
+  /** Accepts all of the thread's work as one commit on its branch. */
+  const commit = useCallback(async () => {
+    if (!thread?.branch) return;
+    const sha = await bridge.commitThread(thread.repo, thread.branch, commitMessage(thread));
+    setThread((t) => (t ? { ...t, committed: sha } : t));
+  }, [bridge, thread]);
+
+  return { thread, start, requestChanges, stop, commit };
 }

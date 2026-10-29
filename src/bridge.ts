@@ -16,7 +16,14 @@ export interface RunRequest {
   stack: StackName;
   /** Dollars this run may spend. */
   cap: number;
-  changes?: { notes: string; plan: string };
+  /** Set for a request for changes, with the work's plan and the thread's branch. */
+  changes?: { notes: string; plan: string; branch: string };
+}
+
+export interface StartedRun {
+  run: number;
+  /** The thread's branch: a new one for a task, the same one for changes. */
+  branch: string;
 }
 
 export interface RunExit {
@@ -38,14 +45,17 @@ export const bridge = {
   saveKey: (key: string) => invoke<void>("save_key", { key }),
   forgetKey: () => invoke<void>("forget_key"),
   pickProject: () => invoke<string | null>("pick_project"),
-  /** Starts a run and returns its number, which its events and exit carry. */
-  startRun: (request: RunRequest) => invoke<number>("start_run", { request }),
+  /** Starts a run. Its number is carried by its events and exit. */
+  startRun: (request: RunRequest) => invoke<StartedRun>("start_run", { request }),
   stopRun: () => invoke<void>("stop_run"),
   changes: (repo: string) => invoke<ProjectChanges>("changes", { repo }),
   /** Keeps a file's changes by staging it. */
   acceptFile: (repo: string, path: string) => invoke<void>("accept_file", { repo, path }),
   /** Puts a file back as it was at the last commit. */
   revertFile: (repo: string, path: string) => invoke<void>("revert_file", { repo, path }),
+  /** Commits all of the thread's work on its branch and returns the commit's short hash. */
+  commitThread: (repo: string, branch: string, message: string) =>
+    invoke<string>("commit_thread", { repo, branch, message }),
   onEvent: (handler: (run: number, event: RuntimeEvent) => void) =>
     listen<{ run: number; event: RuntimeEvent }>("runtime-event", (e) => handler(e.payload.run, e.payload.event)),
   onExit: (handler: (exit: RunExit) => void) => listen<RunExit>("runtime-exit", (e) => handler(e.payload)),

@@ -132,7 +132,7 @@ describe("a thread in the app", () => {
     fake.emit(result("ready", 0.12));
     fake.exit(0);
     expect(screen.getByText(/^Ready for review\. The checks pass/)).toBeTruthy();
-    expect(screen.getByText("1 check passed")).toBeTruthy();
+    expect(document.querySelector(".review .sum")?.textContent).toBe("1 check passed · $0.12 in all");
 
     fireEvent.click(screen.getByRole("button", { name: "Request changes" }));
     const notes = screen.getByRole("textbox", { name: "Changes" });
@@ -143,10 +143,51 @@ describe("a thread in the app", () => {
 
     expect(fake.calls.starts[1]).toMatchObject({
       task: "Add an annual toggle to the pricing cards",
-      changes: { notes: "Make the badge smaller", plan: "1. Add a billing toggle." },
+      changes: { notes: "Make the badge smaller", plan: "1. Add a billing toggle.", branch: "shoji/thread" },
     });
     expect(fake.calls.starts[1].cap).toBeCloseTo(0.38);
     expect(screen.getByText("Make the badge smaller").className).toBe("umsg");
+  });
+
+  it("accepts the thread's work as one commit on its branch", async () => {
+    const fake = await startThread();
+    fake.project.diff = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b\n";
+    fake.emit(running("plan", "plan", OPUS), call("plan", "plan", OPUS, 0.1), done("plan", "plan", OPUS));
+    fake.emit(running("build", "build", SONNET), call("build", "build", SONNET, 0.02), done("build", "build", SONNET));
+    fake.emit(running("review", "review", HAIKU), done("review", "review", HAIKU, "VERDICT: APPROVE"));
+    fake.emit(result("ready", 0.12));
+    await act(async () => fake.exit(0));
+    expect(document.querySelector(".status .r")?.textContent).toBe("shoji/thread");
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: "Accept and commit" }));
+    });
+    expect(fake.calls.commits).toEqual([
+      {
+        repo: "/work/pricing-page",
+        branch: "shoji/thread",
+        message:
+          "Add an annual toggle to the pricing cards\n\n" +
+          "Shoji-Models: Opus 5.5 plan; Sonnet 5.5 build; Haiku 5.5 review\nShoji-Cost: $0.1200",
+      },
+    ]);
+    expect(document.querySelector(".review")?.textContent).toBe("Committed a1b2c3d on shoji/thread$0.12 in all");
+    expect(screen.queryByRole("button", { name: "Request changes" })).toBeNull();
+  });
+
+  it("says why a commit failed and lets it be tried again", async () => {
+    const fake = await startThread();
+    fake.project.diff = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b\n";
+    fake.bridge.commitThread = async () => {
+      throw "Git doesn't know who you are yet.";
+    };
+    fake.emit(result("ready", 0.01));
+    await act(async () => fake.exit(0));
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: "Accept and commit" }));
+    });
+    expect(screen.getByText("Git doesn't know who you are yet.")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Accept and commit" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("shows why the runtime couldn't start", async () => {
