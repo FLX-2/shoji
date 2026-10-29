@@ -4,6 +4,16 @@ import type { CheckResult } from "./events";
 const TIMEOUT_MS = 5 * 60_000;
 const KEEP_CHARS = 4000;
 
+/** The environment for project commands, without the API key: the builder can edit the
+ *  scripts these commands run, so they must never see it. */
+export function commandEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const clean: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(env)) {
+    if (!/^(SHOJI|ANTHROPIC)_API_KEY$/i.test(name)) clean[name] = value;
+  }
+  return { ...clean, CI: "1", FORCE_COLOR: "0" };
+}
+
 /** Runs one shell command in the project and keeps the end of its output. */
 export function runCommand(root: string, command: string): CheckResult {
   const run = spawnSync(command, {
@@ -13,7 +23,7 @@ export function runCommand(root: string, command: string): CheckResult {
     windowsHide: true,
     timeout: TIMEOUT_MS,
     maxBuffer: 20_000_000,
-    env: { ...process.env, CI: "1", FORCE_COLOR: "0" },
+    env: commandEnv(),
   });
   const output = `${run.stdout ?? ""}${run.stderr ?? ""}${run.error ? `\n${run.error.message}` : ""}`;
   return {

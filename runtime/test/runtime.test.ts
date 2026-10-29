@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { RuntimeEvent } from "../src/events";
+import { commandEnv, runCommand } from "../src/commands";
 import { costOf } from "../src/models";
 import { runThread } from "../src/pipeline";
 import { defaultChecks } from "../src/project";
@@ -64,6 +65,24 @@ describe("workspace and tools", () => {
     expect(runTool(ws, ["node -e 0"], "run_command", { command: "rm -rf src" })).toMatch(/only these commands/);
     expect(fs.existsSync(path.join(root, "src/a.ts"))).toBe(true);
     expect(runTool(ws, ["node -e 0"], "run_command", { command: "node -e 0" })).toMatch(/^Passed/);
+  });
+});
+
+describe("project commands", () => {
+  it("never pass the API key to the project's scripts", () => {
+    const env = commandEnv({ PATH: "/bin", SHOJI_API_KEY: "sk-1", ANTHROPIC_API_KEY: "sk-2", HOME: "/h" });
+    expect(env).toEqual({ PATH: "/bin", HOME: "/h", CI: "1", FORCE_COLOR: "0" });
+
+    const saved = process.env.SHOJI_API_KEY;
+    process.env.SHOJI_API_KEY = "sk-test-not-real";
+    try {
+      const root = tempRepo({ "a.txt": "" });
+      const result = runCommand(root, `node -e "process.stdout.write(String(process.env.SHOJI_API_KEY))"`);
+      expect(result.output).toBe("undefined");
+    } finally {
+      if (saved === undefined) delete process.env.SHOJI_API_KEY;
+      else process.env.SHOJI_API_KEY = saved;
+    }
   });
 });
 
