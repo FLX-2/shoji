@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CheckResult } from "../../runtime/src/events";
 import { MODELS } from "../../runtime/src/models";
 import type { Bridge } from "../bridge";
@@ -24,6 +24,7 @@ interface ThreadViewProps {
   thread: Thread;
   onStop: () => void;
   onRequestChanges: (notes: string) => void;
+  onCommit: () => Promise<void>;
 }
 
 const STATUS = {
@@ -35,7 +36,7 @@ const STATUS = {
 
 /** A thread: its Conversation, where each ask is followed by the steps that answered it,
  *  and its Code, the files it changed. */
-export function ThreadView({ bridge, thread, onStop, onRequestChanges }: ThreadViewProps) {
+export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit }: ThreadViewProps) {
   const last = thread.turns[thread.turns.length - 1];
   const running = isRunning(last);
   const runs = thread.turns.map((turn) => foldRun(turn.events));
@@ -46,8 +47,18 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges }: ThreadV
   const [mode, setMode] = useState<"conversation" | "code">("conversation");
   // Read the project again whenever a run ends or Code opens.
   const ended = thread.turns.filter((t) => t.exit || t.error).length;
-  const { changes, error, act } = useChanges(bridge, thread.repo, `${ended}-${mode}`);
+  const { changes, error, act } = useChanges(bridge, thread.repo, `${ended}-${mode}-${thread.committed}`);
   const fileCount = changes?.files.length ?? 0;
+  const [committing, setCommitting] = useState(false);
+  const [commitError, setCommitError] = useState<string | null>(null);
+
+  const commit = () => {
+    setCommitting(true);
+    setCommitError(null);
+    onCommit()
+      .catch((e) => setCommitError(String(e)))
+      .finally(() => setCommitting(false));
+  };
 
   const now = lastRun.steps.findLast((s) => s.running);
   const stage = running
@@ -129,15 +140,33 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges }: ThreadV
           />
         ) : (
           <div className="review">
-            {runs.some((run) => run.result?.plan) && (
-              <button type="button" className="btn" onClick={() => setAsking(true)} disabled={spent >= thread.cap}>
-                Request changes
-              </button>
+            {thread.committed ? (
+              <span className="done">
+                Committed <b>{thread.committed}</b> on {thread.branch}
+              </span>
+            ) : (
+              <>
+                {runs.some((run) => run.result?.plan) && (
+                  <button type="button" className="btn" onClick={() => setAsking(true)} disabled={spent >= thread.cap}>
+                    Request changes
+                  </button>
+                )}
+                {thread.branch && fileCount > 0 && (
+                  <button type="button" className="btn solid" onClick={commit} disabled={committing}>
+                    Accept and commit
+                  </button>
+                )}
+                {commitError && <span className="err">{commitError}</span>}
+              </>
             )}
             <span className="sum">
-              {[checksSummary(lastRun.result?.checks), spent >= thread.cap && `the ${formatCost(thread.cap)} limit is spent`]
-                .filter(Boolean)
-                .join(" · ")}
+              {dotted([
+                !thread.committed && checksSummary(lastRun.result?.checks),
+                <>
+                  <b>{formatCost(spent)}</b> in all
+                </>,
+                !thread.committed && spent >= thread.cap && `the ${formatCost(thread.cap)} limit is spent`,
+              ])}
             </span>
           </div>
         ))}
@@ -341,6 +370,16 @@ function useFollow(thread: Thread) {
     if (el && atEnd.current) el.scrollTop = el.scrollHeight;
   }, [thread]);
   return ref;
+}
+
+/** The parts that are set, with a dot between each. */
+function dotted(parts: ReactNode[]): ReactNode[] {
+  return parts.filter(Boolean).map((part, i) => (
+    <Fragment key={i}>
+      {i > 0 && " · "}
+      {part}
+    </Fragment>
+  ));
 }
 
 function checksSummary(checks: CheckResult[] | undefined): string {

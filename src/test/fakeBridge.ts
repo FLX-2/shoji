@@ -8,7 +8,13 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   const project = { diff: "", accepted: [] as string[] };
   const onEvent: ((run: number, event: RuntimeEvent) => void)[] = [];
   const onExit: ((exit: RunExit) => void)[] = [];
-  const calls = { starts: [] as RunRequest[], stops: 0, accepted: [] as string[], reverted: [] as string[] };
+  const calls = {
+    starts: [] as RunRequest[],
+    stops: 0,
+    accepted: [] as string[],
+    reverted: [] as string[],
+    commits: [] as { repo: string; branch: string; message: string }[],
+  };
   let runs = 0;
 
   const bridge: Bridge = {
@@ -18,7 +24,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     pickProject: async () => "/work/pricing-page",
     startRun: async (request) => {
       calls.starts.push(request);
-      return ++runs;
+      return { run: ++runs, branch: request.changes?.branch ?? "shoji/thread" };
     },
     stopRun: async () => {
       calls.stops++;
@@ -30,6 +36,12 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     },
     revertFile: async (_, path) => {
       calls.reverted.push(path);
+    },
+    commitThread: async (repo, branch, message) => {
+      calls.commits.push({ repo, branch, message });
+      project.diff = "";
+      project.accepted = [];
+      return "a1b2c3d";
     },
     onEvent: async (handler) => {
       onEvent.push(handler);

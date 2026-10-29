@@ -544,6 +544,22 @@
   color: var(--z6);
 }
 
+.review .sum b,
+.review .done b {
+  font-weight: 500;
+  color: var(--z9);
+}
+
+.review .done {
+  font-size: 13px;
+  color: var(--z8);
+}
+
+.review .err {
+  font-size: 12px;
+  color: var(--z8);
+}
+
 /* Settings */
 .settings {
   flex: 1;

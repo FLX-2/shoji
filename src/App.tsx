@@ -17,7 +17,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
   const [section, setSection] = useState<SectionId>("home");
   const [prefs, setPrefs] = usePrefs();
   const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
-  const { thread, start, requestChanges, stop } = useThread(bridge);
+  const { thread, start, requestChanges, stop, commit } = useThread(bridge);
   const running = isRunning(thread?.turns[thread.turns.length - 1]);
   const current = SECTIONS[section];
 
@@ -72,7 +72,13 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
               }}
             />
           ) : section === "threads" && thread ? (
-            <ThreadView bridge={bridge} thread={thread} onStop={stop} onRequestChanges={requestChanges} />
+            <ThreadView
+              bridge={bridge}
+              thread={thread}
+              onStop={stop}
+              onRequestChanges={requestChanges}
+              onCommit={commit}
+            />
           ) : (
             <>
               <div className="mh">
@@ -101,9 +107,12 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
         <span title={prefs.repo ?? undefined}>{prefs.repo ? folderName(prefs.repo) : "No project open"}</span>
         {thread && (
           <span className="r">
-            <span>
-              this thread <b>{formatCost(threadCost(thread))}</b>
-            </span>
+            {thread.branch && thread.repo === prefs.repo && <span>{thread.branch}</span>}
+            {running && (
+              <span>
+                this thread <b>{formatCost(threadCost(thread))}</b>
+              </span>
+            )}
           </span>
         )}
       </footer>
