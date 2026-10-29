@@ -1,6 +1,8 @@
-import type { Effort, ModelId } from "./models";
+import { type Effort, MODELS, type ModelId } from "./models";
 
 export type Role = "scout" | "plan" | "build" | "review";
+
+export const ROLES: readonly Role[] = ["scout", "plan", "build", "review"];
 
 export interface Seat {
   model: ModelId;
@@ -34,3 +36,14 @@ export const STACKS = {
 } satisfies Record<string, Stack>;
 
 export type StackName = keyof typeof STACKS;
+
+/** A table of each stack's model and effort for every role, built from STACKS and MODELS. */
+export function describeStacks(): string {
+  const stacks: [string, Stack][] = Object.entries(STACKS);
+  const cell = (seat: Seat) => `${MODELS[seat.model].label} (${seat.effort})`;
+  const nameWidth = Math.max(...stacks.map(([name]) => name.length)) + 2;
+  const widths = ROLES.map((role) => Math.max(role.length, ...stacks.map(([, s]) => cell(s[role]).length)) + 2);
+  const line = (name: string, cells: string[]) =>
+    `  ${name.padEnd(nameWidth)}${cells.map((c, i) => c.padEnd(widths[i])).join("")}`.trimEnd();
+  return [line("", [...ROLES]), ...stacks.map(([name, s]) => line(name, ROLES.map((role) => cell(s[role]))))].join("\n");
+}

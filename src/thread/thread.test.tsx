@@ -5,7 +5,7 @@ import type { ModelId } from "../../runtime/src/models";
 import type { Role } from "../../runtime/src/stack";
 import App from "../App";
 import { fakeBridge } from "../test/fakeBridge";
-import { foldRun, stepLabel } from "./fold";
+import { foldRun, formatCost, stepLabel } from "./fold";
 
 const OPUS = "claude-opus-5-5";
 const SONNET = "claude-sonnet-5-5";
@@ -71,6 +71,46 @@ describe("folding a run", () => {
   });
 });
 
+describe("a run cut short", () => {
+  it("marks a step cut short by the end of the run as unfinished", () => {
+    const run = foldRun([
+      running("scout", "scout", HAIKU),
+      done("scout", "scout", HAIKU),
+      running("plan", "plan", OPUS),
+      result("failed", 0.01, { reason: "Boom" }),
+    ]);
+
+    expect(run.steps[0]).toMatchObject({ running: false });
+    expect(run.steps[0].unfinished).toBeFalsy();
+    expect(run.steps[1]).toMatchObject({ running: false, unfinished: true });
+    expect(stepLabel(run.steps, 0)).toBe("Read the code");
+    expect(stepLabel(run.steps, 1)).toBe("Planning the change");
+  });
+});
+
+describe("formatting a cost", () => {
+  it("shows nothing spent with two decimals", () => {
+    expect(formatCost(0)).toBe("$0.00");
+  });
+
+  it("shows amounts under a cent with four decimals", () => {
+    expect(formatCost(0.005)).toBe("$0.0050");
+    expect(formatCost(0.0001)).toBe("$0.0001");
+  });
+
+  it("shows amounts under ten cents with three decimals", () => {
+    expect(formatCost(0.01)).toBe("$0.010");
+    expect(formatCost(0.05)).toBe("$0.050");
+    expect(formatCost(0.099)).toBe("$0.099");
+  });
+
+  it("shows ten cents or more with two decimals", () => {
+    expect(formatCost(0.1)).toBe("$0.10");
+    expect(formatCost(1)).toBe("$1.00");
+    expect(formatCost(1.5)).toBe("$1.50");
+  });
+});
+
 describe("a thread in the app", () => {
   beforeEach(() => localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", cap: 0.5 })));
   afterEach(() => {
@@ -107,6 +147,19 @@ describe("a thread in the app", () => {
     expect(steps[1].textContent).toContain("Planning the change");
     expect(steps[1].textContent).toContain("Opus");
     expect(screen.getByText("Planning the change · Opus 5.5")).toBeTruthy();
+  });
+
+  it("shows the step a stopped run was on as unfinished", async () => {
+    const fake = await startThread();
+    fake.emit(running("scout", "scout", HAIKU), done("scout", "scout", HAIKU));
+    fake.emit(running("plan", "plan", OPUS));
+    fake.emit(result("stopped", 0.01, { reason: "The limit is spent." }));
+    fake.exit(0);
+
+    const steps = Array.from(document.querySelectorAll(".st"));
+    expect(steps.map((s) => s.className)).toEqual(["st done", "st"]);
+    expect(steps[1].querySelector(".c")?.textContent).toBe("2");
+    expect(steps[1].textContent).toContain("Planning the change");
   });
 
   it("stops the run when asked", async () => {
@@ -146,6 +199,25 @@ describe("a thread in the app", () => {
     });
     expect(fake.calls.starts[1].cap).toBeCloseTo(0.38);
     expect(screen.getByText("Make the badge smaller").className).toBe("umsg");
+  });
+
+  it("closes the Changes box on Escape without sending", async () => {
+    const fake = await startThread();
+    fake.emit(running("review", "review", HAIKU), done("review", "review", HAIKU, "VERDICT: APPROVE"));
+    fake.emit(result("ready", 0.12));
+    fake.exit(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Request changes" }));
+    const notes = screen.getByRole("textbox", { name: "Changes" });
+    fireEvent.change(notes, { target: { value: "Make the badge smaller" } });
+    await act(async () => {
+      fireEvent.keyDown(notes, { key: "Escape" });
+    });
+
+    expect(screen.queryByRole("textbox", { name: "Changes" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Request changes" })).toBeTruthy();
+    expect(fake.calls.starts.length).toBe(1);
+    expect(screen.queryByText("Make the badge smaller")).toBeNull();
   });
 
   it("accepts the thread's work as one commit on its branch", async () => {

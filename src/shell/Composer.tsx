@@ -10,10 +10,12 @@ interface ComposerProps {
   children?: ReactNode;
   hero?: boolean;
   autoFocus?: boolean;
+  /** Closes the composer without sending. Escape calls it. */
+  onCancel?: () => void;
 }
 
-/** Where the person writes a task or the changes they want. Enter sends; Shift+Enter adds a line. */
-export function Composer({ label, placeholder, blocked, onSend, children, hero, autoFocus }: ComposerProps) {
+/** Where the person writes a task or the changes they want. Enter sends; Shift+Enter adds a line; Escape cancels, where that's offered. */
+export function Composer({ label, placeholder, blocked, onSend, children, hero, autoFocus, onCancel }: ComposerProps) {
   const [text, setText] = useState("");
   const ready = text.trim() !== "" && !blocked;
   const send = () => {
@@ -41,6 +43,9 @@ export function Composer({ label, placeholder, blocked, onSend, children, hero, 
           if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             send();
+          } else if (e.key === "Escape" && onCancel && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            onCancel();
           }
         }}
       />

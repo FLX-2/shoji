@@ -7,7 +7,7 @@ import { diffOf } from "./git";
 import { BudgetExceeded, Meter, RefusedError } from "./meter";
 import * as prompts from "./prompts";
 import type { ModelProvider } from "./provider";
-import type { Role, Seat, Stack } from "./stack";
+import { ROLES, type Role, type Seat, type Stack } from "./stack";
 import { COMMAND_TOOLS, READ_TOOLS, WRITE_TOOLS } from "./tools";
 import type { Workspace } from "./workspace";
 
@@ -28,7 +28,7 @@ export interface ThreadInput {
   changes?: { plan: string; notes: string };
 }
 
-const ROLES: Role[] = ["scout", "plan", "build", "review"];
+
 const MAX_FILES_CHARS = 60_000;
 
 /**

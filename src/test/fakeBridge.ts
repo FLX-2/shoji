@@ -11,6 +11,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   const calls = {
     starts: [] as RunRequest[],
     stops: 0,
+    forgot: 0,
     accepted: [] as string[],
     reverted: [] as string[],
     commits: [] as { repo: string; branch: string; message: string }[],
@@ -20,7 +21,10 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   const bridge: Bridge = {
     keyStatus: async () => key,
     saveKey: async () => {},
-    forgetKey: async () => {},
+    forgetKey: async () => {
+      calls.forgot++;
+      key = { ...key, saved: false };
+    },
     pickProject: async () => "/work/pricing-page",
     startRun: async (request) => {
       calls.starts.push(request);

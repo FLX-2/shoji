@@ -894,7 +894,14 @@
   flex: none;
 }
 
-.dh .ask {
+.srow .acts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dh .ask,
+.srow .ask {
   font-size: 12px;
   color: var(--z8);
   margin-right: 4px;

@@ -44,6 +44,8 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit 
   const [asking, setAsking] = useState(false);
   const scroller = useFollow(thread);
   const [mode, setMode] = useState<"conversation" | "code">("conversation");
+  // Held here so the chosen file outlives switching to Conversation.
+  const [chosenFile, setChosenFile] = useState<string | null>(null);
   // Read the project again whenever a run ends or Code opens.
   const ended = thread.turns.filter((t) => t.exit || t.error).length;
   const { changes, error, act } = useChanges(bridge, thread.repo, `${ended}-${mode}-${thread.committed}`);
@@ -111,6 +113,8 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit 
           changes={changes}
           error={error}
           running={running}
+          chosen={chosenFile}
+          onChoose={setChosenFile}
           onAccept={(path) => act(bridge.acceptFile(thread.repo, path))}
           onRevert={(path) => act(bridge.revertFile(thread.repo, path))}
         />
@@ -131,6 +135,7 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit 
             label="Changes"
             placeholder="Describe the changes you want…"
             autoFocus
+            onCancel={() => setAsking(false)}
             blocked={spent >= thread.cap}
             onSend={(notes) => {
               setAsking(false);
@@ -196,10 +201,11 @@ function TurnView({ turn, run, live }: { turn: Turn; run: RunView; live: boolean
 function StepRow({ steps, index, live }: { steps: StepView[]; index: number; live: boolean }) {
   const step = steps[index];
   const now = live && step.running;
+  const finished = !step.running && !step.unfinished;
   return (
-    <li className={now ? "st now" : step.running ? "st" : "st done"}>
+    <li className={now ? "st now" : finished ? "st done" : "st"}>
       <span className="c" aria-hidden="true">
-        {step.running ? index + 1 : "✓"}
+        {finished ? "✓" : index + 1}
       </span>
       <div className="sb">
         <div className="sl">

@@ -7,7 +7,7 @@ import { MODELS } from "./models";
 import { runThread } from "./pipeline";
 import { defaultChecks } from "./project";
 import { AnthropicProvider } from "./provider";
-import { STACKS, type StackName } from "./stack";
+import { describeStacks, STACKS, type StackName } from "./stack";
 import { Workspace } from "./workspace";
 
 const USAGE = `Usage: shoji-runtime --task "<what to change>" [options]
@@ -25,6 +25,9 @@ Options:
   --json              Print events as JSON lines, for the app
   --allow-dirty       Run even if the project has uncommitted changes
   --base-url <url>    Anthropic API address (default: https://api.anthropic.com)
+
+Stacks (model and effort for each role):
+${describeStacks()}
 
 The API key comes from SHOJI_API_KEY or ANTHROPIC_API_KEY.`;
 

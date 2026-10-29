@@ -56,6 +56,43 @@ describe("the thread's Code", () => {
     expect(pane.querySelector(".l.add .tx")?.textContent).toBe("export const price = plan.annual / 12;");
   });
 
+  it("moves between files with the arrow keys", async () => {
+    await finishedThread();
+    const list = screen.getByRole("navigation", { name: "Changed files" });
+    const [card, badge] = within(list).getAllByRole("button");
+    card.focus();
+    expect(fireEvent.keyDown(card, { key: "ArrowDown" })).toBe(false);
+    expect(screen.getByRole("region", { name: "src/Badge.tsx" })).toBeTruthy();
+    expect(badge.getAttribute("aria-current")).toBe("true");
+    expect(document.activeElement).toBe(badge);
+
+    fireEvent.keyDown(badge, { key: "ArrowDown" });
+    expect(screen.getByRole("region", { name: "src/Badge.tsx" })).toBeTruthy();
+
+    fireEvent.keyDown(badge, { key: "ArrowUp" });
+    expect(screen.getByRole("region", { name: "src/Card.tsx" })).toBeTruthy();
+    expect(card.getAttribute("aria-current")).toBe("true");
+    expect(document.activeElement).toBe(card);
+
+    fireEvent.keyDown(card, { key: "ArrowUp" });
+    expect(screen.getByRole("region", { name: "src/Card.tsx" })).toBeTruthy();
+  });
+
+  it("keeps the chosen file when switching to Conversation and back", async () => {
+    await finishedThread();
+    const list = screen.getByRole("navigation", { name: "Changed files" });
+    fireEvent.click(within(list).getByRole("button", { name: /Badge\.tsx/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Conversation" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Code/ }));
+    });
+    expect(screen.getByRole("region", { name: "src/Badge.tsx" })).toBeTruthy();
+    const again = screen.getByRole("navigation", { name: "Changed files" });
+    expect(within(again).getByRole("button", { name: /Badge\.tsx/ }).getAttribute("aria-current")).toBe("true");
+  });
+
   it("accepts a file, and reverts one only after asking", async () => {
     const fake = await finishedThread();
     await act(async () => {
