@@ -61,6 +61,10 @@ jobs:
         with:
           workspaces: src-tauri
       - run: pnpm install --frozen-lockfile
+      # The web job runs the tests on Linux; run them where people build, too.
+      - name: Test on ${{ matrix.name }}
+        if: runner.os != 'Linux'
+        run: pnpm test
       - run: pnpm tauri build
       - name: Test the Rust side
         if: runner.os == 'Linux'

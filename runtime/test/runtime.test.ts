@@ -1,5 +1,6 @@
 // @vitest-environment node
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { RuntimeEvent } from "../src/events";
@@ -37,9 +38,12 @@ describe("workspace and tools", () => {
   });
 
   it("refuses a symlink that leads out of the project", () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "shoji-outside-"));
+    fs.writeFileSync(path.join(outside, "secret.txt"), "secret");
     const link = path.join(root, "escape");
-    fs.symlinkSync("/etc", link);
-    expect(runTool(ws, [], "read_file", { path: "escape/hostname" })).toMatch(/outside the project/);
+    // A junction on Windows, which needs no admin rights; the type is ignored elsewhere.
+    fs.symlinkSync(outside, link, "junction");
+    expect(runTool(ws, [], "read_file", { path: "escape/secret.txt" })).toMatch(/outside the project/);
     fs.unlinkSync(link);
   });
 
