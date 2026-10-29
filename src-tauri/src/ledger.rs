@@ -68,10 +68,10 @@ pub struct ThreadRecord {
 #[serde(rename_all = "camelCase")]
 pub struct RunRecord {
     pub id: i64,
-    /// "task", "changes", "trial" or "notes".
+    /// "task", "changes", "build", "replan", "trial" or "notes".
     pub kind: String,
     pub started_at: i64,
-    /// ready, needs-work, stopped or failed; none while the run is going.
+    /// ready, needs-work, stopped, failed or planned; none while the run is going.
     pub status: Option<String>,
     pub calls: Vec<CallRecord>,
 }

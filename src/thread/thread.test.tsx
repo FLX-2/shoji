@@ -131,8 +131,15 @@ describe("a thread in the app", () => {
 
   it("starts the runtime on the open project and lights the running step with its model", async () => {
     const fake = await startThread();
+    // Threads pause after the plan unless the person turns that off.
     expect(fake.calls.starts).toEqual([
-      { repo: "/work/pricing-page", task: "Add an annual toggle to the pricing cards", stack: STACKS.balanced, cap: 0.5 },
+      {
+        repo: "/work/pricing-page",
+        task: "Add an annual toggle to the pricing cards",
+        stack: STACKS.balanced,
+        cap: 0.5,
+        planOnly: true,
+      },
     ]);
 
     fake.emit(running("scout", "scout", HAIKU), call("scout", "scout", HAIKU, 0.001), done("scout", "scout", HAIKU));
@@ -268,6 +275,54 @@ describe("a thread in the app", () => {
     });
     expect(screen.getByText("Git doesn't know who you are yet.")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Accept and commit" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("pauses after the plan, then builds it or plans again from the person's notes", async () => {
+    const fake = await startThread();
+    fake.emit(running("plan", "plan", OPUS), done("plan", "plan", OPUS, "1. Add a billing toggle."));
+    fake.emit(call("plan", "plan", OPUS, 0.04), result("planned", 0.04));
+    fake.exit(0);
+
+    expect(document.querySelector(".stage")?.textContent).toContain("Plan ready");
+    expect(screen.getByText(/^Here's the plan\./)).toBeTruthy();
+    expect(screen.getByText("The plan").closest("details")?.open).toBe(true);
+    expect(screen.queryByRole("button", { name: "Accept and commit" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Change the plan" }));
+    const notes = screen.getByRole("textbox", { name: "Plan changes" });
+    fireEvent.change(notes, { target: { value: "Keep the monthly price visible" } });
+    await act(async () => {
+      fireEvent.keyDown(notes, { key: "Enter" });
+    });
+    expect(fake.calls.starts[1]).toMatchObject({
+      planOnly: true,
+      changes: { kind: "replan", notes: "Keep the monthly price visible", plan: "1. Add a billing toggle." },
+    });
+    fake.emit(done("plan", "plan", OPUS, "1. Add a toggle. 2. Keep monthly visible."));
+    fake.emit(result("planned", 0.04, { plan: "1. Add a toggle. 2. Keep monthly visible." }));
+    fake.exit(0);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Build it" }));
+    });
+    expect(fake.calls.starts[2]).toMatchObject({
+      changes: { kind: "build", plan: "1. Add a toggle. 2. Keep monthly visible." },
+    });
+    expect(fake.calls.starts[2].planOnly).toBeUndefined();
+    expect(screen.getByText("Build it").className).toBe("umsg");
+  });
+
+  it("builds straight away when the plan check is off on Home", async () => {
+    const fake = fakeBridge();
+    render(<App bridge={fake.bridge} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Check the plan first" }));
+    expect(JSON.parse(localStorage.getItem("shoji.prefs")!).planFirst).toBe(false);
+    const task = screen.getByRole("textbox", { name: "Task" });
+    fireEvent.change(task, { target: { value: "Add a FAQ" } });
+    await act(async () => {
+      fireEvent.keyDown(task, { key: "Enter" });
+    });
+    expect(fake.calls.starts[0].planOnly).toBeUndefined();
   });
 
   it("offers to keep going with more when a thread stops at its limit", async () => {

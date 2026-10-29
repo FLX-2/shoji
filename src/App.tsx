@@ -40,7 +40,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
   const [prefs, setPrefs] = usePrefs();
   const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
   const stack = useStack(bridge, prefs.stack);
-  const { thread, start, requestChanges, keepGoing, stop, commit } = useThread(bridge);
+  const { thread, start, requestChanges, keepGoing, build, replan, stop, commit } = useThread(bridge);
   const trials = useTrial(bridge);
   const trialRunning = !!trials.trial && trialProgress(trials.trial).running;
   const notes = useNotes(bridge);
@@ -157,6 +157,8 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 onPickProject={pickProject}
                 onOpenSettings={() => setSection("settings")}
                 problem={startProblem}
+                planFirst={prefs.planFirst}
+                onTogglePlanFirst={() => setPrefs({ planFirst: !prefs.planFirst })}
                 onStart={async (task) => {
                   const repo = prefs.repo;
                   if (!repo) return false;
@@ -166,7 +168,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                   if (problem) return false;
                   return withinDay("This thread", prefs.cap, () => {
                     setSection("threads");
-                    start(task, repo, stack.stack, prefs.cap);
+                    start(task, repo, stack.stack, prefs.cap, prefs.planFirst);
                   });
                 }}
               />
@@ -193,8 +195,12 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 onKeepGoing={() => withinDay("Keeping this thread going", prefs.cap, () => keepGoing(prefs.cap))}
                 more={prefs.cap}
                 onRetry={() =>
-                  withinDay("This thread", thread.cap, () => start(thread.task, thread.repo, thread.stack, thread.cap))
+                  withinDay("This thread", thread.cap, () =>
+                    start(thread.task, thread.repo, thread.stack, thread.cap, prefs.planFirst),
+                  )
                 }
+                onBuild={build}
+                onReplan={replan}
                 onCommit={commit}
                 showCosts={prefs.showCosts}
               />

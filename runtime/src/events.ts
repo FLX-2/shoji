@@ -36,7 +36,8 @@ export type RuntimeEvent =
   | { type: "result"; result: ThreadResult };
 
 export interface ThreadResult {
-  status: "ready" | "needs-work" | "stopped" | "failed";
+  /** planned: the run stopped after the plan, for the person to build or change it. */
+  status: "ready" | "needs-work" | "stopped" | "failed" | "planned";
   /** Why the thread stopped or failed, in plain words. */
   reason?: string;
   plan: string;

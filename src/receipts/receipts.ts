@@ -50,7 +50,8 @@ export const isTrial = (thread: LedgerThread) => thread.runs[0]?.kind === "trial
 export const isNotes = (thread: LedgerThread) => thread.runs[0]?.kind === "notes";
 
 /** Accepted without a request for changes. */
-export const firstTry = (thread: LedgerThread) => accepted(thread) && thread.runs.every((run) => run.kind === "task");
+export const firstTry = (thread: LedgerThread) =>
+  accepted(thread) && !thread.runs.some((run) => run.kind === "changes");
 
 /** "2026-10" for the month a thread started in, in local time. */
 export function monthOf(at: number): string {
@@ -170,6 +171,8 @@ export function outcome(thread: LedgerThread): string {
       return "Needs work";
     case "stopped":
       return "Stopped";
+    case "planned":
+      return "Planned";
     default:
       return "Failed";
   }

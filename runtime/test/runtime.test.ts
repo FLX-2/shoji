@@ -208,6 +208,41 @@ describe("thread pipeline", () => {
     expect(provider.requests.every((r) => roleOf(r) === "scout")).toBe(true);
   });
 
+  it("stops after the plan when asked, then builds the plan the person approved", async () => {
+    const root = tempRepo({ "src/hello.js": "export default 'hello';\n" });
+    const go = (provider: ModelProvider, extra: object) =>
+      runThread({
+        task: "Make the greeting say hello to Shoji.",
+        stack: STACKS.balanced,
+        provider,
+        workspace: new Workspace(root),
+        checks: [CHECK],
+        cap: 1,
+        emit: () => {},
+        ...extra,
+      });
+
+    const planning = team(() => true);
+    const planned = await go(planning, { planOnly: true });
+    expect(planned.status).toBe("planned");
+    expect(planned.plan).toContain("hello, shoji");
+    expect(planned.diff).toBe("");
+    expect(planning.requests.map(roleOf)).toEqual(["scout", "scout", "planner"]);
+
+    const replanning = team(() => true);
+    await go(replanning, { planOnly: true, replan: { plan: planned.plan, notes: "Use an exclamation mark." } });
+    const replan = JSON.stringify(replanning.requests.find((r) => roleOf(r) === "planner")!.messages);
+    expect(replan).toContain("An earlier plan for this task");
+    expect(replan).toContain("Use an exclamation mark.");
+
+    const building = team(() => true);
+    const built = await go(building, { approved: "Say hello to Shoji, exactly as approved." });
+    expect(built.status).toBe("ready");
+    expect(built.plan).toBe("Say hello to Shoji, exactly as approved.");
+    expect(building.requests.some((r) => roleOf(r) === "scout" || roleOf(r) === "planner")).toBe(false);
+    expect(JSON.stringify(building.requests[0].messages)).toContain("exactly as approved");
+  });
+
   it("says when a check can't run at all, and spends nothing trying to fix it", async () => {
     const provider = team(() => true);
     const { result, events } = await run(provider, 1, undefined, ["shoji-no-such-program --version"]);

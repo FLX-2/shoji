@@ -119,8 +119,11 @@ struct RunRequest {
     stack: serde_json::Value,
     /// Dollars this run may spend.
     cap: f64,
-    /// Set when the person asks for changes to finished work, with that work's plan.
+    /// Set when the run carries on a thread: changes to its work, or building or replanning its plan.
     changes: Option<Changes>,
+    /// Stop once the plan is written, for the person to build or change it.
+    #[serde(default)]
+    plan_only: bool,
 }
 
 #[derive(Serialize)]
@@ -140,6 +143,20 @@ struct Changes {
     plan: String,
     /// The thread's branch, which the project must still be on.
     branch: String,
+    /// "changes" to the work (the default), "build" for an approved plan, or "replan" for notes
+    /// on the plan.
+    #[serde(default)]
+    kind: Option<String>,
+}
+
+impl Changes {
+    fn kind(&self) -> &str {
+        match self.kind.as_deref() {
+            Some("build") => "build",
+            Some("replan") => "replan",
+            _ => "changes",
+        }
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -197,7 +214,7 @@ fn start_run(
 
     let task = request.task.clone();
     let stack = request.stack.to_string();
-    let thread = request.changes.as_ref().map(|c| c.thread);
+    let thread = request.changes.as_ref().map(|c| (c.thread, c.kind().to_string()));
     let mut args = vec![
         "--json".to_string(),
         "--repo".into(),
@@ -211,27 +228,29 @@ fn start_run(
         "--log".into(),
         log.display().to_string(),
     ];
+    if request.plan_only {
+        args.push("--plan-only".into());
+    }
     if let Some(changes) = request.changes {
         let plan = runs.join(format!("{stamp}-plan.md"));
-        fs::write(&plan, changes.plan).map_err(|e| e.to_string())?;
-        args.extend([
-            "--changes".into(),
-            changes.notes,
-            "--plan-file".into(),
-            plan.display().to_string(),
-        ]);
+        fs::write(&plan, &changes.plan).map_err(|e| e.to_string())?;
+        args.extend(["--plan-file".into(), plan.display().to_string()]);
+        match changes.kind() {
+            "build" => args.push("--build".into()),
+            kind => args.extend([format!("--{kind}"), changes.notes]),
+        }
     }
 
     // The ledger keeps the thread and run first, so every call the run makes has a home.
     let recorded = match thread {
-        Some(thread) => Ok((thread, "changes")),
+        Some((thread, kind)) => Ok((thread, kind)),
         None => ledger
             .start_thread(&task, &repo, &branch, &stack, stamp)
-            .map(|thread| (thread, "task")),
+            .map(|thread| (thread, "task".to_string())),
     }
     .and_then(|(thread, kind)| {
         ledger
-            .start_run(thread, kind, &log.display().to_string(), stamp)
+            .start_run(thread, &kind, &log.display().to_string(), stamp)
             .map(|entry| (thread, entry))
     })
     .map_err(|e| e.to_string());

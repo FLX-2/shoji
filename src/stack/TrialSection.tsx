@@ -28,6 +28,8 @@ const STATUS: Record<TrialOutcome["status"], string> = {
   "needs-work": "Needs work",
   stopped: "Stopped at the limit",
   failed: "Failed",
+  // Trials never pause for a plan.
+  planned: "Planned",
 };
 
 /** What a candidate stack is, in words, beside the saved one. */

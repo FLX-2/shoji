@@ -26,6 +26,12 @@ export interface ThreadInput {
    * and builds the changes on top of the work already in the project.
    */
   changes?: { plan: string; notes: string };
+  /** Stop once the plan is written, so the person can build it or ask for a different one. */
+  planOnly?: boolean;
+  /** A plan the person approved: the thread skips scout and plan and builds it. */
+  approved?: string;
+  /** The person's notes on an earlier plan, which the planner writes a new one from. */
+  replan?: { plan: string; notes: string };
 }
 
 
@@ -37,7 +43,7 @@ const MAX_FILES_CHARS = 60_000;
  * With `changes`, it runs again from the build on the person's notes.
  */
 export async function runThread(input: ThreadInput): Promise<ThreadResult> {
-  const { task, stack, workspace, checks, emit, changes } = input;
+  const { task, stack, workspace, checks, emit, changes, approved, replan } = input;
   const meter = new Meter(input.provider, emit, input.cap);
   const state = { plan: "", review: "", checks: [] as CheckResult[], escalated: false };
 
@@ -72,7 +78,8 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   const commandsNote = checks.length ? `\n\nCheck commands you can run: ${checks.join(", ")}` : "";
 
   try {
-    state.plan = changes ? changes.plan : await planFor();
+    state.plan = changes ? changes.plan : (approved ?? (await planFor()));
+    if (input.planOnly) return finish("planned");
     const asked = changes ? `\n\nThe work so far is already in the project. The person asked for these changes:\n${changes.notes}` : "";
     const buildPrompt = `Task: ${task}\n\nPlan:\n${state.plan}${commandsNote}${asked}`;
     const buildStep = changes ? "changes" : "build";
@@ -147,7 +154,8 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   }
 
   async function planFor(): Promise<string> {
-    const brief = await agent("scout", "scout", stack.scout, prompts.SCOUT, `Task: ${task}`, READ_TOOLS);
+    const asked = replan ? `\n\nThe person also asked: ${replan.notes}` : "";
+    const brief = await agent("scout", "scout", stack.scout, prompts.SCOUT, `Task: ${task}${asked}`, READ_TOOLS);
     return step("plan", "plan", stack.plan, async () =>
       textOf(
         await meter.send("plan", "plan", {
@@ -157,13 +165,20 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
           messages: [
             {
               role: "user",
-              content: `Task: ${task}${projectNotes(workspace)}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief)}`,
+              content: `Task: ${task}${projectNotes(workspace)}${replanNotes()}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief)}`,
             },
           ],
           maxTokens: MAX_TOKENS,
         }),
       ),
     );
+  }
+
+  /** An earlier plan and what the person asked to change in it. */
+  function replanNotes(): string {
+    return replan
+      ? `\n\nAn earlier plan for this task:\n${replan.plan}\n\nThe person read it and asked for these changes to the plan:\n${replan.notes}`
+      : "";
   }
 
   function finish(status: ThreadResult["status"], reason?: string): ThreadResult {
