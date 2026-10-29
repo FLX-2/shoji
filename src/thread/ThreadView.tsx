@@ -24,6 +24,8 @@ interface ThreadViewProps {
   onStop: () => void;
   onRequestChanges: (notes: string) => void;
   onCommit: () => Promise<void>;
+  /** What the thread has cost, on the review bar. Off in Settings hides it. */
+  showCosts: boolean;
 }
 
 const MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
@@ -38,7 +40,7 @@ const STATUS = {
 
 /** A thread: its Conversation, where each ask is followed by the steps that answered it,
  *  and its Code, the files it changed. */
-export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit }: ThreadViewProps) {
+export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit, showCosts }: ThreadViewProps) {
   const last = thread.turns[thread.turns.length - 1];
   const running = isRunning(last);
   const runs = thread.turns.map((turn) => foldRun(turn.events));
@@ -68,7 +70,12 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit 
   const now = lastRun.steps.findLast((s) => s.running);
   const stage = running
     ? now
-      ? `${stepLabel(lastRun.steps, lastRun.steps.indexOf(now))} · ${MODELS[now.model].label}`
+      ? (
+          <>
+            {stepLabel(lastRun.steps, lastRun.steps.indexOf(now))}
+            <span className="mn"> · {MODELS[now.model].label}</span>
+          </>
+        )
       : last.stoppedByYou
         ? "Stopping"
         : "Starting"
@@ -174,9 +181,11 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit 
             <span className="sum">
               {dotted([
                 !thread.committed && checksSummary(lastRun.result?.checks),
-                <>
-                  <b>{formatCost(spent)}</b> in all
-                </>,
+                showCosts && (
+                  <>
+                    <b>{formatCost(spent)}</b> in all
+                  </>
+                ),
                 !thread.committed && spent >= thread.cap && `the ${formatCost(thread.cap)} limit is spent`,
               ])}
             </span>
@@ -218,7 +227,7 @@ function StepRow({ steps, index, live }: { steps: StepView[]; index: number; liv
       <div className="sb">
         <div className="sl">
           {stepLabel(steps, index)}
-          <span className="m" title={step.cost > 0 ? `${MODELS[step.model].label} · ${formatCost(step.cost)}` : MODELS[step.model].label}>
+          <span className="m mn" title={step.cost > 0 ? `${MODELS[step.model].label} · ${formatCost(step.cost)}` : MODELS[step.model].label}>
             {modelName(step.model)}
           </span>
         </div>

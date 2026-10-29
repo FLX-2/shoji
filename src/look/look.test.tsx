@@ -53,3 +53,36 @@ describe("the Zone look", () => {
     expect(screen.getByRole("slider", { name: /Main area frost/ }).hasAttribute("disabled")).toBe(true);
   });
 });
+
+describe("what the app shows", () => {
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+  });
+
+  async function settings() {
+    render(<App bridge={fakeBridge().bridge} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    });
+  }
+
+  it("takes the accent everywhere running or spending is shown", async () => {
+    await settings();
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Accent" })).getByRole("radio", { name: "Sodium" }));
+    expect(prefs().accent).toBe("sodium");
+    expect(app().style.getPropertyValue("--safe-rgb")).toBe("255,176,46");
+  });
+
+  it("can be compact, and hide the status bar and model names", async () => {
+    await settings();
+    fireEvent.click(
+      within(screen.getByRole("radiogroup", { name: "Density" })).getByRole("radio", { name: "Compact" }),
+    );
+    expect(app().getAttribute("data-density")).toBe("compact");
+    fireEvent.click(screen.getByRole("switch", { name: "Status bar" }));
+    expect(document.querySelector("footer.status")).toBeNull();
+    fireEvent.click(screen.getByRole("switch", { name: "Model names" }));
+    expect(app().getAttribute("data-models")).toBe("hidden");
+  });
+});

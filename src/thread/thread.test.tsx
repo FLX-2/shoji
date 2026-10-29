@@ -146,7 +146,7 @@ describe("a thread in the app", () => {
     expect(steps[0].textContent).toContain("Haiku");
     expect(steps[1].textContent).toContain("Planning the change");
     expect(steps[1].textContent).toContain("Opus");
-    expect(screen.getByText("Planning the change · Opus 5.5")).toBeTruthy();
+    expect(document.querySelector(".stage")?.textContent).toContain("Planning the change · Opus 5.5");
   });
 
   it("shows the step a stopped run was on as unfinished", async () => {
@@ -176,6 +176,14 @@ describe("a thread in the app", () => {
     expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
     // Nothing was planned yet, so there's no work to change.
     expect(screen.queryByRole("button", { name: "Request changes" })).toBeNull();
+  });
+
+  it("leaves the cost off the review bar when costs are hidden", async () => {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", showCosts: false }));
+    const fake = await startThread();
+    fake.emit(result("ready", 0.12));
+    fake.exit(0);
+    expect(document.querySelector(".review .sum")?.textContent).not.toContain("$");
   });
 
   it("sends requested changes with the plan, within what's left of the limit", async () => {

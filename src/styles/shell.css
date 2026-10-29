@@ -34,6 +34,10 @@ button {
   isolation: isolate;
 }
 
+.app[data-status="hidden"] {
+  grid-template-rows: 42px minmax(0, 1fr);
+}
+
 /* The background field sits under everything. The chrome is solid, so it shows only through the main stage. */
 .field {
   position: absolute;

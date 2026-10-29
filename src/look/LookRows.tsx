@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Prefs } from "../settings/prefs";
+import { ACCENTS, type AccentId } from "./accent";
 import { FIELD_NAMES, type FieldId } from "./fields";
 
 interface RowProps {
@@ -94,8 +95,87 @@ export function OpaqueRow({ prefs, onChange }: RowProps) {
   );
 }
 
+export function AccentRow({ prefs, onChange }: RowProps) {
+  return (
+    <div className="srow">
+      <div>
+        <b>Accent</b>
+        <span className="d">Used for one thing only: something is running or spending.</span>
+      </div>
+      <div className="swatches" role="radiogroup" aria-label="Accent">
+        {(Object.keys(ACCENTS) as AccentId[]).map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            className="swc"
+            aria-checked={prefs.accent === id}
+            onClick={() => onChange({ accent: id })}
+          >
+            <i style={{ background: `rgb(${ACCENTS[id].rgb.join(",")})` }} aria-hidden="true" />
+            {ACCENTS[id].name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function DensityRow({ prefs, onChange }: RowProps) {
+  return (
+    <div className="srow">
+      <div>
+        <b>Density</b>
+        <span className="d">Compact fits more on screen, with smaller text and tighter rows.</span>
+      </div>
+      <div className="seg" role="radiogroup" aria-label="Density">
+        {(["comfortable", "compact"] as const).map((density) => (
+          <button
+            key={density}
+            type="button"
+            role="radio"
+            aria-checked={prefs.density === density}
+            onClick={() => onChange({ density })}
+          >
+            {density === "comfortable" ? "Comfortable" : "Compact"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** An on or off setting. */
+export function SwitchRow({
+  label,
+  description,
+  on,
+  onToggle,
+}: {
+  label: string;
+  description: string;
+  on: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="srow">
+      <div>
+        <b>{label}</b>
+        <span className="d">{description}</span>
+      </div>
+      <button type="button" className="sw" role="switch" aria-checked={on} aria-label={label} onClick={onToggle} />
+    </div>
+  );
+}
+
 /** The frost setting as the CSS the main stage reads: how much blur, and how much of the matte shows. */
-export function frostStyle(frost: number) {
-  const f = frost / 100;
-  return { "--bm": `${(1 + f * 14).toFixed(1)}px`, "--tm": (0.12 + f * 0.7).toFixed(3) } as CSSProperties;
+export function lookStyle(prefs: Prefs) {
+  const f = prefs.frost / 100;
+  const rgb = ACCENTS[prefs.accent].rgb.join(",");
+  return {
+    "--bm": `${(1 + f * 14).toFixed(1)}px`,
+    "--tm": (0.12 + f * 0.7).toFixed(3),
+    "--safe": `rgb(${rgb})`,
+    "--safe-rgb": rgb,
+  } as CSSProperties;
 }

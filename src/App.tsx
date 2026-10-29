@@ -4,7 +4,7 @@ import { spentOn } from "./budget/daily";
 import { bridge as tauriBridge, type Bridge, type KeyStatus } from "./bridge";
 import { folderName, HomeView } from "./home/HomeView";
 import { Field } from "./look/Field";
-import { frostStyle } from "./look/LookRows";
+import { lookStyle } from "./look/LookRows";
 import { ReceiptsView } from "./receipts/ReceiptsView";
 import { usePrefs } from "./settings/prefs";
 import { SettingsView } from "./settings/SettingsView";
@@ -82,7 +82,10 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
       data-platform={isMac ? "mac" : "other"}
       data-motion={prefs.motion ? "on" : "off"}
       data-opaque={prefs.opaque || undefined}
-      style={frostStyle(prefs.frost)}
+      data-density={prefs.density}
+      data-models={prefs.showModels ? undefined : "hidden"}
+      data-status={prefs.statusBar ? undefined : "hidden"}
+      style={lookStyle(prefs)}
     >
       {!prefs.opaque && prefs.field !== "none" && (
         <Field key={prefs.field} id={prefs.field} running={running} still={!prefs.motion} />
@@ -162,6 +165,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 onStop={stop}
                 onRequestChanges={requestChanges}
                 onCommit={commit}
+                showCosts={prefs.showCosts}
               />
             ) : (
               <>
@@ -193,22 +197,24 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
 
       {ask && <LimitAsk ask={ask} limit={prefs.dailyLimit} onClose={() => setAsk(null)} />}
 
-      <footer className="status solid">
-        <span title={prefs.repo ?? undefined}>{prefs.repo ? folderName(prefs.repo) : "No project open"}</span>
-        <span className="r">
-          {thread?.branch && thread.repo === prefs.repo && <span>{thread.branch}</span>}
-          {thread && threadRunning && (
-            <span>
-              this thread <b>{formatCost(threadCost(thread))}</b>
-            </span>
-          )}
-          {trials.trial && trialRunning && (
-            <span>
-              this trial <b>{formatCost(trialProgress(trials.trial).spent)}</b>
-            </span>
-          )}
-        </span>
-      </footer>
+      {prefs.statusBar && (
+        <footer className="status solid">
+          <span title={prefs.repo ?? undefined}>{prefs.repo ? folderName(prefs.repo) : "No project open"}</span>
+          <span className="r">
+            {thread?.branch && thread.repo === prefs.repo && <span>{thread.branch}</span>}
+            {thread && threadRunning && prefs.showCosts && (
+              <span>
+                this thread <b>{formatCost(threadCost(thread))}</b>
+              </span>
+            )}
+            {trials.trial && trialRunning && prefs.showCosts && (
+              <span>
+                this trial <b>{formatCost(trialProgress(trials.trial).spent)}</b>
+              </span>
+            )}
+          </span>
+        </footer>
+      )}
     </div>
   );
 }
