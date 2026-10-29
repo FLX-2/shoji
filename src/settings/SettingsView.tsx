@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Stack } from "../../runtime/src/stack";
 import type { KeyStatus } from "../bridge";
 import { describeStack } from "../stack/lock";
+import { MoneyRow } from "./MoneyRow";
 import type { Prefs } from "./prefs";
 
 interface SettingsViewProps {
@@ -25,8 +26,6 @@ export function SettingsView({
   onForgetKey,
   onRunSetup,
 }: SettingsViewProps) {
-  // The field keeps what's typed, so "0.0" can become "0.05"; only a positive amount is saved.
-  const [cap, setCap] = useState(String(prefs.cap));
   return (
     <div className="settings">
       <div className="swrap">
@@ -45,27 +44,20 @@ export function SettingsView({
                 Change in Stack
               </button>
             </div>
-            <div className="srow">
-              <label htmlFor="s-cap">
-                <b>Limit per thread</b>
-                <span className="d">Shoji stops a thread before any call that could take it past this.</span>
-              </label>
-              <div className="money">
-                <span aria-hidden="true">$</span>
-                <input
-                  id="s-cap"
-                  type="number"
-                  min={0.01}
-                  step={0.05}
-                  value={cap}
-                  onChange={(e) => {
-                    setCap(e.target.value);
-                    if (Number(e.target.value) > 0) onChange({ cap: Number(e.target.value) });
-                  }}
-                  onBlur={() => setCap(String(prefs.cap))}
-                />
-              </div>
-            </div>
+            <MoneyRow
+              id="s-cap"
+              label="Limit per thread"
+              description="Shoji stops a thread before any call that could take it past this."
+              value={prefs.cap}
+              onChange={(cap) => onChange({ cap })}
+            />
+            <MoneyRow
+              id="s-daily"
+              label="Daily limit"
+              description="Shoji asks before a thread or trial could take the day's spend past this."
+              value={prefs.dailyLimit}
+              onChange={(dailyLimit) => onChange({ dailyLimit })}
+            />
           </div>
         </section>
 

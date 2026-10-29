@@ -7,7 +7,8 @@ interface HomeViewProps {
   busy: boolean;
   onPickProject: () => void;
   onOpenSettings: () => void;
-  onStart: (task: string) => void;
+  /** Returns false when the task didn't start, so the composer keeps it. */
+  onStart: (task: string) => void | boolean;
 }
 
 /** Start: pick a project and describe a change. */

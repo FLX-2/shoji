@@ -1874,3 +1874,44 @@ button.rrow:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Asking before the daily limit: a small window over a dimmed app. */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(6, 5, 5, 0.6);
+}
+
+.ask {
+  width: min(440px, 100%);
+  display: grid;
+  gap: 12px;
+  padding: 20px 22px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: var(--solid2);
+}
+
+.ask h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--z10);
+}
+
+.ask p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--z8);
+}
+
+.ask .acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
