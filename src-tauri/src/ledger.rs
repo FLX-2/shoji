@@ -177,6 +177,22 @@ impl Ledger {
                     ],
                 )?;
             }
+            // A trial wraps each replayed task's events and ends with a briefing, which alone
+            // says how the trial went.
+            Some("runtime") if event["event"]["type"] == "call" => {
+                return self.record(run, &event["event"], at);
+            }
+            Some("briefing") => {
+                let outcomes = event["briefing"]["outcomes"].as_array();
+                let finished = outcomes.is_some_and(|all| {
+                    all.iter()
+                        .any(|o| matches!(o["status"].as_str(), Some("ready" | "needs-work")))
+                });
+                self.0.lock().unwrap().execute(
+                    "UPDATE runs SET status = ?2 WHERE id = ?1",
+                    params![run, if finished { "ready" } else { "failed" }],
+                )?;
+            }
             Some("result") => {
                 if let Some(status) = event["result"]["status"].as_str() {
                     self.0.lock().unwrap().execute(
@@ -358,6 +374,30 @@ mod tests {
             ("plan", "claude-opus-5-5")
         );
         assert_eq!((calls[1].cache_read_tokens, calls[1].cost), (40, 0.02));
+    }
+
+    #[test]
+    fn keeps_a_trial_s_calls_and_how_it_ended() {
+        let ledger = Ledger::in_memory().unwrap();
+        let thread = ledger
+            .start_thread("Review on Sonnet 5.5", "/r", "", "{}", 1)
+            .unwrap();
+        let run = ledger.start_run(thread, "trial", "/logs/2.jsonl", 2).unwrap();
+        let wrapped = |event: Value| json!({ "type": "runtime", "index": 0, "event": event });
+        ledger
+            .record(run, &wrapped(call("review", "claude-sonnet-5-5", 0.01)), 3)
+            .unwrap();
+        ledger
+            .record(run, &wrapped(json!({ "type": "result", "result": { "status": "ready" } })), 4)
+            .unwrap();
+        assert_eq!(ledger.threads().unwrap()[0].runs[0].status, None);
+        let briefing = json!({ "type": "briefing", "briefing": { "outcomes": [{ "status": "stopped" }] } });
+        ledger.record(run, &briefing, 5).unwrap();
+
+        let runs = &ledger.threads().unwrap()[0].runs;
+        assert_eq!(runs[0].kind, "trial");
+        assert_eq!(runs[0].calls.len(), 1);
+        assert_eq!(runs[0].status.as_deref(), Some("failed"));
     }
 
     #[test]

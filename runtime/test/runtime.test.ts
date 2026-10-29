@@ -9,11 +9,11 @@ import { commandEnv, runCommand } from "../src/commands";
 import { costOf } from "../src/models";
 import { runThread } from "../src/pipeline";
 import { defaultChecks } from "../src/project";
-import { AnthropicProvider, type ModelProvider, type ModelRequest } from "../src/provider";
+import { AnthropicProvider, type ModelProvider } from "../src/provider";
 import { STACKS } from "../src/stack";
 import { runTool } from "../src/tools";
 import { Workspace } from "../src/workspace";
-import { reply, ScriptedProvider, tempRepo } from "./helpers";
+import { CHECK, roleOf, team, tempRepo } from "./helpers";
 
 const usage = (u: object) => ({ input_tokens: 0, output_tokens: 0, ...u }) as Parameters<typeof costOf>[1];
 
@@ -96,42 +96,6 @@ describe("default checks", () => {
   });
 });
 
-/** The role a request is for, read from its system prompt. */
-function roleOf(request: ModelRequest) {
-  return request.system.match(/You are the (\w+)/)![1];
-}
-
-/** A scripted team that adds a greeting file. `goodBuild` decides whether its first build passes. */
-function team(goodBuild: (request: ModelRequest) => boolean, verdict = "VERDICT: APPROVE") {
-  return new ScriptedProvider((request) => {
-    const last = request.messages[request.messages.length - 1];
-    const answered = Array.isArray(last.content) && last.content.some((b) => b.type === "tool_result");
-    switch (roleOf(request)) {
-      case "scout":
-        return answered
-          ? reply([{ text: "The greeting lives in src/hello.js.\nFILES: src/hello.js" }])
-          : reply([{ tool: "read_file", input: { path: "src/hello.js" } }]);
-      case "planner":
-        return reply([{ text: "Change the greeting to 'hello, shoji'.\nDONE WHEN: the check passes." }]);
-      case "builder":
-        return answered
-          ? reply([{ text: "Changed the greeting." }])
-          : reply([
-              {
-                tool: "write_file",
-                input: {
-                  path: "src/hello.js",
-                  content: goodBuild(request) ? "export default 'hello, shoji';\n" : "export default 'hello';\n",
-                },
-              },
-            ]);
-      default:
-        return reply([{ text: verdict }]);
-    }
-  });
-}
-
-const CHECK = `node -e "process.exit(require('fs').readFileSync('src/hello.js','utf8').includes('shoji') ? 0 : 1)"`;
 
 async function run(provider: ModelProvider, cap = 1, changes?: { plan: string; notes: string }) {
   const root = tempRepo({ "src/hello.js": "export default 'hello';\n" });

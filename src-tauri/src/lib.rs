@@ -8,6 +8,7 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
+use tauri::async_runtime::Receiver;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
@@ -234,7 +235,7 @@ fn start_run(
             })?;
         Ok((ids, spawned))
     });
-    let ((thread, entry), (mut events, child)) = match spawned {
+    let ((thread, entry), (events, child)) = match spawned {
         Ok(spawned) => spawned,
         Err(e) => {
             // Leave the project as it was found.
@@ -247,8 +248,12 @@ fn start_run(
     };
     let id = run.count.fetch_add(1, Ordering::Relaxed) + 1;
     *slot = Some((id, child, entry));
+    watch(app, events, id, entry);
+    Ok(Started { run: id, thread, branch })
+}
 
-    let app = app.clone();
+/// Passes a run's events to the app and the ledger until the runtime exits.
+fn watch(app: AppHandle, mut events: Receiver<CommandEvent>, id: u64, entry: i64) {
     tauri::async_runtime::spawn(async move {
         let mut stderr = Vec::new();
         while let Some(event) = events.recv().await {
@@ -281,7 +286,80 @@ fn start_run(
             }
         }
     });
-    Ok(Started { run: id, thread, branch })
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TrialRequest {
+    repo: String,
+    /// What the trial tries, in words, as the ledger and Receipts name it.
+    label: String,
+    /// The candidate stack, as the runtime's --stack-json takes it.
+    stack: serde_json::Value,
+    /// Dollars the whole trial may spend.
+    cap: f64,
+    /// The accepted tasks to replay: {task, base, was}, as the runtime's --trial-file takes them.
+    tasks: Vec<serde_json::Value>,
+}
+
+/// Replays accepted tasks on a candidate stack in scratch copies of the project. The project
+/// itself is never touched. Its events and exit arrive like a thread's, under its run number.
+#[tauri::command]
+fn start_trial(
+    app: AppHandle,
+    run: State<Run>,
+    ledger: State<Ledger>,
+    request: TrialRequest,
+) -> Result<u64, String> {
+    let mut slot = run.child.lock().unwrap();
+    if slot.is_some() {
+        return Err("Something is already running. Let it finish or stop it first.".into());
+    }
+    let key = saved_key()
+        .or_else(env_key)
+        .ok_or("Add your Anthropic API key in Settings first.")?;
+    let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let runs = data.join("runs");
+    fs::create_dir_all(&runs).map_err(|e| e.to_string())?;
+    let stamp = now_ms();
+    let log = runs.join(format!("{stamp}.jsonl"));
+    let tasks = runs.join(format!("{stamp}-trial.json"));
+    let contents = serde_json::json!({ "tasks": request.tasks }).to_string();
+    fs::write(&tasks, contents).map_err(|e| e.to_string())?;
+
+    let stack = request.stack.to_string();
+    let thread = ledger
+        .start_thread(&request.label, &request.repo, "", &stack, stamp)
+        .map_err(|e| e.to_string())?;
+    let entry = ledger
+        .start_run(thread, "trial", &log.display().to_string(), stamp)
+        .map_err(|e| e.to_string())?;
+    let args = vec![
+        "--json".to_string(),
+        "--repo".into(),
+        request.repo,
+        "--trial-file".into(),
+        tasks.display().to_string(),
+        "--stack-json".into(),
+        stack,
+        "--cap".into(),
+        format!("{:.4}", request.cap),
+        "--log".into(),
+        log.display().to_string(),
+    ];
+    let command = app.shell().sidecar("shoji-runtime").map_err(|e| e.to_string())?;
+    let (events, child) = command
+        .args(args)
+        .env("SHOJI_API_KEY", key)
+        .spawn()
+        .map_err(|e| {
+            noted(ledger.end_run(entry, "failed"));
+            e.to_string()
+        })?;
+    let id = run.count.fetch_add(1, Ordering::Relaxed) + 1;
+    *slot = Some((id, child, entry));
+    watch(app, events, id, entry);
+    Ok(id)
 }
 
 #[tauri::command]
@@ -554,6 +632,7 @@ pub fn run() {
             forget_key,
             pick_project,
             start_run,
+            start_trial,
             stop_run,
             changes,
             accept_file,

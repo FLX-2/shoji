@@ -6,6 +6,7 @@ import { usePrefs } from "./settings/prefs";
 import { SettingsView } from "./settings/SettingsView";
 import { StackView } from "./stack/StackView";
 import { useStack } from "./stack/useStack";
+import { trialProgress, useTrial } from "./stack/useTrial";
 import { Mark } from "./shell/Mark";
 import { Rail } from "./shell/Rail";
 import { WindowControls } from "./shell/WindowControls";
@@ -22,7 +23,10 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
   const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
   const stack = useStack(bridge, prefs.stack);
   const { thread, start, requestChanges, stop, commit } = useThread(bridge);
-  const running = isRunning(thread?.turns[thread.turns.length - 1]);
+  const trials = useTrial(bridge);
+  const trialRunning = !!trials.trial && trialProgress(trials.trial).running;
+  const threadRunning = isRunning(thread?.turns[thread.turns.length - 1]);
+  const running = threadRunning || trialRunning;
   const current = SECTIONS[section];
 
   const refreshKey = useCallback(() => bridge.keyStatus().then(setKeyStatus), [bridge]);
@@ -78,7 +82,17 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
           ) : section === "receipts" ? (
             <ReceiptsView bridge={bridge} />
           ) : section === "stack" ? (
-            <StackView stack={stack.stack} lock={stack.lock} error={stack.error} onSave={stack.save} />
+            <StackView
+              bridge={bridge}
+              repo={prefs.repo}
+              trial={trials.trial}
+              onStartTrial={trials.start}
+              onStopTrial={trials.stop}
+              stack={stack.stack}
+              lock={stack.lock}
+              error={stack.error}
+              onSave={stack.save}
+            />
           ) : section === "threads" && thread ? (
             <ThreadView
               bridge={bridge}
@@ -115,16 +129,19 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
 
       <footer className="status solid">
         <span title={prefs.repo ?? undefined}>{prefs.repo ? folderName(prefs.repo) : "No project open"}</span>
-        {thread && (
-          <span className="r">
-            {thread.branch && thread.repo === prefs.repo && <span>{thread.branch}</span>}
-            {running && (
-              <span>
-                this thread <b>{formatCost(threadCost(thread))}</b>
-              </span>
-            )}
-          </span>
-        )}
+        <span className="r">
+          {thread?.branch && thread.repo === prefs.repo && <span>{thread.branch}</span>}
+          {thread && threadRunning && (
+            <span>
+              this thread <b>{formatCost(threadCost(thread))}</b>
+            </span>
+          )}
+          {trials.trial && trialRunning && (
+            <span>
+              this trial <b>{formatCost(trialProgress(trials.trial).spent)}</b>
+            </span>
+          )}
+        </span>
       </footer>
     </div>
   );

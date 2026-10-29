@@ -8,9 +8,11 @@ import { runThread } from "./pipeline";
 import { defaultChecks } from "./project";
 import { AnthropicProvider } from "./provider";
 import { describeStacks, parseStack, type Stack, STACKS, type StackName } from "./stack";
+import { describeBriefing, finished, runTrial, type TrialEvent, type TrialTask } from "./trial";
 import { Workspace } from "./workspace";
 
 const USAGE = `Usage: shoji-runtime --task "<what to change>" [options]
+       shoji-runtime --trial-file <file> [options]
 
 Options:
   --repo <path>       Project folder, a git repository (default: current folder)
@@ -23,6 +25,10 @@ Options:
   --changes <notes>   Build the person's requested changes on top of finished work,
                       skipping scout and plan; needs --plan-file
   --plan-file <file>  The plan of the work being changed
+  --trial-file <file> Replay accepted tasks on the stack instead of running one, each in a
+                      scratch copy of the project at the commit it started from. The file
+                      holds {"tasks":[{"task":…,"base":<commit>,"was":<dollars>},…]};
+                      --cap covers the whole trial
   --log <file>        Append every event to a JSON lines file
   --json              Print events as JSON lines, for the app
   --allow-dirty       Run even if the project has uncommitted changes
@@ -60,6 +66,34 @@ function describe(event: RuntimeEvent): string | null {
   }
 }
 
+function describeTrial(event: TrialEvent): string | null {
+  switch (event.type) {
+    case "task":
+      return `\nTask ${event.index + 1} of ${event.total}: ${event.task.split("\n")[0]}`;
+    case "runtime":
+      return event.event.type === "result" ? null : describe(event.event);
+    case "outcome":
+      return `${event.outcome.status}, $${event.outcome.cost.toFixed(4)} (was $${event.outcome.was.toFixed(4)})`;
+    case "briefing":
+      return `\n${describeBriefing(event.briefing)}`;
+  }
+}
+
+function readTrialTasks(file: string): TrialTask[] {
+  let tasks: unknown;
+  try {
+    tasks = JSON.parse(fs.readFileSync(file, "utf8")).tasks;
+  } catch (e) {
+    fail(`Couldn't read the trial file: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  const valid = (t: Partial<TrialTask>) =>
+    typeof t?.task === "string" && typeof t.base === "string" && typeof t.was === "number";
+  if (!Array.isArray(tasks) || tasks.length === 0 || !tasks.every(valid)) {
+    fail('The trial file needs {"tasks":[{"task":…,"base":<commit>,"was":<dollars>},…]}.');
+  }
+  return tasks;
+}
+
 async function main() {
   const { values } = parseArgs({
     options: {
@@ -71,6 +105,7 @@ async function main() {
       check: { type: "string", multiple: true },
       changes: { type: "string" },
       "plan-file": { type: "string" },
+      "trial-file": { type: "string" },
       log: { type: "string" },
       json: { type: "boolean", default: false },
       "allow-dirty": { type: "boolean", default: false },
@@ -79,7 +114,7 @@ async function main() {
     },
   });
   if (values.help) return void process.stdout.write(`${USAGE}\n`);
-  if (!values.task) fail(USAGE);
+  if (!values.task && !values["trial-file"]) fail(USAGE);
   let stack: Stack;
   if (values["stack-json"] !== undefined) {
     try {
@@ -102,6 +137,30 @@ async function main() {
 
   const root = path.resolve(values.repo);
   if (!isGitRepo(root)) fail(`${root} isn't a git repository.`);
+  const log = values.log ? fs.openSync(values.log, "a") : null;
+  const write = (event: object, text: string | null) => {
+    const line = JSON.stringify({ at: new Date().toISOString(), ...event });
+    if (log !== null) fs.writeSync(log, `${line}\n`);
+    if (values.json) process.stdout.write(`${line}\n`);
+    else if (text) process.stdout.write(`${text}\n`);
+  };
+  const provider = new AnthropicProvider(apiKey, values["base-url"]);
+
+  if (values["trial-file"]) {
+    const tasks = readTrialTasks(values["trial-file"]);
+    const briefing = await runTrial({
+      root,
+      tasks,
+      stack,
+      provider,
+      cap,
+      checks: values.check ? () => values.check! : undefined,
+      emit: (event) => write(event, describeTrial(event)),
+    });
+    process.exitCode = briefing.outcomes.some((o) => finished(o.status)) ? 0 : 1;
+    return;
+  }
+  if (!values.task) fail(USAGE);
   // Changes build on the thread's own uncommitted work, so only a fresh thread needs a clean project.
   if (!changes && hasChanges(root) && !values["allow-dirty"]) {
     fail(
@@ -111,24 +170,15 @@ async function main() {
     );
   }
 
-  const log = values.log ? fs.openSync(values.log, "a") : null;
   const result = await runThread({
     task: values.task,
     stack,
-    provider: new AnthropicProvider(apiKey, values["base-url"]),
+    provider,
     workspace: new Workspace(root),
     checks: values.check ?? defaultChecks(root),
     cap,
     changes,
-    emit: (event) => {
-      const line = JSON.stringify({ at: new Date().toISOString(), ...event });
-      if (log !== null) fs.writeSync(log, `${line}\n`);
-      if (values.json) process.stdout.write(`${line}\n`);
-      else {
-        const text = describe(event);
-        if (text) process.stdout.write(`${text}\n`);
-      }
-    },
+    emit: (event) => write(event, describe(event)),
   });
   process.exitCode = result.status === "ready" ? 0 : 1;
 }

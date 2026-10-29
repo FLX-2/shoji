@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { EFFORTS, MODELS, type ModelId } from "../../runtime/src/models";
 import { ROLES, STACKS, type Role, type Seat, type Stack, type StackName } from "../../runtime/src/stack";
+import type { Bridge, TrialRequest } from "../bridge";
 import {
   changedRoles,
   describeStack,
@@ -12,8 +13,16 @@ import {
   seatLabel,
   type StackLock,
 } from "./lock";
+import { TrialSection } from "./TrialSection";
+import type { Trial } from "./useTrial";
 
 interface StackViewProps {
+  bridge: Bridge;
+  /** The open project, whose accepted work a trial replays. */
+  repo: string | null;
+  trial: Trial | null;
+  onStartTrial: (request: TrialRequest) => void;
+  onStopTrial: () => void;
   stack: Stack;
   lock: StackLock;
   /** Why stack.lock couldn't be read, if it couldn't. */
@@ -28,7 +37,17 @@ function when(at: number): string {
 }
 
 /** Which model and effort takes each step, saved to stack.lock with its history. */
-export function StackView({ stack, lock, error, onSave }: StackViewProps) {
+export function StackView({
+  bridge,
+  repo,
+  trial,
+  onStartTrial,
+  onStopTrial,
+  stack,
+  lock,
+  error,
+  onSave,
+}: StackViewProps) {
   const [draft, setDraft] = useState<Stack | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const shown = draft ?? stack;
@@ -140,6 +159,16 @@ export function StackView({ stack, lock, error, onSave }: StackViewProps) {
               </div>
             )}
           </section>
+
+          <TrialSection
+            bridge={bridge}
+            repo={repo}
+            saved={stack}
+            candidate={shown}
+            trial={trial}
+            onStart={onStartTrial}
+            onStop={onStopTrial}
+          />
 
           <section className="prices" aria-labelledby="prices-h">
             <h2 id="prices-h">Prices</h2>

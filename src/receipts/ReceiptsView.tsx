@@ -26,6 +26,11 @@ const STEPS: Record<string, string> = {
   review: "Review",
 };
 
+function counted(threads: number, trials: number): string {
+  const text = `${threads} ${threads === 1 ? "thread" : "threads"}`;
+  return trials ? `${text} and ${trials} ${trials === 1 ? "trial" : "trials"}` : text;
+}
+
 const percent = (share: number) => `${Math.round(share * 100)}%`;
 
 /** Dollars at one fixed precision, so a column of them lines up. */
@@ -137,9 +142,7 @@ export function ReceiptsView({ bridge }: { bridge: Bridge }) {
             <div>
               <dt>Spent</dt>
               <dd>{formatCost(summary.spent)}</dd>
-              <dd className="s">
-                {summary.threads.length} {summary.threads.length === 1 ? "thread" : "threads"}
-              </dd>
+              <dd className="s">{counted(summary.threads.length - summary.trials, summary.trials)}</dd>
             </div>
             <div>
               <dt>Saved against one model</dt>

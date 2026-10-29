@@ -1408,3 +1408,103 @@ button.rrow:focus-visible {
 .spane .versions .btn {
   margin: 4px 0 0 -10px;
 }
+
+.trial {
+  display: grid;
+  gap: 14px;
+}
+
+.trial .srow > .d {
+  margin: 0;
+  font-size: 13px;
+  color: var(--z8);
+}
+
+.briefing {
+  display: grid;
+  gap: 18px;
+  padding: 18px 18px 8px;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  background: var(--z1);
+}
+
+.briefing > .d {
+  margin: 0 0 10px;
+}
+
+.trialrun {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 10px;
+  font-size: 13.5px;
+  color: var(--z9);
+}
+
+.trialrun .n {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--z8);
+}
+
+.bhead {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--z10);
+}
+
+.bhead .meta,
+.outcomes .meta {
+  font-weight: 400;
+  color: var(--z6);
+}
+
+.figures.small {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px 28px;
+}
+
+.figures.small dd {
+  font-size: 22px;
+}
+
+.figures.small dd.s {
+  font-size: 12.5px;
+}
+
+.outcomes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+}
+
+.outcomes li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 4px 16px;
+  align-items: baseline;
+  padding: 10px 0;
+  border-top: 1px solid var(--hair2);
+  font-size: 13.5px;
+  color: var(--z9);
+}
+
+.outcomes .task {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outcomes .n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.outcomes .why {
+  grid-column: 1 / -1;
+  font-size: 12.5px;
+  color: var(--z6);
+}
