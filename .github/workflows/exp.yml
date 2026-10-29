@@ -15,8 +15,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: bun --version
       - name: Under bun
-        run: bun scripts/exp/checks.ts "${{ github.workspace }}"
+        run: bun scripts/exp/checks.ts "${{ github.workspace }}" bun
       - name: Compiled
         run: |
           bun build scripts/exp/checks.ts --compile --outfile exp.exe
-          ./exp.exe "${{ github.workspace }}"
+          ./exp.exe "${{ github.workspace }}" compiled
