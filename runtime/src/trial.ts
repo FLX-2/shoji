@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import type { RuntimeEvent, ThreadResult } from "./events";
 import { commitDiff } from "./git";
+import { excludeFromGit, NOTES_FILE } from "./notes";
 import { approves, runThread } from "./pipeline";
 import { defaultChecks } from "./project";
 import type { ModelProvider } from "./provider";
@@ -165,6 +166,12 @@ export function scratchCopy(root: string, base: string): string {
   if (checkedOut.status !== 0) {
     fs.rmSync(copy, { recursive: true, force: true });
     throw new Error(`The task's starting commit ${base} isn't in the project any more.`);
+  }
+  // Notes git ignores aren't in the copy, so it gets the project's own, as a thread there would.
+  const notes = path.join(root, NOTES_FILE);
+  if (fs.existsSync(notes) && !fs.existsSync(path.join(copy, NOTES_FILE))) {
+    fs.copyFileSync(notes, path.join(copy, NOTES_FILE));
+    excludeFromGit(copy);
   }
   const packages = path.join(root, "node_modules");
   if (fs.existsSync(packages)) {

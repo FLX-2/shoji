@@ -2,6 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { CallRecord, RuntimeEvent } from "../runtime/src/events";
+import type { NotesEvent } from "../runtime/src/notes";
 import type { Stack } from "../runtime/src/stack";
 import type { TrialEvent, TrialTask } from "../runtime/src/trial";
 
@@ -38,6 +39,14 @@ export interface TrialRequest {
   /** Dollars the whole trial may spend. */
   cap: number;
   tasks: TrialTask[];
+}
+
+export interface NotesRequest {
+  repo: string;
+  /** The stack; its Scout reads the project. */
+  stack: Stack;
+  /** Dollars the notes may cost. */
+  cap: number;
 }
 
 export interface StartedRun {
@@ -78,7 +87,7 @@ export interface LedgerThread {
 
 export interface LedgerRun {
   id: number;
-  kind: "task" | "changes" | "trial";
+  kind: "task" | "changes" | "trial" | "notes";
   startedAt: number;
   /** How the run ended; null while it's going. */
   status: "ready" | "needs-work" | "stopped" | "failed" | null;
@@ -102,6 +111,8 @@ export const bridge = {
   startRun: (request: RunRequest) => invoke<StartedRun>("start_run", { request }),
   /** Starts a trial and returns its run number, which its events and exit carry. */
   startTrial: (request: TrialRequest) => invoke<number>("start_trial", { request }),
+  /** Has Scout write the project's SHOJI.md. Returns its run number, or null if the project has notes already. */
+  startNotes: (request: NotesRequest) => invoke<number | null>("start_notes", { request }),
   stopRun: () => invoke<void>("stop_run"),
   changes: (repo: string) => invoke<ProjectChanges>("changes", { repo }),
   /** Keeps a file's changes by staging it. */
@@ -122,6 +133,8 @@ export const bridge = {
     listen<{ run: number; event: RuntimeEvent }>("runtime-event", (e) => handler(e.payload.run, e.payload.event)),
   onTrialEvent: (handler: (run: number, event: TrialEvent) => void) =>
     listen<{ run: number; event: TrialEvent }>("runtime-event", (e) => handler(e.payload.run, e.payload.event)),
+  onNotesEvent: (handler: (run: number, event: NotesEvent) => void) =>
+    listen<{ run: number; event: NotesEvent }>("runtime-event", (e) => handler(e.payload.run, e.payload.event)),
   onExit: (handler: (exit: RunExit) => void) => listen<RunExit>("runtime-exit", (e) => handler(e.payload)),
 };
 

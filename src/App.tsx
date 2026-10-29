@@ -9,6 +9,7 @@ import { ReceiptsView } from "./receipts/ReceiptsView";
 import { usePrefs } from "./settings/prefs";
 import { SettingsView } from "./settings/SettingsView";
 import { SetupView } from "./setup/SetupView";
+import { notesProgress, useNotes } from "./setup/useNotes";
 import { StackView } from "./stack/StackView";
 import { useStack } from "./stack/useStack";
 import { trialProgress, useTrial } from "./stack/useTrial";
@@ -30,8 +31,10 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
   const { thread, start, requestChanges, stop, commit } = useThread(bridge);
   const trials = useTrial(bridge);
   const trialRunning = !!trials.trial && trialProgress(trials.trial).running;
+  const notes = useNotes(bridge);
+  const notesRunning = !!notes.notes && notesProgress(notes.notes).running;
   const threadRunning = isRunning(thread?.turns[thread.turns.length - 1]);
-  const running = threadRunning || trialRunning;
+  const running = threadRunning || trialRunning || notesRunning;
   const current = SECTIONS[section];
 
   // Setup opens on its own at launch when there's no saved key and it was never finished. It stays
@@ -117,6 +120,8 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
             onSaveStack={stack.save}
             prefs={prefs}
             onChange={setPrefs}
+            notes={notes.notes}
+            onWriteNotes={(repo) => notes.start(repo, stack.stack)}
             onDone={() => {
               setPrefs({ setupDone: true });
               setInSetup(false);

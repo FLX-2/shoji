@@ -24,11 +24,14 @@ const STEPS: Record<string, string> = {
   "fix-1": "Fix",
   "fix-2": "Second fix",
   review: "Review",
+  notes: "Project notes",
 };
 
-function counted(threads: number, trials: number): string {
-  const text = `${threads} ${threads === 1 ? "thread" : "threads"}`;
-  return trials ? `${text} and ${trials} ${trials === 1 ? "trial" : "trials"}` : text;
+function counted(threads: number, trials: number, notes: number): string {
+  const parts = [`${threads} ${threads === 1 ? "thread" : "threads"}`];
+  if (trials) parts.push(`${trials} ${trials === 1 ? "trial" : "trials"}`);
+  if (notes) parts.push(`${notes} ${notes === 1 ? "project read" : "project reads"}`);
+  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0];
 }
 
 const percent = (share: number) => `${Math.round(share * 100)}%`;
@@ -142,7 +145,9 @@ export function ReceiptsView({ bridge }: { bridge: Bridge }) {
             <div>
               <dt>Spent</dt>
               <dd>{formatCost(summary.spent)}</dd>
-              <dd className="s">{counted(summary.threads.length - summary.trials, summary.trials)}</dd>
+              <dd className="s">
+                {counted(summary.threads.length - summary.trials - summary.notes, summary.trials, summary.notes)}
+              </dd>
             </div>
             <div>
               <dt>Saved against one model</dt>

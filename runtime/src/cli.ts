@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 import type { RuntimeEvent } from "./events";
 import { hasChanges, isGitRepo } from "./git";
 import { MODELS } from "./models";
+import { writeNotes, type NotesEvent } from "./notes";
 import { runThread } from "./pipeline";
 import { defaultChecks } from "./project";
 import { AnthropicProvider } from "./provider";
@@ -13,6 +14,7 @@ import { Workspace } from "./workspace";
 
 const USAGE = `Usage: shoji-runtime --task "<what to change>" [options]
        shoji-runtime --trial-file <file> [options]
+       shoji-runtime --notes [options]
 
 Options:
   --repo <path>       Project folder, a git repository (default: current folder)
@@ -29,6 +31,9 @@ Options:
                       scratch copy of the project at the parent of its accepted commit. The
                       file holds {"tasks":[{"task":…,"commit":<accepted>,"was":<dollars>},…]};
                       --cap covers the whole trial
+  --notes             Have the stack's scout read the project and write SHOJI.md, the notes
+                      Plan reads before every task. Git is told to ignore the file. A project
+                      that already has one keeps it
   --log <file>        Append every event to a JSON lines file
   --json              Print events as JSON lines, for the app
   --allow-dirty       Run even if the project has uncommitted changes
@@ -79,6 +84,13 @@ function describeTrial(event: TrialEvent): string | null {
   }
 }
 
+function describeNotes(event: NotesEvent): string | null {
+  if (event.type !== "notes") return describe(event);
+  const r = event.result;
+  if (r.status === "kept") return "The project already has a SHOJI.md, so it was kept.";
+  return r.status === "ready" ? `\nWrote SHOJI.md for $${r.cost.toFixed(4)}.` : `\n${r.status}: ${r.reason}`;
+}
+
 function readTrialTasks(file: string): TrialTask[] {
   let tasks: unknown;
   try {
@@ -106,6 +118,7 @@ async function main() {
       changes: { type: "string" },
       "plan-file": { type: "string" },
       "trial-file": { type: "string" },
+      notes: { type: "boolean", default: false },
       log: { type: "string" },
       json: { type: "boolean", default: false },
       "allow-dirty": { type: "boolean", default: false },
@@ -114,7 +127,7 @@ async function main() {
     },
   });
   if (values.help) return void process.stdout.write(`${USAGE}\n`);
-  if (!values.task && !values["trial-file"]) fail(USAGE);
+  if (!values.task && !values["trial-file"] && !values.notes) fail(USAGE);
   let stack: Stack;
   if (values["stack-json"] !== undefined) {
     try {
@@ -146,6 +159,17 @@ async function main() {
   };
   const provider = new AnthropicProvider(apiKey, values["base-url"]);
 
+  if (values.notes) {
+    const result = await writeNotes({
+      root,
+      seat: stack.scout,
+      provider,
+      cap,
+      emit: (event) => write(event, describeNotes(event)),
+    });
+    process.exitCode = result.status === "ready" || result.status === "kept" ? 0 : 1;
+    return;
+  }
   if (values["trial-file"]) {
     const tasks = readTrialTasks(values["trial-file"]);
     const briefing = await runTrial({

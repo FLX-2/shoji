@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { MODELS } from "../../runtime/src/models";
 import { ROLES, STACKS, type Stack, type StackName } from "../../runtime/src/stack";
 import type { Bridge, KeyStatus } from "../bridge";
@@ -8,6 +8,8 @@ import { MoneyRow } from "../settings/MoneyRow";
 import type { Prefs } from "../settings/prefs";
 import { Mark } from "../shell/Mark";
 import { describeStack, presetOf, PRESETS, ROLE_NAMES, sameStack, seatLabel } from "../stack/lock";
+import { formatCost } from "../thread/fold";
+import { NOTES_CAP, notesProgress, type Notes } from "./useNotes";
 
 interface SetupViewProps {
   bridge: Bridge;
@@ -18,6 +20,9 @@ interface SetupViewProps {
   onSaveStack: (stack: Stack) => Promise<void>;
   prefs: Prefs;
   onChange: (change: Partial<Prefs>) => void;
+  /** The project notes Scout is writing or last wrote, if any. */
+  notes: Notes | null;
+  onWriteNotes: (repo: string) => void;
   onDone: () => void;
 }
 
@@ -51,7 +56,16 @@ export function SetupView(props: SetupViewProps) {
         {step === 0 && <Welcome onStart={() => setStep(1)} />}
         {step === 1 && <Models bridge={props.bridge} status={props.keyStatus} onKeyChanged={props.onKeyChanged} />}
         {step === 2 && <StackStep choice={choice} onChoose={setChoice} prefs={props.prefs} onChange={props.onChange} />}
-        {step === 3 && <Project bridge={props.bridge} repo={props.prefs.repo} onChange={props.onChange} />}
+        {step === 3 && (
+          <Project
+            bridge={props.bridge}
+            repo={props.prefs.repo}
+            onChange={props.onChange}
+            scout={MODELS[props.stack.scout.model].label}
+            notes={props.notes}
+            onWriteNotes={props.onWriteNotes}
+          />
+        )}
         {step === 4 && <Look prefs={props.prefs} onChange={props.onChange} />}
 
         {step > 0 && (
@@ -269,16 +283,23 @@ function StackStep({
   );
 }
 
-type Check = { repo: string; problem: string | null } | null;
+type Check = { repo: string; problem: string | null; notGit?: boolean } | null;
 
 function Project({
   bridge,
   repo,
   onChange,
+  scout,
+  notes,
+  onWriteNotes,
 }: {
   bridge: Bridge;
   repo: string | null;
   onChange: (change: Partial<Prefs>) => void;
+  /** The Scout seat's model, which reads the project for its notes. */
+  scout: string;
+  notes: Notes | null;
+  onWriteNotes: (repo: string) => void;
 }) {
   const [recent, setRecent] = useState<string[]>([]);
   const [check, setCheck] = useState<Check>(null);
@@ -290,21 +311,31 @@ function Project({
       .catch(() => setRecent([]));
   }, [bridge]);
 
-  const choose = async (path: string) => {
-    onChange({ repo: path });
-    try {
-      const changes = await bridge.changes(path);
-      setCheck({
-        repo: path,
-        problem: changes.diff ? "It has uncommitted changes. Commit or stash them before the first task." : null,
-      });
-    } catch {
-      setCheck({
-        repo: path,
-        problem: "This folder isn't a git repository. Shoji works in git so every change can be reviewed and undone.",
-      });
-    }
-  };
+  // Checks whichever project is chosen, including one chosen before setup.
+  useEffect(() => {
+    if (!repo) return;
+    let current = true;
+    bridge.changes(repo).then(
+      (changes) =>
+        current &&
+        setCheck({
+          repo,
+          problem: changes.diff ? "It has uncommitted changes. Commit or stash them before the first task." : null,
+        }),
+      () =>
+        current &&
+        setCheck({
+          repo,
+          problem: "This folder isn't a git repository. Shoji works in git so every change can be reviewed and undone.",
+          notGit: true,
+        }),
+    );
+    return () => {
+      current = false;
+    };
+  }, [bridge, repo]);
+
+  const choose = (path: string) => onChange({ repo: path });
 
   const folders = repo && !recent.includes(repo) ? [repo, ...recent] : recent;
   return (
@@ -335,11 +366,85 @@ function Project({
           className="btn sm"
           onClick={async () => {
             const path = await bridge.pickProject();
-            if (path) await choose(path);
+            if (path) choose(path);
           }}
         >
           Open a folder…
         </button>
+      </div>
+      {repo && check?.repo === repo && !check.notGit && (
+        <NotesRow
+          repo={repo}
+          scout={scout}
+          notes={notes?.repo === repo ? notes : null}
+          onWrite={() => onWriteNotes(repo)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Scout reads the project once and writes SHOJI.md, which Plan reads before every task. */
+function NotesRow({
+  repo,
+  scout,
+  notes,
+  onWrite,
+}: {
+  repo: string;
+  scout: string;
+  notes: Notes | null;
+  onWrite: () => void;
+}) {
+  const progress = notes && notesProgress(notes);
+  const result = progress?.result;
+  const failed =
+    notes?.error ?? (result && result.status !== "ready" && result.status !== "kept" ? result.reason : null);
+  const ended = notes?.exit && !result ? notes.exit.error || "Scout stopped before it finished." : null;
+
+  let description: string;
+  let action: ReactNode;
+  if (notes?.kept || result?.status === "kept") {
+    description = "This project already has a SHOJI.md. Plan reads it before every task.";
+    action = <span className="pill">found</span>;
+  } else if (result?.status === "ready") {
+    description = `Written to SHOJI.md for ${formatCost(result.cost)}. Edit it any time. Git ignores it, so it stays out of your commits.`;
+    action = (
+      <span className="pill">
+        <span className="dot ok" aria-hidden="true" />
+        written
+      </span>
+    );
+  } else if (progress?.running) {
+    description = `${scout} is reading ${folderName(repo)}.`;
+    action = (
+      <span className="pill">
+        <span className="dot live" aria-hidden="true" />
+        reading
+      </span>
+    );
+  } else {
+    description =
+      failed ??
+      ended ??
+      `${scout} reads the project once and writes SHOJI.md: its commands and conventions. Plan reads it before every task. It stops at $${NOTES_CAP.toFixed(2)}.`;
+    action = (
+      <button type="button" className="btn sm" onClick={onWrite}>
+        {failed || ended ? "Try again" : "Write notes"}
+      </button>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="srow">
+        <div>
+          <b>Project notes</b>
+          <span className="d" role="status">
+            {description}
+          </span>
+        </div>
+        {action}
       </div>
     </div>
   );

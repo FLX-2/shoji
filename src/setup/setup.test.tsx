@@ -101,5 +101,76 @@ describe("first-run setup", () => {
     await click("Continue");
     await click("Open a folder…");
     expect(screen.getByText(/isn't a git repository/)).toBeTruthy();
+    expect(screen.queryByText("Project notes")).toBeNull();
+  });
+
+  /** Opens setup's Project step with a project already chosen. */
+  async function projectStep(fake = fakeBridge()) {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page" }));
+    render(<App bridge={fake.bridge} />);
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    await click("Run setup again");
+    await click("Set up Shoji");
+    await click("Continue");
+    await click("Continue");
+    await screen.findByText("Project notes");
+    return fake;
+  }
+
+  it("has Scout write the project's notes when asked, and shows what they cost", async () => {
+    const fake = await projectStep();
+    expect(screen.getByText(/Haiku 5.5 reads the project once and writes SHOJI.md/)).toBeTruthy();
+    expect(fake.calls.notes).toEqual([]);
+    await click("Write notes");
+    expect(fake.calls.notes).toEqual([{ repo: "/work/pricing-page", stack: STACKS.balanced, cap: 0.05 }]);
+    expect(screen.getByText("Haiku 5.5 is reading pricing-page.")).toBeTruthy();
+    expect(document.querySelector(".app")!.getAttribute("data-state")).toBe("running");
+
+    const call = {
+      role: "scout",
+      step: "notes",
+      model: "claude-haiku-5-5",
+      effort: "low",
+      inputTokens: 9000,
+      outputTokens: 600,
+      cacheWriteTokens: 0,
+      cacheReadTokens: 0,
+      cost: 0.0012,
+      seconds: 2,
+    } as const;
+    fake.emitNotes(
+      { type: "call", call },
+      { type: "notes", result: { status: "ready", notes: "# Pricing page", cost: 0.0012 } },
+    );
+    fake.exit(0);
+    expect(screen.getByText(/Written to SHOJI.md for \$0.0012/)).toBeTruthy();
+    expect(screen.getByText("written")).toBeTruthy();
+    expect(document.querySelector(".app")!.getAttribute("data-state")).toBe("idle");
+  });
+
+  it("keeps notes the project already has", async () => {
+    const fake = fakeBridge();
+    fake.files.hasNotes = true;
+    await projectStep(fake);
+    await click("Write notes");
+    expect(screen.getByText(/already has a SHOJI.md/)).toBeTruthy();
+    expect(document.querySelector(".app")!.getAttribute("data-state")).toBe("idle");
+  });
+
+  it("says why the notes stopped, and offers to try again", async () => {
+    const fake = await projectStep();
+    await click("Write notes");
+    fake.emitNotes({
+      type: "notes",
+      result: {
+        status: "stopped",
+        reason: "Stopped at $0.05: the next call could pass the $0.05 limit.",
+        notes: "",
+        cost: 0.05,
+      },
+    });
+    fake.exit(1);
+    expect(screen.getByText(/the next call could pass/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
 });
