@@ -10,6 +10,16 @@ In a test on real tasks, routing each step to the right model cost 55% less per 
 
 Early. This is milestone 1: one thread that runs from plan to accepted change. Mac comes first. Windows and Linux build from the same code and get their polish later.
 
+## Threads
+
+Each thread gets its own branch. When you start a task, Shoji moves your project onto a new branch named after it, such as `shoji/add-a-faq`. If that name is taken, it adds `-2`, `-3` and so on. The project must be a git repo, on a branch rather than a detached commit, with no uncommitted changes. That includes untracked files. Shoji refuses to start otherwise. When you request changes, the thread carries on in the same branch, and the project must still be on it.
+
+Code lists every file the thread changed, with its diff. Accept keeps a file's changes and stages it in git. Revert puts the file back as it was at the last commit, or deletes it if the thread created it. Shoji asks before it reverts. Both buttons are unavailable while a run is going.
+
+Revert anything you don't want. Accept and commit then commits the rest as one commit on the thread's branch, using your own git name and email, so `user.name` and `user.email` must be set. The message is the task, followed by `Shoji-Models:` and `Shoji-Cost:` lines.
+
+Shoji never pushes. The commit and the branch stay on your machine. Merging or pushing is up to you.
+
 ## Run it
 
 You need [Node 22](https://nodejs.org), [pnpm](https://pnpm.io), [Rust](https://rustup.rs) and [Bun](https://bun.sh), which compiles the agent runtime that the app bundles. On Linux you also need the [Tauri system libraries](https://v2.tauri.app/start/prerequisites/) and `libdbus-1-dev` for the keychain.
