@@ -163,6 +163,14 @@ describe("the Receipts view", () => {
     fireEvent.click(screen.getByRole("row", { name: /Add formatCost tests/ }));
     expect(within(pane).getByText("Add formatCost tests")).toBeTruthy();
     expect(within(pane).getByText("Stopped")).toBeTruthy();
+    expect(within(pane).getByText("Scout")).toBeTruthy();
+  });
+
+  it("says when a thread never reached a model", async () => {
+    await openReceipts([thread(1, "Rename x to y", [run("task", "failed", [])])]);
+    const pane = screen.getByRole("complementary", { name: "Receipt" });
+    expect(within(pane).getByText("No model was called.")).toBeTruthy();
+    expect(within(pane).queryByText("Tokens in and out")).toBeNull();
   });
 
   it("steps between months that have threads", async () => {

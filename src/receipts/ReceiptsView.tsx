@@ -224,35 +224,41 @@ function ReceiptPane({ thread }: { thread: LedgerThread }) {
       <p className="meta">
         {folderName(thread.repo)} · {when(thread.startedAt)}
       </p>
-      <ul className="lines">
-        {r.lines.map((line, i) => (
-          <li key={i}>
-            <span>
-              {STEPS[line.step] ?? line.step}
-              <span className="m"> · {modelLabel(line.model)}</span>
-            </span>
-            <span className="n">{dollars(line.cost, 3)}</span>
-          </li>
-        ))}
-      </ul>
-      <ul className="lines quiet">
-        <li>
-          <span>Tokens in and out</span>
-          <span className="n">
-            {compact(r.tokensIn)} / {compact(r.tokensOut)}
-          </span>
-        </li>
-        {r.cacheReuse !== null && (
-          <li>
-            <span>Read from cache</span>
-            <span className="n">{percent(r.cacheReuse)}</span>
-          </li>
-        )}
-        <li>
-          <span>On {modelLabel(r.baseline)} alone, estimated</span>
-          <span className="n">{dollars(r.oneModel, 3)}</span>
-        </li>
-      </ul>
+      {r.lines.length === 0 ? (
+        <p className="meta">No model was called.</p>
+      ) : (
+        <>
+          <ul className="lines">
+            {r.lines.map((line, i) => (
+              <li key={i}>
+                <span>
+                  {STEPS[line.step] ?? line.step}
+                  <span className="m"> · {modelLabel(line.model)}</span>
+                </span>
+                <span className="n">{dollars(line.cost, 3)}</span>
+              </li>
+            ))}
+          </ul>
+          <ul className="lines quiet">
+            <li>
+              <span>Tokens in and out</span>
+              <span className="n">
+                {compact(r.tokensIn)} / {compact(r.tokensOut)}
+              </span>
+            </li>
+            {r.cacheReuse !== null && (
+              <li>
+                <span>Read from cache</span>
+                <span className="n">{percent(r.cacheReuse)}</span>
+              </li>
+            )}
+            <li>
+              <span>On {modelLabel(r.baseline)} alone, estimated</span>
+              <span className="n">{dollars(r.oneModel, 3)}</span>
+            </li>
+          </ul>
+        </>
+      )}
       <p className="total">
         <span>Total</span>
         <span className="n">{dollars(r.total, 3)}</span>
