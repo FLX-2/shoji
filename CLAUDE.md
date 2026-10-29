@@ -7,6 +7,7 @@ A Tauri 2 desktop app: a React and TypeScript front end in `src/`, the Rust shel
 - `pnpm test`, `pnpm typecheck` and `pnpm build` must pass before every push. CI runs them, then builds the app on macOS, Windows and Linux.
 - `pnpm tauri dev` runs the app. It needs Bun, which compiles the runtime into the sidecar the app bundles (`pnpm sidecar`). On Linux it also needs `libwebkit2gtk-4.1-dev` and `libdbus-1-dev`.
 - `pnpm runtime --repo <path> --task "…" --stack haiku --cap 0.05` runs the runtime live on a git project.
+- `pnpm review-check` asks the review seat to judge diffs with planted bugs and clean controls (`runtime/eval/`). It calls a model, so run it on Haiku with a cap and keep its results in `runtime/eval/results/`.
 - Runtime tests use `ScriptedProvider` in `runtime/test/helpers.ts` to answer as each role. They never call a model.
 
 ## Design
