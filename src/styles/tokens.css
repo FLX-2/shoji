@@ -1,0 +1,41 @@
+/* Zone design tokens, taken from the Shoji prototype (design round 15).
+   Red (--safe) only ever means running or spending. */
+:root {
+  /* Greys, darkest to lightest */
+  --z0: #060505;
+  --z1: #0e0d0c;
+  --z2: #171615;
+  --z3: #222120;
+  --z4: #33312f;
+  --z5: #4d4b48;
+  --z6: #6f6c68;
+  --z7: #96938e;
+  --z8: #bebab4;
+  --z9: #e3e0da;
+  --z10: #f8f6f2;
+
+  --matte: #0b0a0a;
+  --safe: #ff5b3a;
+  --safe-rgb: 255, 91, 58;
+  --hair: rgba(255, 255, 255, 0.1);
+  --hair2: rgba(255, 255, 255, 0.06);
+
+  /* Materials: solid chrome, frosted secondary panes, clear main stage */
+  --solid: #0f0e0d;
+  --solid2: #121110;
+  --pane: rgba(14, 13, 12, 0.78);
+
+  --sans: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --mono: "DM Mono", ui-monospace, Menlo, monospace;
+
+  /* Motion (see the signals and motion spec) */
+  --d-instant: 80ms;
+  --d-quick: 140ms;
+  --d-base: 220ms;
+  --d-slow: 360ms;
+  --d-count: 600ms;
+  --e-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --e-move: cubic-bezier(0.4, 0, 0.2, 1);
+
+  color-scheme: dark;
+}
