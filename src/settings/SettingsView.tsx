@@ -109,6 +109,7 @@ function KeyRow({
 }) {
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const attempt = (work: Promise<void>) => work.then(() => setError(null), (e) => setError(String(e)));
 
   return (
@@ -125,9 +126,30 @@ function KeyRow({
         </span>
       </label>
       {status?.saved ? (
-        <button type="button" className="btn sm" onClick={() => attempt(onForget())}>
-          Remove
-        </button>
+        <span className="acts">
+          {confirming ? (
+            <>
+              <span className="ask">Forget the saved key?</span>
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() => {
+                  setConfirming(false);
+                  attempt(onForget());
+                }}
+              >
+                Forget
+              </button>
+              <button type="button" className="btn sm ghost" onClick={() => setConfirming(false)}>
+                Keep
+              </button>
+            </>
+          ) : (
+            <button type="button" className="btn sm" onClick={() => setConfirming(true)}>
+              Forget
+            </button>
+          )}
+        </span>
       ) : (
         <form
           className="keyform"
