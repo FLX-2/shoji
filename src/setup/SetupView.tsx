@@ -3,6 +3,7 @@ import { MODELS } from "../../runtime/src/models";
 import { ROLES, STACKS, type Stack, type StackName } from "../../runtime/src/stack";
 import type { Bridge, KeyStatus } from "../bridge";
 import { folderName } from "../home/HomeView";
+import { BackgroundRow, MotionRow } from "../look/LookRows";
 import { MoneyRow } from "../settings/MoneyRow";
 import type { Prefs } from "../settings/prefs";
 import { Mark } from "../shell/Mark";
@@ -352,20 +353,8 @@ function Look({ prefs, onChange }: { prefs: Prefs; onChange: (change: Partial<Pr
         <p>Changes apply as you pick. All of it can be changed later in Settings.</p>
       </div>
       <div className="card">
-        <div className="srow">
-          <div>
-            <b>Interface motion</b>
-            <span className="d">Transitions when things open, close or change.</span>
-          </div>
-          <button
-            type="button"
-            className="sw"
-            role="switch"
-            aria-checked={prefs.motion}
-            aria-label="Interface motion"
-            onClick={() => onChange({ motion: !prefs.motion })}
-          />
-        </div>
+        <BackgroundRow prefs={prefs} onChange={onChange} />
+        <MotionRow prefs={prefs} onChange={onChange} />
       </div>
     </div>
   );

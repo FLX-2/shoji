@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Stack } from "../../runtime/src/stack";
 import type { KeyStatus } from "../bridge";
+import { BackgroundRow, FrostRow, MotionRow, OpaqueRow } from "../look/LookRows";
 import { describeStack } from "../stack/lock";
 import { MoneyRow } from "./MoneyRow";
 import type { Prefs } from "./prefs";
@@ -66,20 +67,10 @@ export function SettingsView({
             Look
           </h2>
           <div className="card">
-            <div className="srow">
-              <div>
-                <b>Interface motion</b>
-                <span className="d">Transitions when things open, close or change.</span>
-              </div>
-              <button
-                type="button"
-                className="sw"
-                role="switch"
-                aria-checked={prefs.motion}
-                aria-label="Interface motion"
-                onClick={() => onChange({ motion: !prefs.motion })}
-              />
-            </div>
+            <BackgroundRow prefs={prefs} onChange={onChange} />
+            <FrostRow prefs={prefs} onChange={onChange} />
+            <OpaqueRow prefs={prefs} onChange={onChange} />
+            <MotionRow prefs={prefs} onChange={onChange} />
           </div>
         </section>
 

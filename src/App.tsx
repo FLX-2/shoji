@@ -3,6 +3,8 @@ import { LimitAsk, type Ask } from "./budget/LimitAsk";
 import { spentOn } from "./budget/daily";
 import { bridge as tauriBridge, type Bridge, type KeyStatus } from "./bridge";
 import { folderName, HomeView } from "./home/HomeView";
+import { Field } from "./look/Field";
+import { frostStyle } from "./look/LookRows";
 import { ReceiptsView } from "./receipts/ReceiptsView";
 import { usePrefs } from "./settings/prefs";
 import { SettingsView } from "./settings/SettingsView";
@@ -79,7 +81,12 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
       data-state={running ? "running" : "idle"}
       data-platform={isMac ? "mac" : "other"}
       data-motion={prefs.motion ? "on" : "off"}
+      data-opaque={prefs.opaque || undefined}
+      style={frostStyle(prefs.frost)}
     >
+      {!prefs.opaque && prefs.field !== "none" && (
+        <Field key={prefs.field} id={prefs.field} running={running} still={!prefs.motion} />
+      )}
       <header className="titlebar solid" data-tauri-drag-region>
         <div data-tauri-drag-region />
         <div className="center" data-tauri-drag-region>
