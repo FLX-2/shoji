@@ -19,6 +19,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     trials: [] as TrialRequest[],
     stops: 0,
     forgot: 0,
+    savedKeys: [] as string[],
     accepted: [] as string[],
     reverted: [] as string[],
     commits: [] as { repo: string; branch: string; message: string; thread: number }[],
@@ -29,7 +30,15 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
 
   const bridge: Bridge = {
     keyStatus: async () => key,
-    saveKey: async () => {},
+    saveKey: async (value) => {
+      calls.savedKeys.push(value);
+      key = { ...key, saved: true };
+    },
+    useShellKey: async () => {
+      if (!key.fromEnv) throw new Error("No key was found in the shell.");
+      calls.savedKeys.push("(from the shell)");
+      key = { ...key, saved: true };
+    },
     forgetKey: async () => {
       calls.forgot++;
       key = { ...key, saved: false };
@@ -91,8 +100,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     ledger,
     files,
     /** Sends events from the latest run. */
-    emit: (...events: RuntimeEvent[]) =>
-      act(() => events.forEach((event) => onEvent.forEach((h) => h(runs, event)))),
+    emit: (...events: RuntimeEvent[]) => act(() => events.forEach((event) => onEvent.forEach((h) => h(runs, event)))),
     /** Sends trial events from the latest run. */
     emitTrial: (...events: TrialEvent[]) =>
       act(() => events.forEach((event) => onTrialEvent.forEach((h) => h(runs, event)))),

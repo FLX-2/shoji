@@ -12,9 +12,19 @@ interface SettingsViewProps {
   keyStatus: KeyStatus | null;
   onSaveKey: (key: string) => Promise<void>;
   onForgetKey: () => Promise<void>;
+  onRunSetup: () => void;
 }
 
-export function SettingsView({ prefs, onChange, stack, onOpenStack, keyStatus, onSaveKey, onForgetKey }: SettingsViewProps) {
+export function SettingsView({
+  prefs,
+  onChange,
+  stack,
+  onOpenStack,
+  keyStatus,
+  onSaveKey,
+  onForgetKey,
+  onRunSetup,
+}: SettingsViewProps) {
   // The field keeps what's typed, so "0.0" can become "0.05"; only a positive amount is saved.
   const [cap, setCap] = useState(String(prefs.cap));
   return (
@@ -77,6 +87,23 @@ export function SettingsView({ prefs, onChange, stack, onOpenStack, keyStatus, o
                 aria-label="Interface motion"
                 onClick={() => onChange({ motion: !prefs.motion })}
               />
+            </div>
+          </div>
+        </section>
+
+        <section className="sg" aria-labelledby="s-setup">
+          <h2 id="s-setup" className="k">
+            Setup
+          </h2>
+          <div className="card">
+            <div className="srow">
+              <div>
+                <b>First-run setup</b>
+                <span className="d">Walk through models, stack, project and look again.</span>
+              </div>
+              <button type="button" className="btn sm" onClick={onRunSetup}>
+                Run setup again
+              </button>
             </div>
           </div>
         </section>

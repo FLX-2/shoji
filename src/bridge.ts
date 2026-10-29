@@ -94,6 +94,8 @@ export interface LedgerCall extends Omit<CallRecord, "model"> {
 export const bridge = {
   keyStatus: () => invoke<KeyStatus>("key_status"),
   saveKey: (key: string) => invoke<void>("save_key", { key }),
+  /** Saves the key the app found in its environment to the keychain. The key never reaches this side. */
+  useShellKey: () => invoke<void>("use_shell_key"),
   forgetKey: () => invoke<void>("forget_key"),
   pickProject: () => invoke<string | null>("pick_project"),
   /** Starts a run. Its number is carried by its events and exit. */

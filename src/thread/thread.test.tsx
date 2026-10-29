@@ -271,9 +271,13 @@ describe("a thread in the app", () => {
 });
 
 describe("home", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+  });
 
   it("asks for a key before anything can run", async () => {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ setupDone: true }));
     render(<App bridge={fakeBridge({ saved: false, fromEnv: false }).bridge} />);
     expect(await screen.findByText("Add it in Settings")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Send" }).hasAttribute("disabled")).toBe(true);

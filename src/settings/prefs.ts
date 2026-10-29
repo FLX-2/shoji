@@ -10,9 +10,11 @@ export interface Prefs {
   cap: number;
   /** Interface motion. Off removes every transition. */
   motion: boolean;
+  /** The first-run setup was finished once, so it doesn't open on its own again. */
+  setupDone: boolean;
 }
 
-export const DEFAULT_PREFS: Prefs = { repo: null, stack: "balanced", cap: 0.5, motion: true };
+export const DEFAULT_PREFS: Prefs = { repo: null, stack: "balanced", cap: 0.5, motion: true, setupDone: false };
 
 const STORE = "shoji.prefs";
 
