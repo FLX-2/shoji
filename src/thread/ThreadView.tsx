@@ -45,6 +45,8 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit 
   const [asking, setAsking] = useState(false);
   const scroller = useFollow(thread);
   const [mode, setMode] = useState<"conversation" | "code">("conversation");
+  // Held here so the chosen file outlives switching to Conversation.
+  const [chosenFile, setChosenFile] = useState<string | null>(null);
   // Read the project again whenever a run ends or Code opens.
   const ended = thread.turns.filter((t) => t.exit || t.error).length;
   const { changes, error, act } = useChanges(bridge, thread.repo, `${ended}-${mode}-${thread.committed}`);
@@ -112,6 +114,8 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit 
           changes={changes}
           error={error}
           running={running}
+          chosen={chosenFile}
+          onChoose={setChosenFile}
           onAccept={(path) => act(bridge.acceptFile(thread.repo, path))}
           onRevert={(path) => act(bridge.revertFile(thread.repo, path))}
         />

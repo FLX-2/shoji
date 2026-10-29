@@ -7,13 +7,16 @@ interface CodeViewProps {
   error: string | null;
   /** True while a run is editing the project, when files can't be accepted or reverted. */
   running: boolean;
+  /** The path the person picked; the first file when it's null or gone. */
+  chosen: string | null;
+  onChoose: (path: string) => void;
   onAccept: (path: string) => void;
   onRevert: (path: string) => void;
 }
 
 /** The thread's Code: every changed file, its diff, and accept or revert for each. */
-export function CodeView({ changes, error, running, onAccept, onRevert }: CodeViewProps) {
-  const [chosen, setChosen] = useState<string | null>(null);
+export function CodeView({ changes, error, running, chosen, onChoose, onAccept, onRevert }: CodeViewProps) {
+  // chosen and onChoose come from the parent so the choice outlives this view.
   const files = changes?.files ?? [];
   const file = files.find((f) => f.path === chosen) ?? files[0];
   const list = useRef<HTMLElement>(null);
@@ -26,7 +29,7 @@ export function CodeView({ changes, error, running, onAccept, onRevert }: CodeVi
     const at = file ? files.indexOf(file) : 0;
     const next = Math.min(Math.max(at + (e.key === "ArrowDown" ? 1 : -1), 0), files.length - 1);
     if (next === at) return;
-    setChosen(files[next].path);
+    onChoose(files[next].path);
     list.current?.querySelectorAll<HTMLButtonElement>("button.fl")[next]?.focus();
   };
 
@@ -52,7 +55,7 @@ export function CodeView({ changes, error, running, onAccept, onRevert }: CodeVi
               type="button"
               className="fl"
               aria-current={f === file ? "true" : undefined}
-              onClick={() => setChosen(f.path)}
+              onClick={() => onChoose(f.path)}
             >
               <span className="fn">
                 <b>{baseName(f.path)}</b>
