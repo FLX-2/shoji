@@ -132,6 +132,7 @@ export function ThreadView({ bridge, thread, onStop, onRequestChanges, onCommit 
             label="Changes"
             placeholder="Describe the changes you want…"
             autoFocus
+            onCancel={() => setAsking(false)}
             blocked={spent >= thread.cap}
             onSend={(notes) => {
               setAsking(false);

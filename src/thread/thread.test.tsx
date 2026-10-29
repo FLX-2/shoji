@@ -172,6 +172,25 @@ describe("a thread in the app", () => {
     expect(screen.getByText("Make the badge smaller").className).toBe("umsg");
   });
 
+  it("closes the Changes box on Escape without sending", async () => {
+    const fake = await startThread();
+    fake.emit(running("review", "review", HAIKU), done("review", "review", HAIKU, "VERDICT: APPROVE"));
+    fake.emit(result("ready", 0.12));
+    fake.exit(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Request changes" }));
+    const notes = screen.getByRole("textbox", { name: "Changes" });
+    fireEvent.change(notes, { target: { value: "Make the badge smaller" } });
+    await act(async () => {
+      fireEvent.keyDown(notes, { key: "Escape" });
+    });
+
+    expect(screen.queryByRole("textbox", { name: "Changes" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Request changes" })).toBeTruthy();
+    expect(fake.calls.starts.length).toBe(1);
+    expect(screen.queryByText("Make the badge smaller")).toBeNull();
+  });
+
   it("accepts the thread's work as one commit on its branch", async () => {
     const fake = await startThread();
     fake.project.diff = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b\n";
