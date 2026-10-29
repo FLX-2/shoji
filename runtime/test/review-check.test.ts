@@ -5,6 +5,9 @@ import { Meter } from "../src/meter";
 import { STACKS } from "../src/stack";
 import { reply, ScriptedProvider } from "./helpers";
 
+// Each case builds a small git repo to diff, and spawning git is slow on Windows runners.
+const GIT_TIMEOUT = 30_000;
+
 describe("review check", () => {
   it("plants each bug in the diff the reviewer sees", () => {
     for (const c of CASES) {
@@ -15,7 +18,7 @@ describe("review check", () => {
     expect(diffFor(CASES[0])).toContain("+  return plan.monthly * 12 * 0.2;");
     // The reviewer can see that the save is async.
     expect(diffFor(CASES[4])).toContain("export async function saveProfile");
-  });
+  }, GIT_TIMEOUT);
 
   it("scores a review right only when it names the planted bug or approves a correct change", async () => {
     const cases = [CASES[0], CASES[2], CASES[5]];
@@ -35,5 +38,5 @@ describe("review check", () => {
     expect(provider.requests[0].model).toBe("claude-haiku-5-5");
     expect(provider.requests[0].messages[0].content).toContain("pnpm test: passed");
     expect(summary(verdicts)).toContain("Planted bugs named: 1 of 2");
-  });
+  }, GIT_TIMEOUT);
 });
