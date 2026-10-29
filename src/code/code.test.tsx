@@ -56,6 +56,28 @@ describe("the thread's Code", () => {
     expect(pane.querySelector(".l.add .tx")?.textContent).toBe("export const price = plan.annual / 12;");
   });
 
+  it("moves between files with the arrow keys", async () => {
+    await finishedThread();
+    const list = screen.getByRole("navigation", { name: "Changed files" });
+    const [card, badge] = within(list).getAllByRole("button");
+    card.focus();
+    expect(fireEvent.keyDown(card, { key: "ArrowDown" })).toBe(false);
+    expect(screen.getByRole("region", { name: "src/Badge.tsx" })).toBeTruthy();
+    expect(badge.getAttribute("aria-current")).toBe("true");
+    expect(document.activeElement).toBe(badge);
+
+    fireEvent.keyDown(badge, { key: "ArrowDown" });
+    expect(screen.getByRole("region", { name: "src/Badge.tsx" })).toBeTruthy();
+
+    fireEvent.keyDown(badge, { key: "ArrowUp" });
+    expect(screen.getByRole("region", { name: "src/Card.tsx" })).toBeTruthy();
+    expect(card.getAttribute("aria-current")).toBe("true");
+    expect(document.activeElement).toBe(card);
+
+    fireEvent.keyDown(card, { key: "ArrowUp" });
+    expect(screen.getByRole("region", { name: "src/Card.tsx" })).toBeTruthy();
+  });
+
   it("accepts a file, and reverts one only after asking", async () => {
     const fake = await finishedThread();
     await act(async () => {
