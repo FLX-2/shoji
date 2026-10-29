@@ -1,3 +1,5 @@
+mod ledger;
+
 use std::fs;
 use std::path::{Component, Path};
 use std::process::Command;
@@ -11,15 +13,29 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
+use ledger::{Ledger, ThreadRecord};
+
 /// Where the Anthropic key lives in the system keychain.
 const KEY_SERVICE: &str = "app.shoji.desktop";
 const KEY_ACCOUNT: &str = "anthropic";
 
-/// The running thread's runtime process and its run number. M1 runs one thread at a time.
+/// The running thread's runtime process, its run number and its run in the ledger.
+/// One thread runs at a time.
 #[derive(Default)]
 struct Run {
-    child: Mutex<Option<(u64, CommandChild)>>,
+    child: Mutex<Option<(u64, CommandChild, i64)>>,
     count: AtomicU64,
+}
+
+fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as i64)
+}
+
+/// The ledger must never stop a run, so a failed write is only reported.
+fn noted<T>(result: rusqlite::Result<T>) -> Option<T> {
+    result.map_err(|e| eprintln!("ledger: {e}")).ok()
 }
 
 fn key_entry() -> keyring::Result<keyring::Entry> {
@@ -96,12 +112,16 @@ struct RunRequest {
 #[derive(Serialize)]
 struct Started {
     run: u64,
+    /// The thread's id in the ledger.
+    thread: i64,
     /// The thread's branch, where its work is committed.
     branch: String,
 }
 
 #[derive(Deserialize)]
 struct Changes {
+    /// The thread in the ledger these changes belong to.
+    thread: i64,
     notes: String,
     plan: String,
     /// The thread's branch, which the project must still be on.
@@ -126,7 +146,12 @@ struct Exit {
 /// `runtime-event`, then one `runtime-exit`, each carrying that number. A new task gets
 /// its own branch; changes carry on the thread's branch.
 #[tauri::command]
-fn start_run(app: AppHandle, run: State<Run>, request: RunRequest) -> Result<Started, String> {
+fn start_run(
+    app: AppHandle,
+    run: State<Run>,
+    ledger: State<Ledger>,
+    request: RunRequest,
+) -> Result<Started, String> {
     let mut slot = run.child.lock().unwrap();
     if slot.is_some() {
         return Err("A thread is already running.".into());
@@ -139,12 +164,15 @@ fn start_run(app: AppHandle, run: State<Run>, request: RunRequest) -> Result<Sta
     let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let runs = data.join("runs");
     fs::create_dir_all(&runs).map_err(|e| e.to_string())?;
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_millis());
+    let stamp = now_ms();
     let log = runs.join(format!("{stamp}.jsonl"));
 
     let repo = request.repo;
+    if let Some(changes) = &request.changes {
+        if !ledger.has_thread(changes.thread).map_err(|e| e.to_string())? {
+            return Err("That thread isn't in the ledger.".into());
+        }
+    }
     let (branch, base) = match &request.changes {
         Some(changes) => (on_branch(&repo, &changes.branch)?, None),
         None => {
@@ -153,6 +181,9 @@ fn start_run(app: AppHandle, run: State<Run>, request: RunRequest) -> Result<Sta
         }
     };
 
+    let task = request.task.clone();
+    let stack = request.stack.clone();
+    let thread = request.changes.as_ref().map(|c| c.thread);
     let mut args = vec![
         "--json".to_string(),
         "--repo".into(),
@@ -177,18 +208,32 @@ fn start_run(app: AppHandle, run: State<Run>, request: RunRequest) -> Result<Sta
         ]);
     }
 
-    let spawned = app
-        .shell()
-        .sidecar("shoji-runtime")
-        .map_err(|e| e.to_string())
-        .and_then(|command| {
-            command
-                .args(args)
-                .env("SHOJI_API_KEY", key)
-                .spawn()
-                .map_err(|e| e.to_string())
-        });
-    let (mut events, child) = match spawned {
+    // The ledger keeps the thread and run first, so every call the run makes has a home.
+    let recorded = match thread {
+        Some(thread) => Ok((thread, "changes")),
+        None => ledger
+            .start_thread(&task, &repo, &branch, &stack, stamp)
+            .map(|thread| (thread, "task")),
+    }
+    .and_then(|(thread, kind)| {
+        ledger
+            .start_run(thread, kind, &log.display().to_string(), stamp)
+            .map(|entry| (thread, entry))
+    })
+    .map_err(|e| e.to_string());
+    let spawned = recorded.and_then(|ids| {
+        let command = app.shell().sidecar("shoji-runtime").map_err(|e| e.to_string())?;
+        let spawned = command
+            .args(args)
+            .env("SHOJI_API_KEY", key)
+            .spawn()
+            .map_err(|e| {
+                noted(ledger.end_run(ids.1, "failed"));
+                e.to_string()
+            })?;
+        Ok((ids, spawned))
+    });
+    let ((thread, entry), (mut events, child)) = match spawned {
         Ok(spawned) => spawned,
         Err(e) => {
             // Leave the project as it was found.
@@ -200,7 +245,7 @@ fn start_run(app: AppHandle, run: State<Run>, request: RunRequest) -> Result<Sta
         }
     };
     let id = run.count.fetch_add(1, Ordering::Relaxed) + 1;
-    *slot = Some((id, child));
+    *slot = Some((id, child, entry));
 
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -209,6 +254,7 @@ fn start_run(app: AppHandle, run: State<Run>, request: RunRequest) -> Result<Sta
             match event {
                 CommandEvent::Stdout(line) => {
                     if let Ok(event) = serde_json::from_slice::<serde_json::Value>(&line) {
+                        noted(app.state::<Ledger>().record(entry, &event, now_ms()));
                         let _ = app.emit("runtime-event", RunEvent { run: id, event });
                     }
                 }
@@ -218,10 +264,11 @@ fn start_run(app: AppHandle, run: State<Run>, request: RunRequest) -> Result<Sta
                 CommandEvent::Terminated(status) => {
                     let state = app.state::<Run>();
                     let mut slot = state.child.lock().unwrap();
-                    if slot.as_ref().is_some_and(|(run, _)| *run == id) {
+                    if slot.as_ref().is_some_and(|(run, _, _)| *run == id) {
                         slot.take();
                     }
                     drop(slot);
+                    noted(app.state::<Ledger>().end_run(entry, "failed"));
                     let exit = Exit {
                         run: id,
                         code: status.code,
@@ -233,12 +280,13 @@ fn start_run(app: AppHandle, run: State<Run>, request: RunRequest) -> Result<Sta
             }
         }
     });
-    Ok(Started { run: id, branch })
+    Ok(Started { run: id, thread, branch })
 }
 
 #[tauri::command]
-fn stop_run(run: State<Run>) -> Result<(), String> {
-    if let Some((_, child)) = run.child.lock().unwrap().take() {
+fn stop_run(run: State<Run>, ledger: State<Ledger>) -> Result<(), String> {
+    if let Some((_, child, entry)) = run.child.lock().unwrap().take() {
+        noted(ledger.end_run(entry, "stopped"));
         child.kill().map_err(|e| e.to_string())?;
     }
     Ok(())
@@ -337,8 +385,22 @@ fn slug(task: &str) -> String {
 /// Accepts all of the thread's work and commits it on the thread's branch, as the person's
 /// own git identity. Shoji never pushes. Returns the commit's short hash.
 #[tauri::command]
-async fn commit_thread(repo: String, branch: String, message: String) -> Result<String, String> {
-    commit(&repo, &branch, &message)
+async fn commit_thread(
+    ledger: State<'_, Ledger>,
+    repo: String,
+    branch: String,
+    message: String,
+    thread: i64,
+) -> Result<String, String> {
+    let sha = commit(&repo, &branch, &message)?;
+    noted(ledger.commit(thread, &sha, now_ms()));
+    Ok(sha)
+}
+
+/// Every thread in the ledger with its runs and calls, newest first, for Receipts.
+#[tauri::command]
+async fn ledger_threads(ledger: State<'_, Ledger>) -> Result<Vec<ThreadRecord>, String> {
+    ledger.threads().map_err(|e| e.to_string())
 }
 
 fn commit(repo: &str, branch: &str, message: &str) -> Result<String, String> {
@@ -432,6 +494,20 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Run::default())
+        .setup(|app| {
+            let data = app.path().app_data_dir()?;
+            fs::create_dir_all(&data)?;
+            let path = data.join("shoji.db");
+            // A ledger that can't be read is set aside, not lost, so the app still opens.
+            let ledger = Ledger::open(&path).or_else(|e| {
+                eprintln!("ledger: {e}");
+                fs::rename(&path, data.join(format!("shoji-unreadable-{}.db", now_ms())))
+                    .map_err(|e| e.to_string())?;
+                Ledger::open(&path).map_err(|e| e.to_string())
+            })?;
+            app.manage(ledger);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             key_status,
             save_key,
@@ -442,7 +518,8 @@ pub fn run() {
             changes,
             accept_file,
             revert_file,
-            commit_thread
+            commit_thread,
+            ledger_threads
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
