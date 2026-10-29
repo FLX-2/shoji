@@ -71,6 +71,23 @@ describe("folding a run", () => {
   });
 });
 
+describe("a run cut short", () => {
+  it("marks a step cut short by the end of the run as unfinished", () => {
+    const run = foldRun([
+      running("scout", "scout", HAIKU),
+      done("scout", "scout", HAIKU),
+      running("plan", "plan", OPUS),
+      result("failed", 0.01, { reason: "Boom" }),
+    ]);
+
+    expect(run.steps[0]).toMatchObject({ running: false });
+    expect(run.steps[0].unfinished).toBeFalsy();
+    expect(run.steps[1]).toMatchObject({ running: false, unfinished: true });
+    expect(stepLabel(run.steps, 0)).toBe("Read the code");
+    expect(stepLabel(run.steps, 1)).toBe("Planning the change");
+  });
+});
+
 describe("formatting a cost", () => {
   it("shows nothing spent with two decimals", () => {
     expect(formatCost(0)).toBe("$0.00");
@@ -131,6 +148,19 @@ describe("a thread in the app", () => {
     expect(steps[1].textContent).toContain("opus");
     expect(steps[1].querySelector(".ho")).toBeTruthy();
     expect(screen.getByText("Planning the change · Opus 5.5")).toBeTruthy();
+  });
+
+  it("shows the step a stopped run was on as unfinished", async () => {
+    const fake = await startThread();
+    fake.emit(running("scout", "scout", HAIKU), done("scout", "scout", HAIKU));
+    fake.emit(running("plan", "plan", OPUS));
+    fake.emit(result("stopped", 0.01, { reason: "The limit is spent." }));
+    fake.exit(0);
+
+    const steps = Array.from(document.querySelectorAll(".st"));
+    expect(steps.map((s) => s.className)).toEqual(["st done", "st"]);
+    expect(steps[1].querySelector(".c")?.textContent).toBe("2");
+    expect(steps[1].textContent).toContain("Planning the change");
   });
 
   it("stops the run when asked", async () => {

@@ -13,6 +13,8 @@ export interface StepView {
   role: Role;
   model: ModelId;
   running: boolean;
+  /** Set when the run ended (failed or stopped) while this step was still going. */
+  unfinished?: boolean;
   /** What the step wrote: the brief, the plan, the builder's summary or the review. */
   output?: string;
   tools: ToolUse[];
@@ -74,7 +76,11 @@ export function foldRun(events: RuntimeEvent[]): RunView {
       case "result":
         result = event.result;
         cost = event.result.cost;
-        for (const step of steps) step.running = false;
+        for (const step of steps) {
+          if (!step.running) continue;
+          step.running = false;
+          step.unfinished = true;
+        }
         break;
     }
   }
@@ -84,7 +90,7 @@ export function foldRun(events: RuntimeEvent[]): RunView {
 /** What a step is doing, or did, in a few words. */
 export function stepLabel(steps: StepView[], index: number): string {
   const step = steps[index];
-  const tense = (running: string, done: string) => (step.running ? running : done);
+  const tense = (running: string, done: string) => (step.running || step.unfinished ? running : done);
   const before = steps.slice(0, index);
   switch (step.name) {
     case "scout":

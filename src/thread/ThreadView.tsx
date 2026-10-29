@@ -206,10 +206,11 @@ function StepRow({ steps, index, live }: { steps: StepView[]; index: number; liv
   const step = steps[index];
   const handoff = index > 0 && steps[index - 1].model !== step.model;
   const now = live && step.running;
+  const finished = !step.running && !step.unfinished;
   return (
-    <li className={now ? "st now" : step.running ? "st" : "st done"}>
+    <li className={now ? "st now" : finished ? "st done" : "st"}>
       <span className="c" aria-hidden="true">
-        {step.running ? index + 1 : "✓"}
+        {finished ? "✓" : index + 1}
       </span>
       <div className="sb">
         <div className="sl">
