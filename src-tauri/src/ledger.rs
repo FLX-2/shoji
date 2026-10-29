@@ -95,8 +95,16 @@ pub struct CallRecord {
 type Result<T> = rusqlite::Result<T>;
 
 impl Ledger {
+    /// Opens the ledger file. No run can be going while the app starts, so a run left
+    /// without an ending, by a crash or a forced quit, is marked failed.
     pub fn open(path: &Path) -> Result<Self> {
-        Self::with(Connection::open(path)?)
+        let ledger = Self::with(Connection::open(path)?)?;
+        ledger
+            .0
+            .lock()
+            .unwrap()
+            .execute("UPDATE runs SET status = 'failed' WHERE status IS NULL", [])?;
+        Ok(ledger)
     }
 
     #[cfg(test)]
@@ -378,12 +386,16 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         {
             let ledger = Ledger::open(&path).unwrap();
-            ledger
+            let thread = ledger
                 .start_thread("Kept", "/r", "shoji/kept", "balanced", 1)
                 .unwrap();
+            ledger.start_run(thread, "task", "/logs/1.jsonl", 2).unwrap();
         }
         let ledger = Ledger::open(&path).unwrap();
-        assert_eq!(ledger.threads().unwrap()[0].task, "Kept");
+        let threads = ledger.threads().unwrap();
+        assert_eq!(threads[0].task, "Kept");
+        // The app closed while the run was going, so it can't still be running.
+        assert_eq!(threads[0].runs[0].status.as_deref(), Some("failed"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

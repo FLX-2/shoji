@@ -17,6 +17,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     accepted: [] as string[],
     reverted: [] as string[],
     commits: [] as { repo: string; branch: string; message: string; thread: number }[],
+    exports: [] as { name: string; contents: string }[],
   };
   let runs = 0;
 
@@ -37,6 +38,10 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     },
     changes: async () => ({ ...project }),
     ledgerThreads: async () => ledger,
+    exportCsv: async (name, contents) => {
+      calls.exports.push({ name, contents });
+      return `/Users/bob/Downloads/${name}`;
+    },
     acceptFile: async (_, path) => {
       calls.accepted.push(path);
       project.accepted.push(path);

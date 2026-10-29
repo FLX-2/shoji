@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { bridge as tauriBridge, type Bridge, type KeyStatus } from "./bridge";
 import { folderName, HomeView } from "./home/HomeView";
+import { ReceiptsView } from "./receipts/ReceiptsView";
 import { usePrefs } from "./settings/prefs";
 import { SettingsView } from "./settings/SettingsView";
 import { Mark } from "./shell/Mark";
@@ -71,6 +72,8 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 start(task, prefs.repo, prefs.stack, prefs.cap);
               }}
             />
+          ) : section === "receipts" ? (
+            <ReceiptsView bridge={bridge} />
           ) : section === "threads" && thread ? (
             <ThreadView
               bridge={bridge}

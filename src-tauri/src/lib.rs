@@ -397,6 +397,24 @@ async fn commit_thread(
     Ok(sha)
 }
 
+/// Asks where to save a CSV file, then writes it there. Returns the path, or none if cancelled.
+#[tauri::command]
+async fn export_csv(app: AppHandle, name: String, contents: String) -> Result<Option<String>, String> {
+    let Some(path) = app
+        .dialog()
+        .file()
+        .set_title("Export receipts")
+        .set_file_name(&name)
+        .add_filter("CSV", &["csv"])
+        .blocking_save_file()
+        .and_then(|path| path.into_path().ok())
+    else {
+        return Ok(None);
+    };
+    fs::write(&path, contents).map_err(|e| e.to_string())?;
+    Ok(Some(path.display().to_string()))
+}
+
 /// Every thread in the ledger with its runs and calls, newest first, for Receipts.
 #[tauri::command]
 async fn ledger_threads(ledger: State<'_, Ledger>) -> Result<Vec<ThreadRecord>, String> {
@@ -519,7 +537,8 @@ pub fn run() {
             accept_file,
             revert_file,
             commit_thread,
-            ledger_threads
+            ledger_threads,
+            export_csv
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
