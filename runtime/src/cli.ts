@@ -18,6 +18,9 @@ Options:
   --cap <dollars>     Hard spending limit for this thread (default: 0.50)
   --check <command>   A command that must pass; repeat for more (default: the project's
                       typecheck, lint and test scripts)
+  --changes <notes>   Build the person's requested changes on top of finished work,
+                      skipping scout and plan; needs --plan-file
+  --plan-file <file>  The plan of the work being changed
   --log <file>        Append every event to a JSON lines file
   --json              Print events as JSON lines, for the app
   --allow-dirty       Run even if the project has uncommitted changes
@@ -34,6 +37,8 @@ function describe(event: RuntimeEvent): string | null {
   switch (event.type) {
     case "step":
       return event.status === "running" ? `${event.step} · ${MODELS[event.model].label}` : null;
+    case "tool":
+      return `  ${event.tool} ${event.target}`;
     case "call":
       return `  $${event.call.cost.toFixed(4)}  ${event.call.inputTokens} in, ${event.call.outputTokens} out, ${event.call.cacheReadTokens} cached`;
     case "checks":
@@ -58,6 +63,8 @@ async function main() {
       stack: { type: "string", default: "balanced" },
       cap: { type: "string", default: "0.50" },
       check: { type: "string", multiple: true },
+      changes: { type: "string" },
+      "plan-file": { type: "string" },
       log: { type: "string" },
       json: { type: "boolean", default: false },
       "allow-dirty": { type: "boolean", default: false },
@@ -73,9 +80,16 @@ async function main() {
   const apiKey = process.env.SHOJI_API_KEY || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) fail("Set SHOJI_API_KEY or ANTHROPIC_API_KEY.");
 
+  if (values.changes !== undefined && !values["plan-file"]) fail("--changes needs --plan-file.");
+  const changes =
+    values.changes !== undefined && values["plan-file"]
+      ? { notes: values.changes, plan: fs.readFileSync(values["plan-file"], "utf8") }
+      : undefined;
+
   const root = path.resolve(values.repo);
   if (!isGitRepo(root)) fail(`${root} isn't a git repository.`);
-  if (hasChanges(root) && !values["allow-dirty"]) {
+  // Changes build on the thread's own uncommitted work, so only a fresh thread needs a clean project.
+  if (!changes && hasChanges(root) && !values["allow-dirty"]) {
     fail("The project has uncommitted changes. Commit or stash them, or pass --allow-dirty.");
   }
 
@@ -87,6 +101,7 @@ async function main() {
     workspace: new Workspace(root),
     checks: values.check ?? defaultChecks(root),
     cap,
+    changes,
     emit: (event) => {
       const line = JSON.stringify({ at: new Date().toISOString(), ...event });
       if (log !== null) fs.writeSync(log, `${line}\n`);

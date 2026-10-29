@@ -12,7 +12,7 @@ Early. This is milestone 1: one thread that runs from plan to accepted change. M
 
 ## Run it
 
-You need [Node 22](https://nodejs.org), [pnpm](https://pnpm.io) and [Rust](https://rustup.rs). On Linux you also need the [Tauri system libraries](https://v2.tauri.app/start/prerequisites/).
+You need [Node 22](https://nodejs.org), [pnpm](https://pnpm.io), [Rust](https://rustup.rs) and [Bun](https://bun.sh), which compiles the agent runtime that the app bundles. On Linux you also need the [Tauri system libraries](https://v2.tauri.app/start/prerequisites/) and `libdbus-1-dev` for the keychain.
 
 ```sh
 pnpm install
@@ -27,9 +27,11 @@ Other commands:
 | `pnpm typecheck` | Checks types |
 | `pnpm tauri build` | Builds the installable app for this computer |
 
+Shoji asks for your Anthropic API key in Settings and keeps it in the system keychain. When you start it from a shell, it also uses `SHOJI_API_KEY` or `ANTHROPIC_API_KEY`. For a cheap first try, pick the Haiku stack in Settings.
+
 ### The agent runtime
 
-The loop that plans, builds and checks a change lives in `runtime/`. Until the app drives it, you can run it on any git project from the command line. It needs [Bun](https://bun.sh) and an Anthropic API key in `SHOJI_API_KEY` or `ANTHROPIC_API_KEY`.
+The loop that plans, builds and checks a change lives in `runtime/`. The app runs it as a separate program, so a crashed run never takes the window down. You can also run it on any git project from the command line, with an Anthropic API key in `SHOJI_API_KEY` or `ANTHROPIC_API_KEY`.
 
 ```sh
 pnpm runtime --repo ../my-project --task "Add a dark mode toggle" --cap 0.50

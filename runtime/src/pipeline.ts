@@ -21,6 +21,11 @@ export interface ThreadInput {
   /** Hard spending cap for the thread, in dollars. */
   cap: number;
   emit: Emit;
+  /**
+   * Set when the person asks for changes to finished work. The thread skips scout and plan,
+   * and builds the changes on top of the work already in the project.
+   */
+  changes?: { plan: string; notes: string };
 }
 
 const ROLES: Role[] = ["scout", "plan", "build", "review"];
@@ -29,21 +34,34 @@ const MAX_FILES_CHARS = 60_000;
 /**
  * Runs one thread: scout, plan, build, check, review. A build whose checks fail gets one
  * more try on the same model, then moves up to the plan model, as the MVP spec describes.
+ * With `changes`, it runs again from the build on the person's notes.
  */
 export async function runThread(input: ThreadInput): Promise<ThreadResult> {
-  const { task, stack, workspace, checks, emit } = input;
+  const { task, stack, workspace, checks, emit, changes } = input;
   const meter = new Meter(input.provider, emit, input.cap);
   const state = { plan: "", review: "", checks: [] as CheckResult[], escalated: false };
 
   const step = async (name: string, role: Role, seat: Seat, work: () => Promise<string>) => {
     emit({ type: "step", step: name, role, model: seat.model, status: "running" });
-    const text = await work();
-    emit({ type: "step", step: name, role, model: seat.model, status: "done" });
-    return text;
+    const output = await work();
+    emit({ type: "step", step: name, role, model: seat.model, status: "done", output });
+    return output;
   };
   const agent = (name: string, role: Role, seat: Seat, system: string, prompt: string, tools: typeof READ_TOOLS) =>
     step(name, role, seat, () =>
-      runAgent({ meter, workspace, allowedCommands: checks, role, step: name, seat, system, prompt, tools }),
+      runAgent({
+        meter,
+        workspace,
+        allowedCommands: checks,
+        role,
+        step: name,
+        seat,
+        system,
+        prompt,
+        tools,
+        onTool: (tool, input) =>
+          emit({ type: "tool", step: name, tool, target: input.path ?? input.pattern ?? input.command ?? "" }),
+      }),
     );
   const check = (name: string) => {
     state.checks = runChecks(workspace.root, checks);
@@ -54,27 +72,11 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   const commandsNote = checks.length ? `\n\nCheck commands you can run: ${checks.join(", ")}` : "";
 
   try {
-    const brief = await agent("scout", "scout", stack.scout, prompts.SCOUT, `Task: ${task}`, READ_TOOLS);
-
-    state.plan = await step("plan", "plan", stack.plan, async () =>
-      textOf(
-        await meter.send("plan", "plan", {
-          model: stack.plan.model,
-          effort: stack.plan.effort,
-          system: prompts.PLAN,
-          messages: [
-            {
-              role: "user",
-              content: `Task: ${task}${projectNotes(workspace)}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief)}`,
-            },
-          ],
-          maxTokens: MAX_TOKENS,
-        }),
-      ),
-    );
-
-    const buildPrompt = `Task: ${task}\n\nPlan:\n${state.plan}${commandsNote}`;
-    await agent("build", "build", stack.build, prompts.BUILD, buildPrompt, builderTools);
+    state.plan = changes ? changes.plan : await planFor();
+    const asked = changes ? `\n\nThe work so far is already in the project. The person asked for these changes:\n${changes.notes}` : "";
+    const buildPrompt = `Task: ${task}\n\nPlan:\n${state.plan}${commandsNote}${asked}`;
+    const buildStep = changes ? "changes" : "build";
+    await agent(buildStep, "build", stack.build, prompts.BUILD, buildPrompt, builderTools);
 
     const fix = (name: string, seat: Seat, notes: string) =>
       agent(
@@ -93,7 +95,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
 
     let fixRounds = 0;
     let seat = stack.build;
-    let passing = check("build");
+    let passing = check(buildStep);
     if (!passing) {
       await fix("fix-1", seat, failures());
       fixRounds++;
@@ -115,7 +117,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
             model: stack.review.model,
             effort: stack.review.effort,
             system: prompts.REVIEW,
-            messages: [{ role: "user", content: reviewPrompt(task, diffOf(workspace.root), state.checks) }],
+            messages: [{ role: "user", content: reviewPrompt(task + asked, diffOf(workspace.root), state.checks) }],
             maxTokens: MAX_TOKENS,
           }),
         ),
@@ -133,6 +135,26 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     if (error instanceof BudgetExceeded) return finish("stopped", error.message);
     if (error instanceof RefusedError) return finish("failed", error.message);
     return finish("failed", error instanceof Error ? error.message : String(error));
+  }
+
+  async function planFor(): Promise<string> {
+    const brief = await agent("scout", "scout", stack.scout, prompts.SCOUT, `Task: ${task}`, READ_TOOLS);
+    return step("plan", "plan", stack.plan, async () =>
+      textOf(
+        await meter.send("plan", "plan", {
+          model: stack.plan.model,
+          effort: stack.plan.effort,
+          system: prompts.PLAN,
+          messages: [
+            {
+              role: "user",
+              content: `Task: ${task}${projectNotes(workspace)}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief)}`,
+            },
+          ],
+          maxTokens: MAX_TOKENS,
+        }),
+      ),
+    );
   }
 
   function finish(status: ThreadResult["status"], reason?: string): ThreadResult {

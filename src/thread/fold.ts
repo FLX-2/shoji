@@ -1,0 +1,125 @@
+import type { CheckResult, RuntimeEvent, ThreadResult } from "../../runtime/src/events";
+import { MODELS, type ModelId } from "../../runtime/src/models";
+import type { Role } from "../../runtime/src/stack";
+
+export interface ToolUse {
+  tool: string;
+  target: string;
+}
+
+/** One pipeline step as the conversation shows it. */
+export interface StepView {
+  name: string;
+  role: Role;
+  model: ModelId;
+  running: boolean;
+  /** What the step wrote: the brief, the plan, the builder's summary or the review. */
+  output?: string;
+  tools: ToolUse[];
+  checks?: CheckResult[];
+  /** Set when the step moved up to a stronger model. */
+  escalation?: { from: ModelId; to: ModelId; reason: string };
+  cost: number;
+}
+
+export interface RunView {
+  steps: StepView[];
+  result?: ThreadResult;
+  cost: number;
+}
+
+/** Folds one run's events into its steps, in order. */
+export function foldRun(events: RuntimeEvent[]): RunView {
+  const steps: StepView[] = [];
+  const escalations = new Map<string, StepView["escalation"]>();
+  const last = (name: string) => steps.findLast((s) => s.name === name);
+  let result: ThreadResult | undefined;
+  let cost = 0;
+
+  for (const event of events) {
+    switch (event.type) {
+      case "step":
+        if (event.status === "running") {
+          steps.push({
+            name: event.step,
+            role: event.role,
+            model: event.model,
+            running: true,
+            tools: [],
+            escalation: escalations.get(event.step),
+            cost: 0,
+          });
+        } else {
+          const step = last(event.step);
+          if (step) Object.assign(step, { running: false, output: event.output });
+        }
+        break;
+      case "tool":
+        last(event.step)?.tools.push({ tool: event.tool, target: event.target });
+        break;
+      case "checks": {
+        const step = last(event.step);
+        if (step) step.checks = event.results;
+        break;
+      }
+      case "escalate":
+        escalations.set(event.step, { from: event.from, to: event.to, reason: event.reason });
+        break;
+      case "call": {
+        cost += event.call.cost;
+        const step = last(event.call.step);
+        if (step) step.cost += event.call.cost;
+        break;
+      }
+      case "result":
+        result = event.result;
+        cost = event.result.cost;
+        for (const step of steps) step.running = false;
+        break;
+    }
+  }
+  return { steps, result, cost };
+}
+
+/** What a step is doing, or did, in a few words. */
+export function stepLabel(steps: StepView[], index: number): string {
+  const step = steps[index];
+  const tense = (running: string, done: string) => (step.running ? running : done);
+  const before = steps.slice(0, index);
+  switch (step.name) {
+    case "scout":
+      return tense("Reading the code", "Read the code");
+    case "plan":
+      return tense("Planning the change", "Planned the change");
+    case "build":
+      return tense("Making the change", "Made the change");
+    case "changes":
+      return tense("Making your changes", "Made your changes");
+    case "review":
+      return before.some((s) => s.name === "review")
+        ? tense("Reviewing again", "Reviewed again")
+        : tense("Reviewing the change", "Reviewed the change");
+    default:
+      return before.at(-1)?.name === "review"
+        ? tense("Fixing what the review found", "Fixed what the review found")
+        : tense("Fixing the failing checks", "Fixed the failing checks");
+  }
+}
+
+/** A model's short name, as the conversation shows it beside each step. */
+export function modelName(model: ModelId): string {
+  return MODELS[model].label.split(" ")[0].toLowerCase();
+}
+
+export function approves(review: string | undefined): boolean {
+  return /^\s*VERDICT:\s*APPROVE/i.test(review ?? "");
+}
+
+/** The review without its verdict line. */
+export function reviewNotes(review: string): string {
+  return review.replace(/^\s*VERDICT:\s*\w+\s*/i, "").trim();
+}
+
+export function formatCost(dollars: number): string {
+  return `$${dollars.toFixed(dollars < 0.01 ? 4 : dollars < 0.1 ? 3 : 2)}`;
+}

@@ -17,6 +17,8 @@ export interface AgentRun {
   prompt: string;
   tools?: Anthropic.Tool[];
   maxTurns?: number;
+  /** Called before each tool runs, so the app can show the work as it happens. */
+  onTool?: (name: string, input: Record<string, string>) => void;
 }
 
 export function textOf(message: Anthropic.Message): string {
@@ -28,7 +30,7 @@ export function textOf(message: Anthropic.Message): string {
 
 /** One role working on one step: a tool loop on the role's model until it answers. */
 export async function runAgent(run: AgentRun): Promise<string> {
-  const { meter, workspace, allowedCommands, role, step, seat, system, prompt, tools, maxTurns = 12 } = run;
+  const { meter, workspace, allowedCommands, role, step, seat, system, prompt, tools, maxTurns = 12, onTool } = run;
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }];
 
   for (let turn = 0; turn < maxTurns; turn++) {
@@ -47,11 +49,15 @@ export async function runAgent(run: AgentRun): Promise<string> {
 
     messages.push({
       role: "user",
-      content: uses.map((use) => ({
-        type: "tool_result" as const,
-        tool_use_id: use.id,
-        content: runTool(workspace, allowedCommands, use.name, use.input as Record<string, string>),
-      })),
+      content: uses.map((use) => {
+        const input = use.input as Record<string, string>;
+        onTool?.(use.name, input);
+        return {
+          type: "tool_result" as const,
+          tool_use_id: use.id,
+          content: runTool(workspace, allowedCommands, use.name, input),
+        };
+      }),
     });
   }
   return "(The step ran out of turns before it finished.)";

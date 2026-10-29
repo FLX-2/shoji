@@ -23,7 +23,11 @@ export interface CheckResult {
 }
 
 export type RuntimeEvent =
-  | { type: "step"; step: string; role: Role; model: ModelId; status: "running" | "done" }
+  | { type: "step"; step: string; role: Role; model: ModelId; status: "running" }
+  /** `output` is what the step wrote: the scout's brief, the plan, the builder's summary or the review. */
+  | { type: "step"; step: string; role: Role; model: ModelId; status: "done"; output: string }
+  /** A tool call. `target` is the file, folder, pattern or command it was used on. */
+  | { type: "tool"; step: string; tool: string; target: string }
   | { type: "call"; call: CallRecord }
   | { type: "checks"; step: string; results: CheckResult[] }
   | { type: "escalate"; step: string; from: ModelId; to: ModelId; reason: string }

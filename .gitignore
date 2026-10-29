@@ -25,3 +25,6 @@ dist-ssr
 
 # Compiled runtime
 dist-runtime
+
+# The runtime, compiled for the app to bundle
+src-tauri/binaries
