@@ -8,13 +8,22 @@ export interface Prefs {
   stack: StackName;
   /** Most a thread may spend, in dollars, across its runs. */
   cap: number;
+  /** Shoji asks before a thread or trial could take a day's spend past this, in dollars. */
+  dailyLimit: number;
   /** Interface motion. Off removes every transition. */
   motion: boolean;
   /** The first-run setup was finished once, so it doesn't open on its own again. */
   setupDone: boolean;
 }
 
-export const DEFAULT_PREFS: Prefs = { repo: null, stack: "balanced", cap: 0.5, motion: true, setupDone: false };
+export const DEFAULT_PREFS: Prefs = {
+  repo: null,
+  stack: "balanced",
+  cap: 0.5,
+  dailyLimit: 25,
+  motion: true,
+  setupDone: false,
+};
 
 const STORE = "shoji.prefs";
 

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { LimitAsk, type Ask } from "./budget/LimitAsk";
+import { spentOn } from "./budget/daily";
 import { bridge as tauriBridge, type Bridge, type KeyStatus } from "./bridge";
 import { folderName, HomeView } from "./home/HomeView";
 import { ReceiptsView } from "./receipts/ReceiptsView";
@@ -44,6 +46,27 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
     );
     // Only at launch: forgetting the key later in Settings shouldn't pull the person into setup.
   }, [bridge]);
+
+  // Today's spend, read again whenever a run starts or ends, so the daily limit is checked against it.
+  const [spentToday, setSpentToday] = useState(0);
+  useEffect(() => {
+    bridge
+      .ledgerThreads()
+      .then((threads) => setSpentToday(spentOn(threads, new Date())))
+      .catch(() => setSpentToday(0));
+  }, [bridge, running]);
+
+  // A thread's whole limit counts against the day when it starts, so its later changes stay inside what
+  // was allowed then. Past the daily limit, Shoji asks first.
+  const [ask, setAsk] = useState<Ask | null>(null);
+  const withinDay = (what: string, cap: number, go: () => void): boolean => {
+    if (spentToday + cap <= prefs.dailyLimit) {
+      go();
+      return true;
+    }
+    setAsk({ spent: spentToday, cap, what, go });
+    return false;
+  };
 
   const pickProject = async () => {
     const repo = await bridge.pickProject();
@@ -103,9 +126,12 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 onPickProject={pickProject}
                 onOpenSettings={() => setSection("settings")}
                 onStart={(task) => {
-                  if (!prefs.repo) return;
-                  setSection("threads");
-                  start(task, prefs.repo, stack.stack, prefs.cap);
+                  const repo = prefs.repo;
+                  if (!repo) return false;
+                  return withinDay("This thread", prefs.cap, () => {
+                    setSection("threads");
+                    start(task, repo, stack.stack, prefs.cap);
+                  });
                 }}
               />
             ) : section === "receipts" ? (
@@ -115,7 +141,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 bridge={bridge}
                 repo={prefs.repo}
                 trial={trials.trial}
-                onStartTrial={trials.start}
+                onStartTrial={(request) => withinDay("This trial", request.cap, () => trials.start(request))}
                 onStopTrial={trials.stop}
                 stack={stack.stack}
                 lock={stack.lock}
@@ -157,6 +183,8 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
           </main>
         </div>
       )}
+
+      {ask && <LimitAsk ask={ask} limit={prefs.dailyLimit} onClose={() => setAsk(null)} />}
 
       <footer className="status solid">
         <span title={prefs.repo ?? undefined}>{prefs.repo ? folderName(prefs.repo) : "No project open"}</span>
