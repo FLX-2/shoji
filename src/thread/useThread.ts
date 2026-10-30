@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RuntimeEvent } from "../../runtime/src/events";
 import { MODELS } from "../../runtime/src/models";
 import type { Stack } from "../../runtime/src/stack";
@@ -29,6 +29,9 @@ export interface Thread {
   cap: number;
   /** The branch the thread works on, once its first run has started. */
   branch?: string;
+  /** The thread's own copy of the project, where its work happens. Missing for a thread from before each had
+   *  one, which works in the project itself. */
+  workdir?: string;
   /** The short hash of the commit that accepted the thread's work. */
   committed?: string;
   /** Screenshots and files attached to the task, as paths. Every run of the thread sees them. */
@@ -66,54 +69,66 @@ const KEEP_GOING =
 
 const FIX = "The last run ended with work left to do. Fix what the review asked for.";
 
-/** Runs one thread through the runtime: the task, then any changes the person asks for. */
-export function useThread(bridge: Bridge, allowedIn: (repo: string) => string[] = () => []) {
-  const [thread, setThread] = useState<Thread | null>(null);
-  // The run the last turn is waiting on. "starting" until the runtime gives its number.
-  const current = useRef<number | "starting" | null>(null);
+/** A thread the app holds, under a key of its own, since a new thread has no ledger id until its run starts. */
+export interface Held {
+  key: number;
+  thread: Thread;
+}
+
+/**
+ * Runs threads through the runtime: each task, then any changes the person asks for. Every thread works in its
+ * own copy of the project, so several run at once. One of them is on show, and the actions act on that one.
+ */
+export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[] = () => []) {
+  const [held, setHeld] = useState<Held[]>([]);
+  const [shownKey, setShownKey] = useState<number | null>(null);
+  const keys = useRef(0);
+  // Which thread each live run belongs to, by run number.
+  const runs = useRef(new Map<number, number>());
+  // Start calls that haven't returned their run's number yet.
+  const starting = useRef(0);
   // Events or an exit that arrived before the start call returned the run's number.
   const early = useRef(new Map<number, { events: RuntimeEvent[]; exit?: RunExit }>());
 
-  const updateLast = useCallback((change: (turn: Turn) => Turn) => {
-    setThread((t) => (t ? { ...t, turns: [...t.turns.slice(0, -1), change(t.turns[t.turns.length - 1])] } : t));
+  const update = useCallback((key: number, change: (thread: Thread) => Thread) => {
+    setHeld((all) => all.map((h) => (h.key === key ? { key, thread: change(h.thread) } : h)));
   }, []);
 
+  const updateLast = useCallback(
+    (key: number, change: (turn: Turn) => Turn) =>
+      update(key, (t) => ({ ...t, turns: [...t.turns.slice(0, -1), change(t.turns[t.turns.length - 1])] })),
+    [update],
+  );
+
   useEffect(() => {
-    const waitingOn = (run: number) => {
-      if (current.current === run) return true;
-      if (current.current === "starting" && !early.current.has(run)) early.current.set(run, { events: [] });
-      return false;
+    const hold = (run: number) => {
+      if (!early.current.has(run)) early.current.set(run, { events: [] });
+      return early.current.get(run)!;
     };
     const subscriptions = [
       bridge.onEvent((run, event) => {
-        if (waitingOn(run)) updateLast((turn) => ({ ...turn, events: [...turn.events, event] }));
-        else early.current.get(run)?.events.push(event);
+        const key = runs.current.get(run);
+        if (key !== undefined) updateLast(key, (turn) => ({ ...turn, events: [...turn.events, event] }));
+        else if (starting.current > 0) hold(run).events.push(event);
       }),
       bridge.onExit((exit) => {
-        if (waitingOn(exit.run)) {
-          current.current = null;
-          updateLast((turn) => ({ ...turn, exit }));
-        } else {
-          const held = early.current.get(exit.run);
-          if (held) held.exit = exit;
-        }
+        const key = runs.current.get(exit.run);
+        if (key !== undefined) {
+          runs.current.delete(exit.run);
+          updateLast(key, (turn) => ({ ...turn, exit }));
+        } else if (starting.current > 0) hold(exit.run).exit = exit;
       }),
     ];
     return () => subscriptions.forEach((s) => s.then((unlisten) => unlisten()));
   }, [bridge, updateLast]);
 
   const run = useCallback(
-    async (next: Thread, turn: Turn, changes?: ChangesRequest, planOnly?: boolean) => {
+    async (key: number, next: Thread, turn: Turn, changes?: ChangesRequest, planOnly?: boolean) => {
       const spent = threadCost(next);
-      setThread({ ...next, turns: [...next.turns, turn] });
-      current.current = "starting";
-      early.current.clear();
+      update(key, () => ({ ...next, turns: [...next.turns, turn] }));
+      starting.current++;
       try {
-        const {
-          run: id,
-          thread: threadId,
-          branch,
-        } = await bridge.startRun({
+        const started = await bridge.startRun({
           repo: next.repo,
           task: next.task,
           stack: next.stack,
@@ -124,44 +139,75 @@ export function useThread(bridge: Bridge, allowedIn: (repo: string) => string[] 
           ...(next.attachments?.length && { attachments: next.attachments }),
           ...(allowedIn(next.repo).length && { allowedCommands: allowedIn(next.repo) }),
         });
-        const held = early.current.get(id);
-        early.current.clear();
-        current.current = held?.exit ? null : id;
-        setThread((t) => (t ? { ...t, id: threadId, branch } : t));
-        if (held) updateLast((t) => ({ ...t, events: [...t.events, ...held.events], exit: held.exit }));
+        const caught = early.current.get(started.run);
+        early.current.delete(started.run);
+        if (!caught?.exit) runs.current.set(started.run, key);
+        update(key, (t) => ({
+          ...t,
+          id: started.thread,
+          branch: started.branch,
+          ...(started.workdir && { workdir: started.workdir }),
+        }));
+        if (caught) updateLast(key, (t) => ({ ...t, events: [...t.events, ...caught.events], exit: caught.exit }));
       } catch (error) {
-        current.current = null;
-        updateLast((t) => ({ ...t, error: String(error) }));
+        updateLast(key, (t) => ({ ...t, error: String(error) }));
+      } finally {
+        if (--starting.current === 0) early.current.clear();
       }
     },
-    [bridge, updateLast, allowedIn],
+    [bridge, update, updateLast, allowedIn],
   );
 
-  /** Starts a thread. With `planFirst`, it pauses once the plan is written. */
+  /** Shows one thread, letting go of others that have finished: the ledger can read those back. */
+  const show = useCallback((key: number, adding?: Thread) => {
+    setHeld((all) => [
+      ...all.filter((h) => h.key === key || isRunning(h.thread.turns.at(-1)) || h.thread.id === undefined),
+      ...(adding ? [{ key, thread: adding }] : []),
+    ]);
+    setShownKey(key);
+  }, []);
+
+  /** Starts a thread and shows it. With `planFirst`, it pauses once the plan is written. */
   const start = useCallback(
-    (task: string, repo: string, stack: Stack, cap: number, planFirst = false, attachments: string[] = []) =>
-      run(
-        { task, repo, stack, cap, turns: [], ...(attachments.length && { attachments }) },
+    (task: string, repo: string, stack: Stack, cap: number, planFirst = false, attachments: string[] = []) => {
+      const key = ++keys.current;
+      const thread: Thread = { task, repo, stack, cap, turns: [], ...(attachments.length && { attachments }) };
+      show(key, thread);
+      return run(
+        key,
+        thread,
         { ask: task, kind: "task", events: [], ...(attachments.length && { attached: attachments.map(fileName) }) },
         undefined,
         planFirst,
-      ),
-    [run],
+      );
+    },
+    [run, show],
   );
+
+  const shown = held.find((h) => h.key === shownKey);
+  const thread = shown?.thread ?? null;
+
+  /** The live run of the thread on show, if it has one. */
+  const liveRun = useCallback(() => {
+    for (const [run, key] of runs.current) if (key === shownKey) return run;
+    return undefined;
+  }, [shownKey]);
 
   /** Carries the thread on from its latest plan: changes to the work, building the plan, or a new plan. */
   const carryOn = useCallback(
     (ask: string, notes: string, kind: "changes" | "build" | "replan" | "question", extra = 0) => {
-      if (thread?.id === undefined) return;
+      if (!shown || shown.thread.id === undefined) return;
+      const { key, thread } = shown;
       const results = thread.turns.map((t) => foldRun(t.events).result);
       const plan = results.map((r) => r?.plan).findLast(Boolean) ?? "";
       const failingBefore = [...new Set(results.flatMap((r) => r?.failingBefore ?? []))];
       const failingTestsBefore = [...new Set(results.flatMap((r) => r?.failingTestsBefore ?? []))];
       run(
+        key,
         { ...thread, cap: thread.cap + extra },
         { ask, kind, events: [] },
         {
-          thread: thread.id,
+          thread: thread.id!,
           notes,
           plan,
           branch: thread.branch ?? "",
@@ -172,7 +218,7 @@ export function useThread(bridge: Bridge, allowedIn: (repo: string) => string[] 
         kind === "replan",
       );
     },
-    [thread, run],
+    [shown, run],
   );
 
   const requestChanges = useCallback((notes: string) => carryOn(notes, notes, "changes"), [carryOn]);
@@ -204,24 +250,66 @@ export function useThread(bridge: Bridge, allowedIn: (repo: string) => string[] 
   const question = useCallback((text: string) => carryOn(text, text, "question"), [carryOn]);
 
   const stop = useCallback(async () => {
-    updateLast((turn) => ({ ...turn, stoppedByYou: true }));
-    await bridge.stopRun();
-  }, [bridge, updateLast]);
+    const live = liveRun();
+    if (shownKey === null || live === undefined) return;
+    updateLast(shownKey, (turn) => ({ ...turn, stoppedByYou: true }));
+    await bridge.stopRun(live);
+  }, [bridge, updateLast, liveRun, shownKey]);
+
+  /** The person's answer to the shown thread's question about a command. */
+  const answer = useCallback(
+    async (allow: boolean) => {
+      const live = liveRun();
+      if (live !== undefined) await bridge.answerAsk(live, allow);
+    },
+    [bridge, liveRun],
+  );
 
   /** Accepts all of the thread's work as one commit on its branch. */
   const commit = useCallback(async () => {
-    if (!thread?.branch || thread.id === undefined) return;
-    const sha = await bridge.commitThread(thread.repo, thread.branch, commitMessage(thread), thread.id);
-    setThread((t) => (t ? { ...t, committed: sha } : t));
-  }, [bridge, thread]);
+    if (!shown?.thread.branch || shown.thread.id === undefined) return;
+    const { key, thread } = shown;
+    const sha = await bridge.commitThread(thread.repo, thread.branch!, commitMessage(thread), thread.id!);
+    update(key, (t) => ({ ...t, committed: sha }));
+  }, [bridge, shown, update]);
+
+  /** Shows a thread the app still holds, by its ledger id. False when it isn't held. */
+  const showId = useCallback(
+    (id: number) => {
+      const found = held.find((h) => h.thread.id === id);
+      if (found) show(found.key);
+      return !!found;
+    },
+    [held, show],
+  );
 
   /** Shows a past thread, read back from the ledger, so the person can read it or carry it on. */
-  const open = useCallback((past: Thread) => {
-    if (current.current !== null) return;
-    setThread(past);
-  }, []);
+  const open = useCallback(
+    (past: Thread) => {
+      if (past.id !== undefined && showId(past.id)) return;
+      show(++keys.current, past);
+    },
+    [show, showId],
+  );
 
-  return { thread, start, requestChanges, keepGoing, fix, build, replan, question, stop, commit, open };
+  const threads = useMemo(() => held.map((h) => h.thread), [held]);
+
+  return {
+    thread,
+    threads,
+    start,
+    requestChanges,
+    keepGoing,
+    fix,
+    build,
+    replan,
+    question,
+    stop,
+    answer,
+    commit,
+    open,
+    showId,
+  };
 }
 
 /** The last part of a path, on any system. */

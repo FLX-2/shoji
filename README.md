@@ -48,11 +48,11 @@ A role can run the project's checks at any time. Any other command, such as inst
 
 ## Threads and git
 
-Each thread gets its own branch. When you start a task, Shoji moves your project onto a new branch named after it, such as `shoji/add-a-faq`. If that name is taken, it adds `-2`, `-3` and so on. The project must be a git repo, on a branch rather than a detached commit, with no uncommitted changes. That includes untracked files. Shoji refuses to start otherwise. When you request changes, the thread carries on in the same branch, and the project must still be on it.
+Each thread gets its own branch and its own copy of the project, so several threads can run at once while your own checkout stays as it is. When you start a task, Shoji makes a git worktree on a new branch named after it, such as `shoji/add-a-faq`, in Shoji's data folder. If that name is taken, it adds `-2`, `-3` and so on. The copy starts from your project's last commit, so changes you haven't committed stay out of it. It links to your installed packages (`node_modules`, `.venv`, `venv`, `vendor`) rather than installing them again, and gets a copy of your `.env` files. The project must be a git repo with at least one commit. When you request changes, the thread carries on in the same copy.
 
 Code lists every file the thread changed, with its diff. Accept keeps a file's changes and stages it in git. Revert puts the file back as it was at the last commit, or deletes it if the thread created it. Shoji asks before it reverts. Both buttons are unavailable while a run is going.
 
-Revert anything you don't want. Accept and commit then commits the rest as one commit on the thread's branch, using your own git name and email, so `user.name` and `user.email` must be set. The message is the task, followed by `Shoji-Models:` and `Shoji-Cost:` lines.
+Revert anything you don't want. Accept and commit then commits the rest as one commit on the thread's branch, using your own git name and email, so `user.name` and `user.email` must be set. The message is the task, followed by `Shoji-Models:` and `Shoji-Cost:` lines. The thread's copy is then put away, so you can check the branch out in your project.
 
 Shoji never pushes. The commit and the branch stay on your machine. Merging or pushing is up to you.
 

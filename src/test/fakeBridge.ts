@@ -7,7 +7,7 @@ import type { Bridge, KeyStatus, LedgerThread, NotesRequest, RunExit, RunRequest
 /** Stands in for the Rust side: records what the app asks for and plays back runtime events. */
 export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   /** The project's changes as git would report them; tests set these. */
-  const project = { diff: "", accepted: [] as string[], files: [] as string[] };
+  const project = { diff: "", accepted: [] as string[], files: [] as string[], git: true };
   /** What the ledger holds; tests fill it. */
   const ledger: LedgerThread[] = [];
   /** Each ledger run's events, as its log on disk would hold them; tests fill it. */
@@ -32,10 +32,13 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     lockWrites: [] as string[],
     pasted: [] as { name: string; bytes: number[] }[],
     answers: [] as boolean[],
+    answeredRuns: [] as number[],
+    stoppedRuns: [] as number[],
   };
   /** What the attach dialog answers with; tests fill it. */
   const picked: string[] = [];
   let runs = 0;
+  let threads = 0;
 
   const bridge: Bridge = {
     keyStatus: async () => key,
@@ -60,7 +63,12 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     },
     startRun: async (request) => {
       calls.starts.push(request);
-      return { run: ++runs, thread: request.changes?.thread ?? 1, branch: request.changes?.branch ?? "shoji/thread" };
+      return {
+        run: ++runs,
+        thread: request.changes?.thread ?? ++threads,
+        branch: request.changes?.branch ?? "shoji/thread",
+        workdir: request.changes ? null : "/data/worktrees/thread",
+      };
     },
     startTrial: async (request) => {
       calls.trials.push(request);
@@ -70,15 +78,20 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       calls.notes.push(request);
       return files.hasNotes ? null : ++runs;
     },
-    answerAsk: async (allow) => {
+    answerAsk: async (run, allow) => {
       calls.answers.push(allow);
+      calls.answeredRuns.push(run);
     },
-    stopRun: async () => {
+    stopRun: async (run) => {
       calls.stops++;
+      calls.stoppedRuns.push(run);
     },
     changes: async () => ({ diff: project.diff, accepted: project.accepted }),
-    projectFiles: async () => [...project.files],
-    ledgerThreads: async () => ledger,
+    projectFiles: async () => {
+      if (!project.git) throw new Error("fatal: not a git repository");
+      return [...project.files];
+    },
+    ledgerThreads: async () => [...ledger],
     runEvents: async (run) => logs[run] ?? [],
     readStackLock: async () => files.stackLock,
     writeStackLock: async (contents) => {
@@ -137,5 +150,10 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     emitNotes: (...events: NotesEvent[]) =>
       act(() => events.forEach((event) => onNotesEvent.forEach((h) => h(runs, event)))),
     exit: (code: number | null = 0, error = "") => act(() => onExit.forEach((h) => h({ run: runs, code, error }))),
+    /** Sends events from one run, when several are going. */
+    emitTo: (run: number, ...events: RuntimeEvent[]) =>
+      act(() => events.forEach((event) => onEvent.forEach((h) => h(run, event)))),
+    /** Ends one run, when several are going. */
+    exitOf: (run: number, code: number | null = 0) => act(() => onExit.forEach((h) => h({ run, code, error: "" }))),
   };
 }

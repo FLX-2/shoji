@@ -31,15 +31,14 @@ import { DEFAULT_PREVIEW } from "./thread/PreviewView";
 import { reopen, workThreads } from "./thread/reopen";
 import { ThreadList } from "./thread/ThreadList";
 import { ThreadView } from "./thread/ThreadView";
-import { isRunning, threadCost, useThread } from "./thread/useThread";
+import { isRunning, threadCost, useThreads } from "./thread/useThread";
 
-/** Why a thread can't start in this folder yet, or null when it can. */
+/** Why a thread can't start in this folder yet, or null when it can. Each thread works in its own copy of the
+ *  project, so changes the person hasn't committed are no reason to wait. */
 async function folderProblem(bridge: Bridge, repo: string): Promise<string | null> {
   try {
-    const changes = await bridge.changes(repo);
-    return changes.diff
-      ? `${folderName(repo)} has uncommitted changes. Commit or stash them, then send the task again.`
-      : null;
+    await bridge.projectFiles(repo);
+    return null;
   } catch {
     return `${folderName(repo)} isn't a git repository. Shoji works in git so every change can be reviewed and undone.`;
   }
@@ -61,16 +60,29 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const allowed = useRef(prefs.allowedCommands);
   allowed.current = prefs.allowedCommands;
   const allowedIn = useCallback((repo: string) => allowed.current[repo] ?? [], []);
-  const { thread, start, requestChanges, keepGoing, fix, build, replan, question, stop, commit, open } = useThread(
-    bridge,
-    allowedIn,
-  );
+  const {
+    thread,
+    threads,
+    start,
+    requestChanges,
+    keepGoing,
+    fix,
+    build,
+    replan,
+    question,
+    stop,
+    answer,
+    commit,
+    open,
+    showId,
+  } = useThreads(bridge, allowedIn);
   const trials = useTrial(bridge);
   const trialRunning = !!trials.trial && trialProgress(trials.trial).running;
   const notes = useNotes(bridge);
   const notesRunning = !!notes.notes && notesProgress(notes.notes).running;
-  const threadRunning = isRunning(thread?.turns[thread.turns.length - 1]);
-  const running = threadRunning || trialRunning || notesRunning;
+  const threadRunning = isRunning(thread?.turns.at(-1));
+  const live = threads.filter((t) => isRunning(t.turns.at(-1)));
+  const running = live.length > 0 || trialRunning || notesRunning;
   const current = SECTIONS[section];
 
   // Setup opens on its own at launch when there's no saved key and it was never finished. It stays
@@ -88,6 +100,8 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     // Only at launch: forgetting the key later in Settings shouldn't pull the person into setup.
   }, [bridge]);
 
+  // Changes whenever a thread gets its ledger id, starts or ends a run, or is committed.
+  const activity = threads.map((t) => `${t.id}:${t.turns.length}:${isRunning(t.turns.at(-1))}:${t.committed}`).join();
   // The ledger, read again whenever a run starts or ends: the thread list, today's spend for the daily limit,
   // recent tasks for Home's estimate, and Stack's Watching row.
   const [ledger, setLedger] = useState<LedgerThread[]>([]);
@@ -97,13 +111,14 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       .then(setLedger)
       .catch(() => setLedger([]));
     // Read again on a commit or on opening Threads too, so each thread shows where it got to.
-  }, [bridge, running, section, thread?.committed]);
+  }, [bridge, activity, trialRunning, notesRunning, section]);
   const pastThreads = useMemo(() => workThreads(ledger), [ledger]);
-  // The project's files, for @ in the task box, read again when the project changes or a run ends.
+  // The project's files, for @ in the task box, read again when the project changes. Threads work in their
+  // own copies, so the project itself only changes in the person's hands.
   const [projectFiles, setProjectFiles] = useState<string[]>([]);
   useEffect(() => {
     setProjectFiles([]);
-    if (!prefs.repo || running) return;
+    if (!prefs.repo) return;
     let current = true;
     bridge.projectFiles(prefs.repo).then(
       (files) => current && setProjectFiles(files),
@@ -112,7 +127,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     return () => {
       current = false;
     };
-  }, [bridge, prefs.repo, running]);
+  }, [bridge, prefs.repo, section]);
 
   const spentToday = useMemo(() => spentOn(ledger, new Date()), [ledger]);
   const [tier, setTier] = useState<Tier>("balanced");
@@ -201,7 +216,6 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
               <HomeView
                 repo={prefs.repo}
                 hasKey={!!keyStatus && (keyStatus.saved || keyStatus.fromEnv)}
-                busy={running}
                 onPickProject={pickProject}
                 onOpenSettings={() => setSection("settings")}
                 problem={startProblem}
@@ -252,14 +266,16 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                   <ThreadList
                     threads={pastThreads}
                     current={thread?.id}
-                    busy={running}
                     showCosts={prefs.showCosts}
-                    onOpen={async (record) => open(await reopen(bridge, record, prefs.cap))}
+                    onOpen={async (record) => {
+                      if (!showId(record.id)) open(await reopen(bridge, record, prefs.cap));
+                    }}
                     onNew={() => setSection("home")}
                   />
                 )}
                 {thread ? (
                   <ThreadView
+                    key={thread.id ?? "new"}
                     bridge={bridge}
                     thread={thread}
                     onStop={stop}
@@ -281,7 +297,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                         const now = prefs.allowedCommands[thread.repo] ?? [];
                         setPrefs({ allowedCommands: { ...prefs.allowedCommands, [thread.repo]: [...now, command] } });
                       }
-                      return bridge.answerAsk(allow);
+                      return answer(allow);
                     }}
                     showCosts={prefs.showCosts}
                     previewUrl={prefs.previewUrls[thread.repo] ?? DEFAULT_PREVIEW}
@@ -329,6 +345,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
           <span title={prefs.repo ?? undefined}>{prefs.repo ? folderName(prefs.repo) : "No project open"}</span>
           <span className="r">
             {thread?.branch && thread.repo === prefs.repo && <span>{thread.branch}</span>}
+            {live.length > 1 && <span>{live.length} threads running</span>}
             {thread && threadRunning && prefs.showCosts && (
               <span>
                 this thread <b>{formatCost(threadCost(thread))}</b>

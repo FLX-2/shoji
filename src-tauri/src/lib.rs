@@ -3,11 +3,13 @@ mod ledger;
 mod shell_path;
 #[cfg(target_os = "macos")]
 mod titlebar;
+mod worktree;
 
 use std::fs;
 use std::path::{Component, Path};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -24,11 +26,18 @@ use ledger::{Ledger, ThreadRecord};
 const KEY_SERVICE: &str = "app.shoji.desktop";
 const KEY_ACCOUNT: &str = "anthropic";
 
-/// The running thread's runtime process, its run number and its run in the ledger.
-/// One thread runs at a time.
+/// A runtime process that's going: its run in the ledger, and the thread it works on.
+struct Live {
+    child: CommandChild,
+    entry: i64,
+    thread: i64,
+}
+
+/// Every runtime process that's going, by run number. Threads work in their own copies of the
+/// project, so several run at once, alongside a trial or project notes.
 #[derive(Default)]
 struct Run {
-    child: Mutex<Option<(u64, CommandChild, i64)>>,
+    live: Mutex<HashMap<u64, Live>>,
     count: AtomicU64,
 }
 
@@ -203,6 +212,9 @@ struct Started {
     thread: i64,
     /// The thread's branch, where its work is committed.
     branch: String,
+    /// The thread's own copy of the project, where its work happens. None for an older thread
+    /// that works in the project itself.
+    workdir: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -253,7 +265,7 @@ struct Exit {
 
 /// Starts the runtime on a task and returns its run number. The run's events arrive as
 /// `runtime-event`, then one `runtime-exit`, each carrying that number. A new task gets
-/// its own branch; changes carry on the thread's branch.
+/// its own branch, in its own copy of the project; changes carry on in the thread's copy.
 #[tauri::command]
 fn start_run(
     app: AppHandle,
@@ -262,9 +274,11 @@ fn start_run(
     request: RunRequest,
 ) -> Result<Started, String> {
     let ask = request.ask.clone();
-    let mut slot = run.child.lock().unwrap();
-    if slot.is_some() {
-        return Err("A thread is already running.".into());
+    let mut live = run.live.lock().unwrap();
+    if let Some(changes) = &request.changes {
+        if live.values().any(|l| l.thread == changes.thread) {
+            return Err("This thread is already running.".into());
+        }
     }
     let key = saved_key()
         .or_else(env_key)
@@ -283,13 +297,21 @@ fn start_run(
             return Err("That thread isn't in the ledger.".into());
         }
     }
-    let (branch, base) = match &request.changes {
-        Some(changes) => (on_branch(&repo, &changes.branch)?, None),
+    // Where the work happens: the thread's own copy, made now for a new task.
+    let (branch, workdir, made) = match &request.changes {
+        Some(changes) => match ledger.workdir_of(changes.thread).map_err(|e| e.to_string())? {
+            Some(dir) => {
+                worktree::restore(&repo, Path::new(&dir), &changes.branch)?;
+                (on_branch(&dir, &changes.branch)?, Some(dir), false)
+            }
+            None => (on_branch(&repo, &changes.branch)?, None, false),
+        },
         None => {
-            let base = current_branch(&repo)?;
-            (new_thread_branch(&repo, &request.task)?, Some(base))
+            let (branch, dir) = worktree::create(&repo, &data.join("worktrees"), &request.task)?;
+            (branch, Some(dir.display().to_string()), true)
         }
     };
+    let dir = workdir.clone().unwrap_or_else(|| repo.clone());
 
     let task = request.task.clone();
     let stack = request.stack.to_string();
@@ -297,7 +319,7 @@ fn start_run(
     let mut args = vec![
         "--json".to_string(),
         "--repo".into(),
-        repo.clone(),
+        dir.clone(),
         "--task".into(),
         request.task,
         "--stack-json".into(),
@@ -330,9 +352,10 @@ fn start_run(
     // The ledger keeps the thread and run first, so every call the run makes has a home.
     let recorded = match thread {
         Some((thread, kind)) => Ok((thread, kind)),
-        None => ledger
-            .start_thread(&task, &repo, &branch, &stack, stamp)
-            .map(|thread| (thread, "task".to_string())),
+        None => ledger.start_thread(&task, &repo, &branch, &stack, stamp).and_then(|thread| {
+            ledger.note_workdir(thread, &dir)?;
+            Ok((thread, "task".to_string()))
+        }),
     }
     .and_then(|(thread, kind)| {
         let entry = ledger.start_run(thread, &kind, &log.display().to_string(), stamp)?;
@@ -358,17 +381,17 @@ fn start_run(
         Ok(spawned) => spawned,
         Err(e) => {
             // Leave the project as it was found.
-            if let Some(base) = base {
-                let _ = git(&repo, &["switch", "--quiet", &base]);
+            if made {
+                worktree::remove(&repo, &dir);
                 let _ = git(&repo, &["branch", "--quiet", "-D", &branch]);
             }
             return Err(e);
         }
     };
     let id = run.count.fetch_add(1, Ordering::Relaxed) + 1;
-    *slot = Some((id, child, entry));
+    live.insert(id, Live { child, entry, thread });
     watch(app, events, id, entry);
-    Ok(Started { run: id, thread, branch })
+    Ok(Started { run: id, thread, branch, workdir })
 }
 
 /// Passes a run's events to the app and the ledger until the runtime exits.
@@ -387,12 +410,7 @@ fn watch(app: AppHandle, mut events: Receiver<CommandEvent>, id: u64, entry: i64
                     stderr.push(String::from_utf8_lossy(&line).trim_end().to_string())
                 }
                 CommandEvent::Terminated(status) => {
-                    let state = app.state::<Run>();
-                    let mut slot = state.child.lock().unwrap();
-                    if slot.as_ref().is_some_and(|(run, _, _)| *run == id) {
-                        slot.take();
-                    }
-                    drop(slot);
+                    app.state::<Run>().live.lock().unwrap().remove(&id);
                     noted(app.state::<Ledger>().end_run(entry, "failed"));
                     let exit = Exit {
                         run: id,
@@ -434,10 +452,7 @@ fn start_trial(
     ledger: State<Ledger>,
     request: TrialRequest,
 ) -> Result<u64, String> {
-    let mut slot = run.child.lock().unwrap();
-    if slot.is_some() {
-        return Err("Something is already running. Let it finish or stop it first.".into());
-    }
+    let mut live = run.live.lock().unwrap();
     let key = saved_key()
         .or_else(env_key)
         .ok_or("Add your Anthropic API key in Settings first.")?;
@@ -484,7 +499,7 @@ fn start_trial(
             e.to_string()
         })?;
     let id = run.count.fetch_add(1, Ordering::Relaxed) + 1;
-    *slot = Some((id, child, entry));
+    live.insert(id, Live { child, entry, thread });
     watch(app, events, id, entry);
     Ok(id)
 }
@@ -516,10 +531,7 @@ fn start_notes(
     if Path::new(&request.repo).join("SHOJI.md").exists() {
         return Ok(None);
     }
-    let mut slot = run.child.lock().unwrap();
-    if slot.is_some() {
-        return Err("Something is already running. Let it finish or stop it first.".into());
-    }
+    let mut live = run.live.lock().unwrap();
     let key = saved_key()
         .or_else(env_key)
         .ok_or("Add your Anthropic API key in Settings first.")?;
@@ -562,26 +574,27 @@ fn start_notes(
             e.to_string()
         })?;
     let id = run.count.fetch_add(1, Ordering::Relaxed) + 1;
-    *slot = Some((id, child, entry));
+    live.insert(id, Live { child, entry, thread });
     watch(app, events, id, entry);
     Ok(Some(id))
 }
 
-/// The person's answer to the running thread's question about a command.
+/// The person's answer to a running thread's question about a command.
 #[tauri::command]
-fn answer_ask(run: State<Run>, allow: bool) -> Result<(), String> {
-    let mut slot = run.child.lock().unwrap();
-    let (_, child, _) = slot.as_mut().ok_or("No thread is running.")?;
-    child
+fn answer_ask(run: State<Run>, id: u64, allow: bool) -> Result<(), String> {
+    let mut live = run.live.lock().unwrap();
+    let going = live.get_mut(&id).ok_or("That thread isn't running.")?;
+    going
+        .child
         .write(format!("{{\"allow\":{allow}}}\n").as_bytes())
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn stop_run(run: State<Run>, ledger: State<Ledger>) -> Result<(), String> {
-    if let Some((_, child, entry)) = run.child.lock().unwrap().take() {
-        noted(ledger.end_run(entry, "stopped"));
-        child.kill().map_err(|e| e.to_string())?;
+fn stop_run(run: State<Run>, ledger: State<Ledger>, id: u64) -> Result<(), String> {
+    if let Some(going) = run.live.lock().unwrap().remove(&id) {
+        noted(ledger.end_run(going.entry, "stopped"));
+        going.child.kill().map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -629,27 +642,6 @@ fn on_branch(repo: &str, branch: &str) -> Result<String, String> {
     }
 }
 
-/// Moves a clean project onto a new branch named after the task, such as `shoji/add-a-faq`.
-fn new_thread_branch(repo: &str, task: &str) -> Result<String, String> {
-    current_branch(repo)?;
-    if !git(repo, &["status", "--porcelain"])?.trim().is_empty() {
-        return Err(
-            "The project has uncommitted changes. Commit or stash them, then start the thread again."
-                .into(),
-        );
-    }
-    let name = format!("shoji/{}", slug(task));
-    let taken = |branch: &str| {
-        git(repo, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{branch}")]).is_ok()
-    };
-    let branch = std::iter::once(name.clone())
-        .chain((2..).map(|n| format!("{name}-{n}")))
-        .find(|b| !taken(b))
-        .unwrap();
-    git(repo, &["switch", "--quiet", "-c", &branch])?;
-    Ok(branch)
-}
-
 /// The task's first words in lower case, joined by dashes.
 fn slug(task: &str) -> String {
     let mut slug = String::new();
@@ -678,6 +670,7 @@ fn slug(task: &str) -> String {
 
 /// Accepts all of the thread's work and commits it on the thread's branch, as the person's
 /// own git identity. Shoji never pushes. Returns the commit's short hash.
+/// `repo` is the project itself; the commit is made in the thread's own copy when it has one.
 #[tauri::command]
 async fn commit_thread(
     ledger: State<'_, Ledger>,
@@ -686,8 +679,13 @@ async fn commit_thread(
     message: String,
     thread: i64,
 ) -> Result<String, String> {
-    let sha = commit(&repo, &branch, &message)?;
+    let workdir = ledger.workdir_of(thread).map_err(|e| e.to_string())?;
+    let sha = commit(workdir.as_deref().unwrap_or(&repo), &branch, &message)?;
     noted(ledger.commit(thread, &sha, now_ms()));
+    // The work is on its branch now, and the copy is put away so the branch can be checked out.
+    if let Some(dir) = workdir {
+        worktree::remove(&repo, &dir);
+    }
     Ok(sha)
 }
 
@@ -1015,22 +1013,6 @@ mod tests {
         assert_eq!(slug("Fix: the café's footer!\nMore detail"), "fix-the-caf-s-footer");
         assert_eq!(slug("…"), "thread");
         assert!(slug(&"word ".repeat(30)).len() <= 40);
-
-        let root = repo("branch");
-        let start = current_branch(&root).unwrap();
-        assert_eq!(new_thread_branch(&root, "Add a FAQ").unwrap(), "shoji/add-a-faq");
-        git(&root, &["switch", "--quiet", &start]).unwrap();
-        assert_eq!(new_thread_branch(&root, "Add a FAQ").unwrap(), "shoji/add-a-faq-2");
-    }
-
-    #[test]
-    fn starts_only_on_a_clean_project() {
-        let root = repo("dirty");
-        fs::write(Path::new(&root).join("a.txt"), "changed\n").unwrap();
-        assert!(new_thread_branch(&root, "Task").unwrap_err().contains("uncommitted"));
-        fs::write(Path::new(&root).join("a.txt"), "one\n").unwrap();
-        fs::write(Path::new(&root).join("new.txt"), "new\n").unwrap();
-        assert!(new_thread_branch(&root, "Task").is_err());
     }
 
     #[test]
@@ -1038,7 +1020,8 @@ mod tests {
         let root = repo("commit");
         git(&root, &["config", "user.name", "Bob"]).unwrap();
         git(&root, &["config", "user.email", "bob@example.com"]).unwrap();
-        let branch = new_thread_branch(&root, "Change a").unwrap();
+        let branch = "shoji/change-a".to_string();
+        git(&root, &["switch", "--quiet", "-c", &branch]).unwrap();
         fs::write(Path::new(&root).join("a.txt"), "one, changed\n").unwrap();
         fs::write(Path::new(&root).join("new.txt"), "new\n").unwrap();
         read_changes(&root).unwrap();

@@ -7,14 +7,15 @@ export interface Changes {
   accepted: Set<string>;
 }
 
-/** The project's changes since its last commit, read again whenever `version` moves. */
-export function useChanges(bridge: Bridge, repo: string, version: unknown) {
+/** The project's changes since its last commit, read again whenever `version` moves. With no folder, as for a
+ *  committed thread whose copy was put away, there are none. */
+export function useChanges(bridge: Bridge, repo: string | null, version: unknown) {
   const [changes, setChanges] = useState<Changes | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(
     () =>
-      bridge.changes(repo).then(
+      (repo === null ? Promise.resolve({ diff: "", accepted: [] }) : bridge.changes(repo)).then(
         (c) => {
           setChanges({ files: parseDiff(c.diff), accepted: new Set(c.accepted) });
           setError(null);

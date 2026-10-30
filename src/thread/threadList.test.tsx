@@ -148,4 +148,58 @@ describe("the thread list", () => {
       },
     });
   });
+
+  it("runs threads side by side, each in its own copy, and stops only the one on show", async () => {
+    const fake = fakeBridge();
+    await act(async () => {
+      render(<App bridge={fake.bridge} />);
+    });
+    const send = async (text: string) => {
+      const task = await screen.findByRole("textbox", { name: "Task" });
+      fireEvent.change(task, { target: { value: text } });
+      await act(async () => {
+        fireEvent.keyDown(task, { key: "Enter" });
+      });
+    };
+    const started = (id: number, task: string): LedgerThread => ({
+      id,
+      task,
+      repo: "/work/pricing-page",
+      branch: "shoji/thread",
+      workdir: "/data/worktrees/thread",
+      stack: "balanced",
+      startedAt: Date.now(),
+      committed: null,
+      committedAt: null,
+      runs: [{ id, kind: "task", startedAt: Date.now(), status: null, calls: [] }],
+    });
+
+    await send("Add a FAQ");
+    fake.ledger.unshift(started(1, "Add a FAQ"));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    });
+    // Home takes a second task while the first runs.
+    await send("Fix the footer");
+    fake.ledger.unshift(started(2, "Fix the footer"));
+    expect(fake.calls.starts.map((s) => s.task)).toEqual(["Add a FAQ", "Fix the footer"]);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Fix the footer");
+    expect(screen.getByText("2 threads running")).toBeTruthy();
+
+    // The first thread's run finishes out of sight, and only the one on show is stopped.
+    fake.emitTo(1, ...finished("ready", "VERDICT: APPROVE"));
+    fake.exitOf(1);
+    expect(screen.queryByText("2 threads running")).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    });
+    expect(fake.calls.stoppedRuns).toEqual([2]);
+
+    // The first thread is still held, finished, so it opens without reading its log back.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Add a FAQ/ }));
+    });
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Add a FAQ");
+    expect(screen.getByText("Changed the footer.")).toBeTruthy();
+  });
 });

@@ -76,8 +76,10 @@ export function useTrial(bridge: Bridge) {
   );
 
   const stop = useCallback(async () => {
+    const run = current.current;
+    if (typeof run !== "number") return;
     setTrial((t) => t && { ...t, stoppedByYou: true });
-    await bridge.stopRun();
+    await bridge.stopRun(run);
   }, [bridge]);
 
   return { trial, start, stop };

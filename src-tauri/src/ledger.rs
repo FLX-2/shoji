@@ -47,6 +47,8 @@ const MIGRATIONS: &[&str] = &["
     CREATE INDEX calls_by_run ON calls(run_id);
 ", "
     ALTER TABLE runs ADD COLUMN ask TEXT;
+", "
+    ALTER TABLE threads ADD COLUMN workdir TEXT;
 "];
 
 pub struct Ledger(Mutex<Connection>);
@@ -58,6 +60,9 @@ pub struct ThreadRecord {
     pub task: String,
     pub repo: String,
     pub branch: String,
+    /// The thread's own copy of the project, where its work happens. Missing for threads from
+    /// before each had one, which worked in the project itself.
+    pub workdir: Option<String>,
     pub stack: String,
     /// Milliseconds since 1970, as are the other times here.
     pub started_at: i64,
@@ -151,6 +156,26 @@ impl Ledger {
             params![thread, kind, log, at],
         )?;
         Ok(conn.last_insert_rowid())
+    }
+
+    /// Keeps where the thread's own copy of the project is.
+    pub fn note_workdir(&self, thread: i64, workdir: &str) -> Result<()> {
+        self.0
+            .lock()
+            .unwrap()
+            .execute("UPDATE threads SET workdir = ?2 WHERE id = ?1", params![thread, workdir])?;
+        Ok(())
+    }
+
+    /// Where a thread's work happens: its own copy, or None for an older thread that worked in
+    /// the project itself.
+    pub fn workdir_of(&self, thread: i64) -> Result<Option<String>> {
+        self.0
+            .lock()
+            .unwrap()
+            .query_row("SELECT workdir FROM threads WHERE id = ?1", [thread], |row| row.get(0))
+            .optional()
+            .map(Option::flatten)
     }
 
     /// Keeps what the person asked for in a run, so a reopened thread can show it.
@@ -251,7 +276,7 @@ impl Ledger {
         let conn = self.0.lock().unwrap();
         let mut threads = conn
             .prepare(
-                "SELECT id, task, repo, branch, stack, started_at, committed, committed_at
+                "SELECT id, task, repo, branch, stack, started_at, committed, committed_at, workdir
                  FROM threads ORDER BY started_at DESC, id DESC",
             )?
             .query_map([], |row| {
@@ -264,6 +289,7 @@ impl Ledger {
                     started_at: row.get(5)?,
                     committed: row.get(6)?,
                     committed_at: row.get(7)?,
+                    workdir: row.get(8)?,
                     runs: Vec::new(),
                 })
             })?
@@ -381,6 +407,10 @@ mod tests {
         ledger.end_run(changes, "stopped").unwrap();
         ledger.note_ask(changes, "Make it blue").unwrap();
         ledger.commit(thread, "abc1234", 3000).unwrap();
+        assert_eq!(ledger.workdir_of(thread).unwrap(), None);
+        ledger.note_workdir(thread, "/data/worktrees/app/add-a-toggle").unwrap();
+        assert_eq!(ledger.workdir_of(thread).unwrap().as_deref(), Some("/data/worktrees/app/add-a-toggle"));
+        assert_eq!(ledger.workdir_of(99).unwrap(), None);
         assert_eq!(ledger.log_of(changes).unwrap().as_deref(), Some("/logs/2.jsonl"));
         assert_eq!(ledger.log_of(99).unwrap(), None);
 
@@ -391,6 +421,7 @@ mod tests {
             (t.task.as_str(), t.committed.as_deref(), t.committed_at),
             ("Add a toggle", Some("abc1234"), Some(3000))
         );
+        assert_eq!(t.workdir.as_deref(), Some("/data/worktrees/app/add-a-toggle"));
         assert_eq!(t.runs.len(), 2);
         assert_eq!(t.runs[0].status.as_deref(), Some("ready"));
         assert_eq!(t.runs[1].status.as_deref(), Some("stopped"));
