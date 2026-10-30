@@ -1,0 +1,67 @@
+name: Release
+
+# Pushing a tag such as v0.2.0 builds Shoji for each system and attaches the installers to a
+# draft pre-release. Nothing is published until someone reads the draft and publishes it.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+          - name: Windows
+            os: windows-latest
+          - name: Linux
+            os: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check the tag matches the app's version
+        shell: bash
+        run: |
+          app=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          web=$(node -p "require('./package.json').version")
+          rust=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)
+          for version in "$app" "$web" "$rust"; do
+            if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+              echo "The tag is $GITHUB_REF_NAME, but the versions are $app (tauri.conf.json), $web (package.json) and $rust (Cargo.toml). Set all three, then tag again."
+              exit 1
+            fi
+          done
+      - name: Install Linux build libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libdbus-1-dev
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      # The build compiles the agent runtime with Bun and bundles it beside the app.
+      - uses: oven-sh/setup-bun@v2
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Shoji ${{ github.ref_name }}
+          releaseBody: |
+            A beta build of Shoji. The builds aren't signed yet: see the README's Install section before opening it.
+          releaseDraft: true
+          prerelease: true
