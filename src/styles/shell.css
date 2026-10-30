@@ -231,7 +231,7 @@ button {
 
 .rail button[aria-current="page"] {
   color: var(--z10);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--z3);
 }
 
 .rail button[aria-current="page"]::before {
