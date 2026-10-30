@@ -87,6 +87,19 @@ export function ThreadView({
   const lastRun = runs[runs.length - 1];
   const spent = threadCost(thread);
   const [asking, setAsking] = useState(false);
+  // The project's files, for @ in the changes box, read each time it opens.
+  const [files, setFiles] = useState<string[]>([]);
+  useEffect(() => {
+    if (!asking) return;
+    let current = true;
+    bridge.projectFiles(thread.repo).then(
+      (list) => current && setFiles(list),
+      () => {},
+    );
+    return () => {
+      current = false;
+    };
+  }, [asking, bridge, thread.repo]);
   const scroller = useFollow(thread);
   const [mode, setMode] = useState<Mode>("conversation");
   useModeKeys(setMode);
@@ -105,7 +118,13 @@ export function ThreadView({
   const planned = lastRun.result?.status === "planned";
   // The review sent it back. Fixing can't help a check whose program isn't on this computer.
   const fixable = lastRun.result?.status === "needs-work" && !lastRun.result.checks.some((c) => c.missing);
-  const outcome = running ? undefined : lastRun.result ? lastRun.result.status : last.stoppedByYou ? "stopped" : "failed";
+  const outcome = running
+    ? undefined
+    : lastRun.result
+      ? lastRun.result.status
+      : last.stoppedByYou
+        ? "stopped"
+        : "failed";
 
   const commit = () => {
     setCommitting(true);
@@ -116,24 +135,26 @@ export function ThreadView({
   };
 
   const now = lastRun.steps.findLast((s) => s.running);
-  const stage = running
-    ? lastRun.asking
-      ? "Waiting for you"
-      : now
-      ? (
-          <>
-            {stepLabel(lastRun.steps, lastRun.steps.indexOf(now))}
-            <span className="mn"> · {MODELS[now.model].label}</span>
-          </>
-        )
-      : last.stoppedByYou
-        ? "Stopping"
-        : "Starting"
-    : lastRun.result
-      ? STATUS[lastRun.result.status]
-      : last.stoppedByYou
-        ? STATUS.stopped
-        : STATUS.failed;
+  const stage = running ? (
+    lastRun.asking ? (
+      "Waiting for you"
+    ) : now ? (
+      <>
+        {stepLabel(lastRun.steps, lastRun.steps.indexOf(now))}
+        <span className="mn"> · {MODELS[now.model].label}</span>
+      </>
+    ) : last.stoppedByYou ? (
+      "Stopping"
+    ) : (
+      "Starting"
+    )
+  ) : lastRun.result ? (
+    STATUS[lastRun.result.status]
+  ) : last.stoppedByYou ? (
+    STATUS.stopped
+  ) : (
+    STATUS.failed
+  );
 
   return (
     <section className="thread">
@@ -233,6 +254,7 @@ export function ThreadView({
               setAsking(false);
               (planned ? onReplan : onRequestChanges)(notes);
             }}
+            files={files}
           />
         ) : planned ? (
           <div className="review">
@@ -404,7 +426,10 @@ function StepRow({
       <div className="sb">
         <div className="sl">
           {stepLabel(steps, index)}
-          <span className="m mn" title={step.cost > 0 ? `${MODELS[step.model].label} · ${formatCost(step.cost)}` : MODELS[step.model].label}>
+          <span
+            className="m mn"
+            title={step.cost > 0 ? `${MODELS[step.model].label} · ${formatCost(step.cost)}` : MODELS[step.model].label}
+          >
             {modelName(step.model)}
           </span>
         </div>
@@ -500,7 +525,10 @@ function Checks({ checks }: { checks: CheckResult[] }) {
               <i className={c.ok ? "good" : "bad"}>{c.ok ? "✓" : "✗"}</i> {c.command}
               {c.failedBefore && <span className="was"> · failed before the change too</span>}
               {c.newFailures && (
-                <span className="was"> · failed before the change too, with {count(c.newFailures.length, "new failure")}</span>
+                <span className="was">
+                  {" "}
+                  · failed before the change too, with {count(c.newFailures.length, "new failure")}
+                </span>
               )}
             </b>
             {"\n"}
@@ -534,7 +562,8 @@ function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean 
   const result = run.result;
   let text: string;
   if (turn.error) text = turn.error;
-  else if (!result) text = turn.stoppedByYou ? "You stopped this thread." : turn.exit?.error || "The runtime quit before it finished.";
+  else if (!result)
+    text = turn.stoppedByYou ? "You stopped this thread." : turn.exit?.error || "The runtime quit before it finished.";
   else if (result.status === "ready")
     text = result.reason
       ? `Ready to accept. ${result.reason}`
