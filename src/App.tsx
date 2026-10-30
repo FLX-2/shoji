@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { LimitAsk, type Ask } from "./budget/LimitAsk";
 import { spentOn } from "./budget/daily";
-import { bridge as tauriBridge, type Bridge, type KeyStatus } from "./bridge";
+import { bridge as tauriBridge, type Bridge, type KeyStatus, type LedgerThread } from "./bridge";
 import { folderName, HomeView } from "./home/HomeView";
 import { Field } from "./look/Field";
 import { lookStyle } from "./look/LookRows";
@@ -11,6 +11,7 @@ import { SettingsView } from "./settings/SettingsView";
 import { SetupView } from "./setup/SetupView";
 import { notesProgress, useNotes } from "./setup/useNotes";
 import { StackView } from "./stack/StackView";
+import { estimateCost, tierStack, type Tier } from "./stack/tier";
 import { useStack } from "./stack/useStack";
 import { trialProgress, useTrial } from "./stack/useTrial";
 import { Mark } from "./shell/Mark";
@@ -64,14 +65,21 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
     // Only at launch: forgetting the key later in Settings shouldn't pull the person into setup.
   }, [bridge]);
 
-  // Today's spend, read again whenever a run starts or ends, so the daily limit is checked against it.
-  const [spentToday, setSpentToday] = useState(0);
+  // The ledger, read again whenever a run starts or ends: today's spend for the daily limit, and
+  // recent tasks for Home's estimate.
+  const [ledger, setLedger] = useState<LedgerThread[]>([]);
   useEffect(() => {
     bridge
       .ledgerThreads()
-      .then((threads) => setSpentToday(spentOn(threads, new Date())))
-      .catch(() => setSpentToday(0));
+      .then(setLedger)
+      .catch(() => setLedger([]));
   }, [bridge, running]);
+  const spentToday = useMemo(() => spentOn(ledger, new Date()), [ledger]);
+  const [tier, setTier] = useState<Tier>("balanced");
+  const estimate = useMemo(
+    () => (prefs.showCosts ? estimateCost(ledger, tierStack(stack.stack, tier)) : null),
+    [ledger, stack.stack, tier, prefs.showCosts],
+  );
 
   // A thread's whole limit counts against the day when it starts, so its later changes stay inside what
   // was allowed then. Past the daily limit, Shoji asks first.
@@ -159,6 +167,9 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 problem={startProblem}
                 planFirst={prefs.planFirst}
                 onTogglePlanFirst={() => setPrefs({ planFirst: !prefs.planFirst })}
+                tier={tier}
+                onTier={setTier}
+                estimate={estimate}
                 onStart={async (task) => {
                   const repo = prefs.repo;
                   if (!repo) return false;
@@ -168,7 +179,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                   if (problem) return false;
                   return withinDay("This thread", prefs.cap, () => {
                     setSection("threads");
-                    start(task, repo, stack.stack, prefs.cap, prefs.planFirst);
+                    start(task, repo, tierStack(stack.stack, tier), prefs.cap, prefs.planFirst);
                   });
                 }}
               />

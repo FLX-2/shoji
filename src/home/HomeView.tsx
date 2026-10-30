@@ -1,4 +1,6 @@
 import { Composer } from "../shell/Composer";
+import { TIERS, type Tier } from "../stack/tier";
+import { formatCost } from "../thread/fold";
 
 interface HomeViewProps {
   repo: string | null;
@@ -10,6 +12,11 @@ interface HomeViewProps {
   /** New threads pause after the plan. */
   planFirst: boolean;
   onTogglePlanFirst: () => void;
+  /** How much the task is worth, which moves the stack up or down for it. */
+  tier: Tier;
+  onTier: (tier: Tier) => void;
+  /** What a task usually costs at this tier, once there's history to tell; null hides it. */
+  estimate: number | null;
   /** Why the last task couldn't start in this folder, if it couldn't. */
   problem?: string | null;
   /** Resolves to false when the task didn't start, so the composer keeps it. */
@@ -25,6 +32,9 @@ export function HomeView({
   onOpenSettings,
   planFirst,
   onTogglePlanFirst,
+  tier,
+  onTier,
+  estimate,
   problem,
   onStart,
 }: HomeViewProps) {
@@ -57,6 +67,25 @@ export function HomeView({
             </svg>
             Check the plan first
           </button>
+          <div className="seg" role="radiogroup" aria-label="Quality">
+            {(Object.keys(TIERS) as Tier[]).map((id) => (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={tier === id}
+                title={TIERS[id].does}
+                onClick={() => onTier(id)}
+              >
+                {TIERS[id].label}
+              </button>
+            ))}
+          </div>
+          {estimate !== null && (
+            <span className="est" title="The middle of your recent tasks, priced on this tier's models">
+              about {formatCost(estimate)}
+            </span>
+          )}
         </Composer>
         {problem ? (
           <p className="hint" role="alert">
