@@ -32,6 +32,7 @@ import { reopen, workThreads } from "./thread/reopen";
 import { ThreadList } from "./thread/ThreadList";
 import { ThreadView } from "./thread/ThreadView";
 import { isRunning, threadCost, useThreads } from "./thread/useThread";
+import { guessCommand, useServers } from "./thread/useServers";
 
 /** Why a thread can't start in this folder yet, or null when it can. Each thread works in its own copy of the
  *  project, so changes the person hasn't committed are no reason to wait. */
@@ -76,6 +77,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     open,
     showId,
   } = useThreads(bridge, allowedIn);
+  const servers = useServers(bridge);
   const trials = useTrial(bridge);
   const trialRunning = !!trials.trial && trialProgress(trials.trial).running;
   const notes = useNotes(bridge);
@@ -302,6 +304,15 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     showCosts={prefs.showCosts}
                     previewUrl={prefs.previewUrls[thread.repo] ?? DEFAULT_PREVIEW}
                     onPreviewUrl={(url) => setPrefs({ previewUrls: { ...prefs.previewUrls, [thread.repo]: url } })}
+                    server={servers.servers[thread.committed || !thread.workdir ? thread.repo : thread.workdir]}
+                    devCommand={
+                      prefs.devCommands[thread.repo] ?? (thread.repo === prefs.repo ? guessCommand(projectFiles) : "")
+                    }
+                    onStartServer={(dir, command) => {
+                      setPrefs({ devCommands: { ...prefs.devCommands, [thread.repo]: command } });
+                      servers.start(dir, command);
+                    }}
+                    onStopServer={servers.stop}
                   />
                 ) : (
                   <div className="empty">

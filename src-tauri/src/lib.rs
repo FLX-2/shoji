@@ -1,6 +1,7 @@
 mod ledger;
 #[cfg(unix)]
 mod shell_path;
+mod server;
 #[cfg(target_os = "macos")]
 mod titlebar;
 mod worktree;
@@ -21,6 +22,7 @@ use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
 use ledger::{Ledger, ThreadRecord};
+use server::Servers;
 
 /// Where the Anthropic key lives in the system keychain.
 const KEY_SERVICE: &str = "app.shoji.desktop";
@@ -674,6 +676,7 @@ fn slug(task: &str) -> String {
 #[tauri::command]
 async fn commit_thread(
     ledger: State<'_, Ledger>,
+    servers: State<'_, Servers>,
     repo: String,
     branch: String,
     message: String,
@@ -684,9 +687,22 @@ async fn commit_thread(
     noted(ledger.commit(thread, &sha, now_ms()));
     // The work is on its branch now, and the copy is put away so the branch can be checked out.
     if let Some(dir) = workdir {
+        servers.stop_in(&dir);
         worktree::remove(&repo, &dir);
     }
     Ok(sha)
+}
+
+/// Starts the project's dev server in a thread's copy, with the person's command. Returns its
+/// number; its output arrives as `server-output` and its end as `server-exit`.
+#[tauri::command]
+fn start_server(app: AppHandle, servers: State<Servers>, dir: String, command: String) -> Result<u64, String> {
+    servers.start(&app, &dir, &command)
+}
+
+#[tauri::command]
+fn stop_server(servers: State<Servers>, id: u64) {
+    servers.stop(id);
 }
 
 /// Asks where to save a CSV file, then writes it there. Returns the path, or none if cancelled.
@@ -863,6 +879,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(Run::default())
+        .manage(Servers::default())
         .setup(|app| {
             let data = app.path().app_data_dir()?;
             fs::create_dir_all(&data)?;
@@ -903,10 +920,18 @@ pub fn run() {
             run_events,
             export_csv,
             read_stack_lock,
-            write_stack_lock
+            write_stack_lock,
+            start_server,
+            stop_server
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Dev servers are the person's own processes, so they go when Shoji does.
+            if let tauri::RunEvent::Exit = event {
+                app.state::<Servers>().stop_all();
+            }
+        });
 }
 
 #[cfg(test)]

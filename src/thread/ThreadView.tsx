@@ -21,6 +21,7 @@ import {
 } from "./fold";
 import { Markdown } from "./Markdown";
 import { PreviewView } from "./PreviewView";
+import type { Server } from "./useServers";
 import { fileName, isRunning, threadCost, type Thread, type Turn } from "./useThread";
 
 interface ThreadViewProps {
@@ -49,6 +50,12 @@ interface ThreadViewProps {
   showCosts: boolean;
   /** Where the project's dev server answers, for Preview. */
   previewUrl: string;
+  /** The dev server Shoji started in this thread's copy, if it did. */
+  server?: Server;
+  /** The command that starts the project's dev server. */
+  devCommand: string;
+  onStartServer: (dir: string, command: string) => void;
+  onStopServer: (dir: string) => void;
   onPreviewUrl: (url: string) => void;
 }
 
@@ -85,6 +92,10 @@ export function ThreadView({
   showCosts,
   previewUrl,
   onPreviewUrl,
+  server,
+  devCommand,
+  onStartServer,
+  onStopServer,
 }: ThreadViewProps) {
   const last = thread.turns[thread.turns.length - 1];
   const running = isRunning(last);
@@ -241,7 +252,17 @@ export function ThreadView({
         />
       )}
 
-      {mode === "preview" && <PreviewView url={previewUrl} onUrl={onPreviewUrl} freshness={String(ended)} />}
+      {mode === "preview" && (
+        <PreviewView
+          url={previewUrl}
+          onUrl={onPreviewUrl}
+          freshness={String(ended)}
+          server={server}
+          command={devCommand}
+          onStartServer={(command) => onStartServer(putAway ? thread.repo : place, command)}
+          onStopServer={() => onStopServer(putAway ? thread.repo : place)}
+        />
+      )}
 
       <div className="scroll" ref={scroller} hidden={mode !== "conversation"}>
         <div className="tcol">

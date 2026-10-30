@@ -40,6 +40,8 @@ export interface Prefs {
   privateFiles: string[];
   /** Where each project's dev server answers, by project folder, for a thread's Preview. */
   previewUrls: Record<string, string>;
+  /** The command that starts each project's dev server, by project folder, for Preview to start it. */
+  devCommands: Record<string, string>;
   /** Download the current models and prices once a day. */
   updateModels: boolean;
 }
@@ -63,6 +65,7 @@ export const DEFAULT_PREFS: Prefs = {
   allowedCommands: {},
   privateFiles: DEFAULT_PRIVATE,
   previewUrls: {},
+  devCommands: {},
   updateModels: true,
 };
 

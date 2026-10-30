@@ -18,6 +18,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   const onTrialEvent: ((run: number, event: TrialEvent) => void)[] = [];
   const onNotesEvent: ((run: number, event: NotesEvent) => void)[] = [];
   const onExit: ((exit: RunExit) => void)[] = [];
+  const onServerOutput: ((server: number, line: string) => void)[] = [];
+  const onServerExit: ((server: number, code: number | null) => void)[] = [];
   const calls = {
     starts: [] as RunRequest[],
     trials: [] as TrialRequest[],
@@ -34,6 +36,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     answers: [] as boolean[],
     answeredRuns: [] as number[],
     stoppedRuns: [] as number[],
+    servers: [] as { dir: string; command: string }[],
+    stoppedServers: [] as number[],
   };
   /** What the attach dialog answers with; tests fill it. */
   const picked: string[] = [];
@@ -131,6 +135,21 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       onExit.push(handler);
       return () => onExit.splice(onExit.indexOf(handler), 1);
     },
+    startServer: async (dir, command) => {
+      calls.servers.push({ dir, command });
+      return calls.servers.length;
+    },
+    stopServer: async (server) => {
+      calls.stoppedServers.push(server);
+    },
+    onServerOutput: async (handler) => {
+      onServerOutput.push(handler);
+      return () => onServerOutput.splice(onServerOutput.indexOf(handler), 1);
+    },
+    onServerExit: async (handler) => {
+      onServerExit.push(handler);
+      return () => onServerExit.splice(onServerExit.indexOf(handler), 1);
+    },
   };
 
   return {
@@ -153,6 +172,11 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     /** Sends events from one run, when several are going. */
     emitTo: (run: number, ...events: RuntimeEvent[]) =>
       act(() => events.forEach((event) => onEvent.forEach((h) => h(run, event)))),
+    /** Sends lines a dev server printed. */
+    serverSays: (server: number, ...lines: string[]) =>
+      act(() => lines.forEach((line) => onServerOutput.forEach((h) => h(server, line)))),
+    /** Ends a dev server. */
+    serverExits: (server: number, code: number | null = 1) => act(() => onServerExit.forEach((h) => h(server, code))),
     /** Ends one run, when several are going. */
     exitOf: (run: number, code: number | null = 0) => act(() => onExit.forEach((h) => h({ run, code, error: "" }))),
   };
