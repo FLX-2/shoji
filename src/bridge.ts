@@ -200,6 +200,14 @@ export const bridge = {
   onNotesEvent: (handler: (run: number, event: NotesEvent) => void) =>
     listen<{ run: number; event: NotesEvent }>("runtime-event", (e) => handler(e.payload.run, e.payload.event)),
   onExit: (handler: (exit: RunExit) => void) => listen<RunExit>("runtime-exit", (e) => handler(e.payload)),
+  /** Starts the project's dev server in a folder with the person's command, and returns its number. */
+  startServer: (dir: string, command: string) => invoke<number>("start_server", { dir, command }),
+  /** Stops a dev server and everything it started. Its end arrives through onServerExit. */
+  stopServer: (server: number) => invoke<void>("stop_server", { id: server }),
+  onServerOutput: (handler: (server: number, line: string) => void) =>
+    listen<{ server: number; line: string }>("server-output", (e) => handler(e.payload.server, e.payload.line)),
+  onServerExit: (handler: (server: number, code: number | null) => void) =>
+    listen<{ server: number; code: number | null }>("server-exit", (e) => handler(e.payload.server, e.payload.code)),
 };
 
 export type Bridge = typeof bridge;
