@@ -31,6 +31,8 @@ export interface RunRequest {
   privateFiles?: string[];
   /** The downloaded model list, when there is one, with version 1 as the runtime reads it. */
   models?: Catalog & { version: 1 };
+  /** What the person asked for, as the thread shows it, kept so a reopened thread shows it again. */
+  ask?: string;
 }
 
 export interface ChangesRequest {
@@ -136,6 +138,8 @@ export interface LedgerRun {
   startedAt: number;
   /** How the run ended; null while it's going. */
   status: "ready" | "needs-work" | "stopped" | "failed" | "planned" | null;
+  /** What the person asked for in the run; missing for runs from before it was kept. */
+  ask?: string | null;
   calls: LedgerCall[];
 }
 
@@ -176,6 +180,8 @@ export const bridge = {
   commitThread: (repo: string, branch: string, message: string, thread: number) =>
     invoke<string>("commit_thread", { repo, branch, message, thread }),
   /** Every thread in the ledger with its runs and calls, newest first. */
+  /** A run's events as the runtime wrote them, for reopening a past thread. */
+  runEvents: (run: number) => invoke<RuntimeEvent[]>("run_events", { run }),
   ledgerThreads: () => invoke<LedgerThread[]>("ledger_threads"),
   /** Asks where to save a CSV file and writes it there. Returns the path, or null if cancelled. */
   exportCsv: (name: string, contents: string) => invoke<string | null>("export_csv", { name, contents }),
