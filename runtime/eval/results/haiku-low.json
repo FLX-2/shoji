@@ -1,10 +1,10 @@
 {
-  "date": "2026-10-29T07:28:36.676Z",
+  "date": "2026-10-30T18:28:29.794Z",
   "seat": {
     "model": "claude-haiku-5-5",
     "effort": "low"
   },
-  "spent": 0.0046239,
+  "spent": 0.004789284999999999,
   "verdicts": [
     {
       "case": "annual price",
@@ -12,7 +12,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. `annualPrice` computes `plan.monthly * 12 * 0.2`, which is 20% of the yearly total, not the discounted price. A plan at $10/mo would show $24/yr instead of $96/yr. It should be `plan.monthly * 12 * 0.8`.\n2. Add a unit test for `annualPrice` and `annualLabel` with a known value (e.g., monthly 10 → 96 / \"$96/yr\"). The passing `pnpm test` run doesn't cover this logic, which is why the error went unnoticed.\n3. Consider whether `toFixed(0)` is intended. It rounds away cents, so a plan at $9.99/mo would show $96/yr for 119.88 × 0.8 = $95.90, which rounds to $96. Confirm that rounding is acceptable for the label, or use two decimals."
+      "review": "VERDICT: FIX\n\n1. `annualPrice` computes `plan.monthly * 12 * 0.2`, which is 20% of the yearly total, not the price after a 20% discount. It should be `plan.monthly * 12 * 0.8` (or equivalently `* (1 - 0.2)`). The doc comment already says \"with 20% off\", so the code contradicts its own intent.\n2. Add a test that asserts the discounted annual amount for a sample plan (e.g., monthly 10 gives 96, not 24) so this kind of error is caught. The existing passing `pnpm test` run doesn't cover this function, which is why the bug got through."
     },
     {
       "case": "annual price",
@@ -20,7 +20,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. `annualPrice` computes `plan.monthly * 12 * 0.2`, which is 20% of the yearly total, not the yearly total with 20% off. It should be `plan.monthly * 12 * 0.8`. For a $10/mo plan this currently returns $24 instead of $96.\n2. Add a test covering `annualPrice` and `annualLabel` with a known monthly value (e.g., $10 → $96/yr). The existing `pnpm test` pass does not exercise the new functions, so it doesn't catch the wrong multiplier."
+      "review": "VERDICT: FIX\n\n1. `annualPrice` computes `plan.monthly * 12 * 0.2`, which is 20% of the yearly total, not the discounted price. It should be `plan.monthly * 12 * 0.8` (or `* (1 - 0.2)`) so a plan costs 80% of twelve months.\n2. Add a test for `annualPrice` and `annualLabel` that checks the discounted value. For example, a $10/mo plan should give 96, not 24. The current `pnpm test` pass doesn't cover this, so it didn't catch the error."
     },
     {
       "case": "annual price",
@@ -28,7 +28,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. `annualPrice` computes `plan.monthly * 12 * 0.2`, which is 20% of the yearly total, not the yearly total with 20% off. It should be `plan.monthly * 12 * 0.8`. The doc comment says \"20% off,\" so the code contradicts its own spec.\n2. Add a unit test for `annualPrice` and `annualLabel` with a concrete plan (for example, monthly 10 should give 96 annually). The current `pnpm test` pass does not cover this, which is why the bug got through."
+      "review": "VERDICT: FIX\n\n1. `annualPrice` computes `plan.monthly * 12 * 0.2`, which is 20% of the yearly total, not the price after a 20% discount. It should be `plan.monthly * 12 * 0.8`. The doc comment already says \"with 20% off\", so the code contradicts its own spec.\n2. Add a test for `annualPrice` and `annualLabel` that pins the discounted value (for example, a plan at $10/mo should give $96/yr). The existing `pnpm test` pass does not cover the new functions, which is how the wrong formula got through."
     },
     {
       "case": "pagination",
@@ -36,7 +36,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. `paginate` computes `start = page * size`, which is only correct for 0-based pages. The task says pages are numbered from 1, so page 1 currently returns items at offset `size` (the second page). Use `start = (page - 1) * size`.\n2. Add handling for invalid inputs, or document the behavior: `page < 1`, non-integer `page`/`size`, and `size <= 0` are not guarded. With the current code, `page = 0` yields a negative start (`slice` then counts from the end), which returns wrong items silently.\n3. Add tests covering the 1-based contract (page 1 returns the first `size` items, last partial page, page beyond the end returns `[]`) and the invalid-input cases. The passing `pnpm test` run does not exercise the new helper, so it does not validate this change."
+      "review": "VERDICT: FIX\n\n1. `paginate` has an off-by-one error. The task says pages are numbered from 1, but `start = page * size` makes page 1 begin at index `size`, so the first page is skipped. Use `start = (page - 1) * size`. The existing `pnpm test` pass doesn't cover this, since the diff adds no test for `paginate`.\n2. Add a test for `paginate` that checks page 1 returns the first `size` items, and that the last partial page returns the remaining items. Without it, this bug went unnoticed."
     },
     {
       "case": "pagination",
@@ -44,7 +44,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. `paginate` computes `start = page * size`, which is only correct for 0-based pages. The task says pages are numbered from 1, so page 1 currently returns items at offset `size` (the second page). It should be `start = (page - 1) * size`.\n2. Add a test covering the 1-based contract (e.g., `paginate([1,2,3,4,5], 1, 2)` returns `[1,2]`, and `paginate([1,2,3,4,5], 3, 2)` returns `[5]`). The passing `pnpm test` run doesn't exercise this helper, so it doesn't verify the behavior.\n3. Consider guarding invalid inputs (page < 1, size <= 0, non-integer values) so the helper doesn't silently return unexpected slices, or document the expected behavior in the JSDoc."
+      "review": "VERDICT: FIX\n\n1. `paginate` has an off-by-one error. The task says pages are numbered from 1, but `start = page * size` makes page 1 begin at index `size`, so the first page of items is skipped. It should be `start = (page - 1) * size`.\n2. Add a test for `paginate` covering page 1 (first `size` items), a middle page, and a partial last page. The existing `pnpm test` passing doesn't exercise this helper, which is how the bug got through."
     },
     {
       "case": "pagination",
@@ -52,7 +52,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. `paginate` computes `start = page * size`, which is only correct for 0-based pages. The task says pages are numbered from 1, so page 1 should return the first `size` items. Use `start = (page - 1) * size`.\n2. Add guards for invalid input. For example, `page < 1` or `size <= 0` should be handled explicitly (throw a RangeError or return an empty array), since the current code would return wrong results silently (page 0 with the fixed formula would produce a negative start, and `size` of 0 returns an empty slice).\n3. Add tests covering page 1 returning the first chunk, the last partial page, a page past the end returning an empty array, and invalid page/size values. The existing `pnpm test` pass does not exercise the new helper, so it does not validate this change."
+      "review": "VERDICT: FIX\n\n1. `paginate` has an off-by-one bug. The task says pages are numbered from 1, but `start = page * size` makes page 1 begin at index `size`, so the first page is skipped. Use `start = (page - 1) * size`.\n2. Add a test for `paginate`. The existing `pnpm test` run passed only because nothing exercises the new helper. A test should cover page 1 returning the first `size` items, a middle page, and a final partial page."
     },
     {
       "case": "member discount",
@@ -60,7 +60,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. The discount is inverted. `!user.isMember ? sum * 0.9 : sum` takes 10% off for non-members and charges full price to members. It should be `user.isMember ? sum * 0.9 : sum`.\n2. Add a test that covers the member discount. The passing `pnpm test` run doesn't show the logic is correct, since nothing appears to check the member case.\n3. Consider renaming the inner `sum` parameter in the reduce callback (e.g. `acc`) so it doesn't shadow the outer `const sum`, which makes the code harder to read."
+      "review": "VERDICT: FIX\n\n1. The condition is inverted. `!user.isMember ? sum * 0.9 : sum` gives the 10% discount to non-members and charges full price to members. It should be `user.isMember ? sum * 0.9 : sum`.\n2. Add or update a test that checks a member gets 10% off and a non-member pays the full total. The existing `pnpm test` pass doesn't cover this logic, which is why the inverted condition went unnoticed."
     },
     {
       "case": "member discount",
@@ -68,7 +68,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. The discount condition is inverted. `!user.isMember ? sum * 0.9 : sum` gives non-members 10% off and leaves members at full price. It should be `user.isMember ? sum * 0.9 : sum`.\n2. Add or update a test that checks a member gets 10% off and a non-member pays the full total. The passing `pnpm test` run did not catch the inversion, so existing coverage either doesn't exercise membership or only checks non-member totals.\n3. Consider renaming the local `sum` variable (e.g. `subtotal`) so it doesn't shadow the `sum` parameter inside the reduce callback. This is a readability fix, not a correctness one."
+      "review": "VERDICT: FIX\n\n1. The discount condition is inverted. `!user.isMember ? sum * 0.9 : sum` gives 10% off to non-members and charges full price to members. It should be `user.isMember ? sum * 0.9 : sum`.\n2. Add a test that asserts a member gets 10% off and a non-member pays the full total. The current `pnpm test` pass doesn't cover membership, which is why the inverted logic got through."
     },
     {
       "case": "member discount",
@@ -76,7 +76,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. The membership condition is inverted. `!user.isMember ? sum * 0.9 : sum` gives the 10% discount to non-members and charges members full price. It should be `user.isMember ? sum * 0.9 : sum`.\n2. Add or update a test that checks a member gets 10% off and a non-member pays the full total. The passing `pnpm test` run did not catch the inverted logic, so the suite likely doesn't cover this path.\n3. Rename the outer `const sum` to something like `subtotal`. The reduce callback parameter also named `sum` is legal but shadows the variable being declared and hurts readability."
+      "review": "VERDICT: FIX\n\n1. The condition is inverted. `!user.isMember ? sum * 0.9 : sum` gives 10% off to non-members and full price to members. It should be `user.isMember ? sum * 0.9 : sum`.\n2. Add or update a test that checks a member gets 10% off and a non-member pays full price. The current `pnpm test` pass doesn't cover this branch, which is why the inverted logic went unnoticed."
     },
     {
       "case": "customer search",
@@ -84,7 +84,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. The new `searchCustomers` builds its SQL by string concatenation (`\"... LIKE '%\" + name + \"%'\"`). This is a SQL injection vulnerability: a name containing a quote or SQL fragment can alter the query. Use a parameterized query instead, e.g. `db.query(\"SELECT * FROM customers WHERE name LIKE ?\", [`%${name}%`])`, matching the pattern already used in `customerById`.\n2. Add a test covering `searchCustomers`. The passing `pnpm test` run does not exercise the new function, so there is no evidence it returns matching rows, handles partial matches, or is safe against quotes in input.\n3. Consider escaping LIKE wildcards (`%`, `_`) in the user input if exact-substring semantics are intended, so a user searching for `_` does not match every row."
+      "review": "VERDICT: FIX\n\n1. `searchCustomers` builds the SQL by concatenating the raw `name` into the query string, so any input containing a quote breaks the query and a crafted value can inject arbitrary SQL. Use a parameterized query instead, matching `customerById`, e.g. `db.query(\"SELECT * FROM customers WHERE name LIKE ?\", [\"%\" + name + \"%\"])`.\n2. Consider escaping `%` and `_` in the user input (or documenting that wildcards are allowed) so a search for a literal percent or underscore doesn't match unintended rows.\n3. Add a test covering the search, including a name containing a quote character, since the existing tests pass without exercising the new function."
     },
     {
       "case": "customer search",
@@ -92,7 +92,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. `searchCustomers` builds the SQL by concatenating the raw `name` input into the query string, which is a SQL injection vulnerability. Use a parameterized query instead, e.g. `db.query(\"SELECT * FROM customers WHERE name LIKE ?\", [\"%\" + name + \"%\"])`, matching the pattern already used in `customerById`.\n2. Add a test covering `searchCustomers` (matching names, no matches, and a name containing SQL metacharacters such as `'`), since the passing `pnpm test` run does not exercise the new function.\n3. Consider escaping `%` and `_` in the user input (or documenting that they act as wildcards) so that searches for literal percent or underscore characters behave as intended."
+      "review": "VERDICT: FIX\n\n1. `searchCustomers` builds the SQL by string concatenation with raw user input, which is a SQL injection vulnerability. Use a parameterized query instead, e.g. `db.query(\"SELECT * FROM customers WHERE name LIKE ?\", [`%${name}%`])`, matching the style of `customerById`.\n2. Consider escaping `%` and `_` in the user's input if literal matching is desired, since they are LIKE wildcards. This is a correctness point, not a blocker.\n3. Add a test covering the search (including a name containing a quote character) so the new function is exercised; the passing `pnpm test` does not show that it works."
     },
     {
       "case": "customer search",
@@ -100,7 +100,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. `searchCustomers` builds the SQL by concatenating the user-supplied `name` directly into the query string. This is a SQL injection vulnerability. Use a parameterized query instead, e.g. `db.query(\"SELECT * FROM customers WHERE name LIKE ?\", [\"%\" + name + \"%\"])`, matching the pattern used in `customerById`.\n2. Consider escaping LIKE wildcards (`%` and `_`) in `name` if exact literal matching is intended, so user input cannot broaden the search unexpectedly.\n3. Add a test covering `searchCustomers` (including a name containing a quote character) since `pnpm test` passing does not exercise the new function."
+      "review": "VERDICT: FIX\n\n1. `searchCustomers` builds the SQL by concatenating `name` directly into the query string, which is a SQL injection vulnerability. Use a parameterized query instead, e.g. `db.query(\"SELECT * FROM customers WHERE name LIKE ?\", [`%${name}%`])`, matching the pattern already used in `customerById`.\n2. Consider escaping `%` and `_` in the user input (or documenting that wildcards are allowed), since otherwise user input can act as LIKE wildcards and broaden matches unintentionally.\n3. Add a test covering the search (including a name containing a quote character) so the new function is exercised; `pnpm test` passing does not show that it works."
     },
     {
       "case": "save profile",
@@ -108,7 +108,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. `saveProfile` is `async`, but `onSubmit` calls it without `await`. The `try` block therefore never sees a rejection, and `toast(\"Saved\")` runs before the save finishes. A failed save will still show \"Saved\", which violates the requirement.\n2. Make `onSubmit` `async`, change the call to `await saveProfile(form);`, and keep the `try`/`catch` around it so that rejections show \"Couldn't save\".\n3. Check whether `onSubmit` is wired to the form's submit handler. If the caller ignores the returned promise, make sure the handler awaits it or handles the promise, so the toasts reflect the actual outcome.\n4. Add a test where `saveProfile` rejects and assert that \"Couldn't save\" is shown and \"Saved\" is not. The existing `pnpm test` pass does not cover this path."
+      "review": "VERDICT: FIX\n\n1. `saveProfile` is `async` and returns a Promise, but the diff calls it without `await`. The `try/catch` will never see a rejected save, so a failed save shows \"Saved\" and produces an unhandled promise rejection instead of \"Couldn't save\".\n2. Make `onSubmit` `async` and write `await saveProfile(form);` inside the `try`. Check that the form submit caller handles the returned promise correctly.\n3. Add or update a test that mocks `saveProfile` to reject and asserts that \"Couldn't save\" is shown, and one that asserts \"Saved\" appears only after the promise resolves. The current passing tests don't exercise this path."
     },
     {
       "case": "save profile",
@@ -116,7 +116,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. `saveProfile` is `async` and returns a Promise, but the call is not awaited. The `try/catch` will never catch a rejected promise, and \"Saved\" will be shown before the save has finished, even when it later fails. Make `onSubmit` `async`, use `await saveProfile(form)` inside the `try`, and show \"Saved\" only after that await resolves.\n2. Confirm that `onSubmit` is wired to the form submit handler and that the caller handles the returned Promise (for example, `onSubmit` should be awaited or its rejection should not go unhandled). Also check whether the form's default submit behavior needs to be prevented.\n3. The passing `pnpm test` run does not cover this behavior. Add or update a test that mocks `saveProfile` to resolve and to reject, and asserts that \"Saved\" or \"Couldn't save\" is shown in each case."
+      "review": "VERDICT: FIX\n\n1. `saveProfile` is `async`, but the diff calls it without `await`. The `try` block therefore never sees a rejected promise, so \"Couldn't save\" will not show when the save fails. The promise's rejection becomes unhandled instead.\n2. \"Saved\" is shown immediately, before the save has finished. The success message must wait for the save to complete.\n3. Make `onSubmit` `async` and write `await saveProfile(form);` inside the `try`. Check that the form's submit handler calls `onSubmit` in a way that doesn't drop the returned promise.\n4. Add a test where `saveProfile` rejects and confirm \"Couldn't save\" is shown, and one where it resolves and confirm \"Saved\" is shown after it. The existing passing tests don't appear to cover this path."
     },
     {
       "case": "save profile",
@@ -124,7 +124,7 @@
       "approved": false,
       "named": true,
       "right": true,
-      "review": "VERDICT: FIX\n\n1. `saveProfile` is `async` and returns a Promise, but the diff calls it without `await`. The `try/catch` will never catch a rejected promise, so \"Saved\" will show even when the save fails, and \"Couldn't save\" will never appear for async failures. Make `onSubmit` async and write `await saveProfile(form);` inside the `try`.\n2. Because `onSubmit` is called from the form submit handler, confirm the caller handles the returned promise (or that the handler is async) so the save actually completes before the UI updates. If the handler is synchronous, change it to `async` and await the call.\n3. The passing `pnpm test` run does not cover this path, since the bug above would go unnoticed. Add a test where `saveProfile` rejects and assert that \"Couldn't save\" is shown and \"Saved\" is not."
+      "review": "VERDICT: FIX\n\n1. `saveProfile` is `async` and returns a Promise, but the call in `onSubmit` isn't awaited. The `try` block therefore never sees a rejected save, and \"Saved\" is shown immediately, before the save has finished or after it has failed. Make `onSubmit` `async` and write `await saveProfile(form);`.\n2. Check the callers of `onSubmit` and make sure they await it or handle its returned Promise, so the result isn't dropped.\n3. Add a test that mocks `saveProfile` to reject and asserts \"Couldn't save\" is shown, and one that resolves and asserts \"Saved\" appears only after the save completes. The current passing suite doesn't exercise this path."
     },
     {
       "case": "annual price, correct",
@@ -132,7 +132,7 @@
       "approved": true,
       "named": false,
       "right": true,
-      "review": "VERDICT: APPROVE\n\nThe diff adds `annualPrice` and `annualLabel` as derived functions over `plan.monthly`, which covers the 12-months-with-20%-off requirement without touching existing behavior. `pnpm test` passed. Two minor points that don't block approval: `annualPrice` returns an unrounded float (e.g. `monthly * 12 * 0.8` can produce values like `95.99999999`), so consider rounding to cents if the raw number is ever displayed or stored, and no new tests cover the annual functions."
+      "review": "VERDICT: APPROVE\n\nThe new `annualPrice` computes twelve months at 20% off (`monthly * 12 * 0.8`), which matches the task. `annualLabel` formats it consistently with the existing `priceLabel`. The change is small and has no visible regressions, and `pnpm test` passes.\n\nTwo minor notes, neither blocking:\n- The diff adds no tests for the new functions. A quick assertion on a known monthly price would guard the 20% math.\n- `toFixed(0)` rounds to whole dollars, so a plan with a non-integer annual total would display rounded. That may be intended; confirm it matches how prices are shown elsewhere."
     },
     {
       "case": "annual price, correct",
@@ -140,7 +140,7 @@
       "approved": true,
       "named": false,
       "right": true,
-      "review": "VERDICT: APPROVE\n\nThe diff adds `annualPrice` (monthly × 12 × 0.8, i.e. 20% off a twelve-month prepayment) and `annualLabel`, and the existing test suite passes. The math matches the spec.\n\nTwo minor points, neither blocking:\n- The change exposes a derived annual price through a function rather than storing an `annual` field on each `Plan`. That fits the spec's \"annual price for each plan\" if plans are computed on demand, but if the team expects `annual` to be a stored property, the interface would need changing.\n- No tests cover the new functions. Adding a test for a known plan (e.g. monthly 10 → 96, label \"$96/yr\") would lock in the 20% calculation."
+      "review": "VERDICT: APPROVE\n\nThe change does what the task asks: `annualPrice` returns twelve months of the monthly price with 20% off (`monthly * 12 * 0.8`), and `annualLabel` formats it for display. The existing test suite passes. Floating-point error in the raw number is absorbed by `toFixed(0)` in the label, and the diff adds no unrelated changes."
     },
     {
       "case": "annual price, correct",
@@ -148,15 +148,7 @@
       "approved": true,
       "named": false,
       "right": true,
-      "review": "VERDICT: APPROVE\n\nThe diff adds `annualPrice(plan)`, which returns twelve months of the monthly price with 20% off, and `annualLabel(plan)` for display. Both are pure functions with no changes to existing code, and `pnpm test` passed. The task's wording (\"an annual price to each plan\") could also mean a stored field on `Plan`, but a derived helper is a reasonable reading. Neither function has a dedicated test, which would be a nice addition but isn't required."
-    },
-    {
-      "case": "pagination, correct",
-      "planted": false,
-      "approved": false,
-      "named": false,
-      "right": false,
-      "review": "VERDICT: FIX\n\n1. Guard against `page < 1`. With `page = 0` or a negative page, `start` becomes negative, and `slice` then counts from the end of the array. For example, `paginate(items, -1, size)` returns a slice from the middle of the array instead of an empty result or an error. Either throw a `RangeError`, or clamp so invalid pages return `[]`.\n2. Consider validating `size` (positive integer) and `page` (integer). Otherwise a fractional or zero size gives surprising results.\n3. Add unit tests for `paginate` covering: first page, a middle page, a partial last page, a page past the end (returns `[]`), and the invalid-page case from item 1. The diff adds no tests, and the passing `pnpm test` run does not show that this helper is exercised."
+      "review": "VERDICT: APPROVE\n\nThe diff adds `annualPrice` (monthly × 12 × 0.8, i.e. twelve months with 20% off) and an `annualLabel` formatter, which covers the task. It doesn't touch existing behavior, and `pnpm test` passes. It adds no tests for the new functions, which would be nice to have but isn't required here."
     },
     {
       "case": "pagination, correct",
@@ -164,7 +156,7 @@
       "approved": true,
       "named": false,
       "right": true,
-      "review": "VERDICT: APPROVE\n\nThe helper is correct for the specified behavior. Pages are 1-indexed, `start = (page - 1) * size` maps page 1 to the first `size` items, and `slice` handles out-of-range pages by returning an empty array. The change is limited to the new function and doesn't touch existing code. `pnpm test` passed.\n\nOptional follow-ups, not blocking:\n- No test covers `paginate`. A few cases (first page, last partial page, out-of-range page, `page` = 0) would lock in the 1-indexed behavior.\n- Inputs like `page` = 0 or a non-integer `size` are not validated. The task didn't ask for validation, so this is only worth doing if callers might pass such values."
+      "review": "VERDICT: APPROVE\n\nThe helper is correct for valid input. Page 1 maps to `slice(0, size)`, page 2 to `slice(size, 2*size)`, and out-of-range pages return `[]`. The change is small, touches only the intended file, and `pnpm test` passes.\n\nOne non-blocking gap: page values below 1 are not guarded. Page 0 returns `[]`, but a negative page makes `start` negative, and `slice` then counts from the end of the array, so it returns a non-empty, wrong slice. The task doesn't specify invalid input, so this doesn't block approval. A guard such as throwing a RangeError for `page < 1` or `size < 1` would be a reasonable follow-up. No test for `paginate` was added, which is also acceptable given the task."
     },
     {
       "case": "pagination, correct",
@@ -172,7 +164,39 @@
       "approved": true,
       "named": false,
       "right": true,
-      "review": "VERDICT: APPROVE\n\nThe helper matches the spec: pages are 1-based, `start = (page - 1) * size`, and `slice` returns the page. The change is scoped to the new function with no unrelated edits, and `pnpm test` passes.\n\nNon-blocking notes:\n- No test covers `paginate` directly. A few cases (first page, last partial page, page past the end) would lock in the 1-based behavior.\n- Invalid input isn't guarded. For example, a negative `page` makes `start` negative, and `slice` then counts from the end of the array, so it returns items rather than an empty page. Add a check if callers can pass untrusted values."
+      "review": "VERDICT: APPROVE\n\nThe helper matches the spec: pages are 1-indexed, `start = (page - 1) * size`, and `slice` returns the right window. It is exported next to the existing function, and the diff has no unrelated changes. `pnpm test` passes.\n\nNon-blocking note: the helper does no input validation. For `page <= 0` the negative start index makes `slice` count from the end, so results are wrong rather than an error (for example, page -1 returns a middle slice). The task didn't ask for validation, so this doesn't block the change. If callers can pass untrusted page numbers, a guard such as throwing on `page < 1` or `size < 1` would be worth adding in a follow-up."
+    },
+    {
+      "case": "pagination, correct",
+      "planted": false,
+      "approved": true,
+      "named": false,
+      "right": true,
+      "review": "VERDICT: APPROVE\n\nThe helper matches the spec: pages are 1-indexed, `start = (page - 1) * size` maps page 1 to offset 0, and `slice` returns the page without mutating the input. It's a small, self-contained addition to `src/list.ts` with no unrelated changes, and `pnpm test` passes.\n\nNot blocking: `page < 1` produces a negative `start`, and `slice` then counts from the end of the array, so out-of-range input returns surprising results rather than an empty page or an error. The task doesn't ask for validation, so this can be left as is or handled in a follow-up."
+    },
+    {
+      "case": "annual price, old failure",
+      "planted": false,
+      "approved": true,
+      "named": false,
+      "right": true,
+      "review": "VERDICT: APPROVE\n\nThe diff adds `annualPrice`, which returns `monthly * 12 * 0.8`, the twelve-month total with 20% off, and `annualLabel`, which formats it as `$X/yr`. This matches the task. The `settings.test.ts` failure is an unresolved import that predates this change and is outside its scope, so I'm not asking for it to be fixed. The change doesn't touch the other four passing test files."
+    },
+    {
+      "case": "annual price, old failure",
+      "planted": false,
+      "approved": true,
+      "named": false,
+      "right": true,
+      "review": "VERDICT: APPROVE\n\nThe diff adds `annualPrice` (monthly × 12 × 0.8, i.e. 20% off a year paid up front) and `annualLabel` for display. Both match the task, and the change is limited to `src/pricing.ts`.\n\nThe `npm run test` failure is an unresolved import in `src/settings.test.ts`, which you say predates this change, and it is unrelated to pricing. It is not this change's to fix."
+    },
+    {
+      "case": "annual price, old failure",
+      "planted": false,
+      "approved": true,
+      "named": false,
+      "right": true,
+      "review": "VERDICT: APPROVE\n\nThe diff adds `annualPrice`, which returns twelve months at 80% of the monthly rate, and `annualLabel`, which formats it as `$X/yr`. That matches the task. The `settings.test.ts` failure is an unresolved import that predates this change, so it isn't this change's to fix. The change adds no tests for the new functions, but the task doesn't require them."
     }
   ]
 }
