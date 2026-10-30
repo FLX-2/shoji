@@ -38,6 +38,8 @@ export interface Prefs {
   allowedCommands: Record<string, string[]>;
   /** Patterns, as in .gitignore, for files no role may read, change or list. */
   privateFiles: string[];
+  /** Where each project's dev server answers, by project folder, for a thread's Preview. */
+  previewUrls: Record<string, string>;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -58,6 +60,7 @@ export const DEFAULT_PREFS: Prefs = {
   setupDone: false,
   allowedCommands: {},
   privateFiles: DEFAULT_PRIVATE,
+  previewUrls: {},
 };
 
 const STORE = "shoji.prefs";

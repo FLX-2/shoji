@@ -19,6 +19,7 @@ import {
   type ToolUse,
 } from "./fold";
 import { Markdown } from "./Markdown";
+import { PreviewView } from "./PreviewView";
 import { fileName, isRunning, threadCost, type Thread, type Turn } from "./useThread";
 
 interface ThreadViewProps {
@@ -43,7 +44,12 @@ interface ThreadViewProps {
   onAnswer: (command: string, allow: boolean, always: boolean) => Promise<void>;
   /** What the thread has cost, on the review bar. Off in Settings hides it. */
   showCosts: boolean;
+  /** Where the project's dev server answers, for Preview. */
+  previewUrl: string;
+  onPreviewUrl: (url: string) => void;
 }
+
+type Mode = "conversation" | "code" | "preview";
 
 const MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 const SHORTCUT = MAC ? "⌘" : "Ctrl+";
@@ -72,6 +78,8 @@ export function ThreadView({
   onCommit,
   onAnswer,
   showCosts,
+  previewUrl,
+  onPreviewUrl,
 }: ThreadViewProps) {
   const last = thread.turns[thread.turns.length - 1];
   const running = isRunning(last);
@@ -80,7 +88,7 @@ export function ThreadView({
   const spent = threadCost(thread);
   const [asking, setAsking] = useState(false);
   const scroller = useFollow(thread);
-  const [mode, setMode] = useState<"conversation" | "code">("conversation");
+  const [mode, setMode] = useState<Mode>("conversation");
   useModeKeys(setMode);
   // Held here so the chosen file outlives switching to Conversation.
   const [chosenFile, setChosenFile] = useState<string | null>(null);
@@ -151,6 +159,15 @@ export function ThreadView({
             Code
             {fileCount > 0 && <span className="cnt">{count(fileCount, "file")}</span>}
           </button>
+          <button
+            type="button"
+            className="mode"
+            aria-current={mode === "preview" ? "page" : undefined}
+            title={`Preview (${SHORTCUT}3)`}
+            onClick={() => setMode("preview")}
+          >
+            Preview
+          </button>
         </nav>
         <div className="tend">
           <span className="stage" data-outcome={outcome}>
@@ -176,6 +193,8 @@ export function ThreadView({
           onRevert={(path) => act(bridge.revertFile(thread.repo, path))}
         />
       )}
+
+      {mode === "preview" && <PreviewView url={previewUrl} onUrl={onPreviewUrl} freshness={String(ended)} />}
 
       <div className="scroll" ref={scroller} hidden={mode !== "conversation"}>
         <div className="tcol">
@@ -535,13 +554,14 @@ function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean 
   return <p className={result?.status === "ready" ? "outcome" : "outcome warn"}>{text}</p>;
 }
 
-/** Ctrl+1 and Ctrl+2 (⌘ on a Mac) switch between Conversation and Code. */
-function useModeKeys(setMode: (mode: "conversation" | "code") => void) {
+/** Ctrl+1, Ctrl+2 and Ctrl+3 (⌘ on a Mac) switch between Conversation, Code and Preview. */
+function useModeKeys(setMode: (mode: Mode) => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(MAC ? e.metaKey : e.ctrlKey) || e.altKey || e.shiftKey) return;
       if (e.key === "1") setMode("conversation");
       else if (e.key === "2") setMode("code");
+      else if (e.key === "3") setMode("preview");
       else return;
       e.preventDefault();
     };
