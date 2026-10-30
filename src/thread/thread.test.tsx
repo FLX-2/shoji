@@ -342,6 +342,8 @@ describe("a thread in the app", () => {
 
     expect(fake.calls.starts[1]).toMatchObject({ changes: { thread: 1, plan: "1. Add a billing toggle." } });
     expect(fake.calls.starts[1].changes!.notes).toMatch(/^The last run stopped at its spending limit/);
+    // Asking for passing checks made the review chase a failure that was there before Shoji started.
+    expect(fake.calls.starts[1].changes!.notes).not.toMatch(/checks/);
     // What was left of the first limit, and the same again.
     expect(fake.calls.starts[1].cap).toBeCloseTo(0.55);
     expect(screen.getByText("Keep going").className).toBe("umsg");
@@ -371,6 +373,7 @@ describe("a thread in the app", () => {
 
     const changes = fake.calls.starts[1].changes!;
     expect(changes.notes).toMatch(/^The last run ended with work left to do\./);
+    expect(changes.notes).not.toMatch(/checks passing/);
     expect(changes.notes).toContain("The review said:\n1. Fix the import.");
     expect(changes.failingBefore).toEqual(["pnpm lint"]);
     expect(fake.calls.starts[1].cap).toBeCloseTo(0.64);

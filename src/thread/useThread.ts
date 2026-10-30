@@ -55,10 +55,12 @@ export function commitMessage(thread: Thread): string {
   return [subject.trim(), body.join("\n").trim(), trailers.filter(Boolean).join("\n")].filter(Boolean).join("\n\n");
 }
 
+// Neither asks for the checks to pass: a reviewer reading "get the checks passing" took a check that
+// was failing before Shoji started as part of the task, and the next round spent its turns on it.
 const KEEP_GOING =
-  "The last run stopped at its spending limit before it finished. Carry on from where it stopped: finish the task and get the checks passing.";
+  "The last run stopped at its spending limit before it finished. Carry on from where it stopped and finish the task.";
 
-const FIX = "The last run ended with work left to do. Fix what the review asked for and get the checks passing.";
+const FIX = "The last run ended with work left to do. Fix what the review asked for.";
 
 /** Runs one thread through the runtime: the task, then any changes the person asks for. */
 export function useThread(bridge: Bridge) {

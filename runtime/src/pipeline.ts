@@ -102,13 +102,17 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     const buildStep = changes ? "changes" : "build";
     await agent(buildStep, "build", stack.build, prompts.BUILD, buildPrompt, builderTools);
 
+    // Even when a review asks, an old failure stays out of a fix round, or the round spends itself there.
+    const leaveOld = failingBefore.size
+      ? `\n\nLeave ${[...failingBefore].join(" and ")} failing as it was before, even if the notes above mention it, unless the task itself is about it.`
+      : "";
     const fix = (name: string, seat: Seat, notes: string) =>
       agent(
         name,
         "build",
         seat,
         prompts.BUILD,
-        `${buildPrompt}\n\nA first attempt is already in the project. Fix what's wrong:\n${notes}`,
+        `${buildPrompt}\n\nA first attempt is already in the project. Fix what's wrong:\n${notes}${leaveOld}`,
         builderTools,
       );
     const failures = () =>
@@ -267,7 +271,7 @@ export function reviewPrompt(task: string, diff: string, checks: CheckResult[]):
                 : c.missing
                   ? "couldn't run, its program isn't installed here"
                   : c.failedBefore
-                    ? `failed, and it failed before this change too. Unless the task is to make it pass, don't hold that against the change\n${c.output}`
+                    ? `failed, and it failed before this change too, so it isn't this change's to fix\n${c.output}`
                     : `failed\n${c.output}`
             }`,
         )

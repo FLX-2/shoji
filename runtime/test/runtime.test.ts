@@ -303,6 +303,10 @@ describe("thread pipeline", () => {
     const fix = fixes[fixes.length - 1];
     expect(fix.messages[0].content).toContain(`${UNBROKEN} failed`);
     expect(fix.messages[0].content).not.toContain(`${ALWAYS_FAILS} failed`);
+    // The review asked for fixes too, and the round it started is still told to leave the old failure.
+    expect(fix.messages[0].content).toContain(`Leave ${ALWAYS_FAILS} failing as it was before`);
+    const review = provider.requests.filter((r) => roleOf(r) === "reviewer").at(-1)!;
+    expect(review.system).toContain("isn't the change's to fix");
   });
 
   it("shortens a call near the cap instead of stopping, while it still has room to work", async () => {
