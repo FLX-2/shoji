@@ -29,15 +29,13 @@ interface ThreadListProps {
   threads: LedgerThread[];
   /** The ledger id of the thread on show. */
   current?: number;
-  /** While a run is going, other threads can't be opened. */
-  busy: boolean;
   showCosts: boolean;
   onOpen: (thread: LedgerThread) => void;
   onNew: () => void;
 }
 
 /** Every thread the person has started, newest first, to read again or carry on. */
-export function ThreadList({ threads, current, busy, showCosts, onOpen, onNew }: ThreadListProps) {
+export function ThreadList({ threads, current, showCosts, onOpen, onNew }: ThreadListProps) {
   const now = new Date();
   const projects = new Set(threads.map((t) => t.repo)).size;
   return (
@@ -56,7 +54,6 @@ export function ThreadList({ threads, current, busy, showCosts, onOpen, onNew }:
               <button
                 type="button"
                 aria-current={t.id === current || undefined}
-                disabled={busy && t.id !== current}
                 onClick={() => t.id !== current && onOpen(t)}
               >
                 <b>{t.task.split("\n")[0]}</b>

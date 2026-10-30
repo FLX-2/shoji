@@ -102,6 +102,9 @@ export interface StartedRun {
   thread: number;
   /** The thread's branch: a new one for a task, the same one for changes. */
   branch: string;
+  /** The thread's own copy of the project, where its work happens; null for an older thread that works in
+   *  the project itself. */
+  workdir: string | null;
 }
 
 export interface RunExit {
@@ -124,6 +127,8 @@ export interface LedgerThread {
   task: string;
   repo: string;
   branch: string;
+  /** The thread's own copy of the project; missing or null for threads from before each had one. */
+  workdir?: string | null;
   /** The stack as JSON, or a preset name for threads from before stack.lock. */
   stack: string;
   startedAt: number;
@@ -166,9 +171,9 @@ export const bridge = {
   startTrial: (request: TrialRequest) => invoke<number>("start_trial", { request }),
   /** Has Scout write the project's SHOJI.md. Returns its run number, or null if the project has notes already. */
   startNotes: (request: NotesRequest) => invoke<number | null>("start_notes", { request }),
-  stopRun: () => invoke<void>("stop_run"),
+  stopRun: (run: number) => invoke<void>("stop_run", { id: run }),
   /** Answers the running thread's question about a command. */
-  answerAsk: (allow: boolean) => invoke<void>("answer_ask", { allow }),
+  answerAsk: (run: number, allow: boolean) => invoke<void>("answer_ask", { id: run, allow }),
   changes: (repo: string) => invoke<ProjectChanges>("changes", { repo }),
   /** The project's files, as git sees them, for mentioning with @ in the task. */
   projectFiles: (repo: string) => invoke<string[]>("project_files", { repo }),

@@ -94,6 +94,10 @@ export function ThreadView({
   const lastWork = workAt < 0 ? lastRun : runs[workAt];
   const workTurn = workAt < 0 ? last : thread.turns[workAt];
   const spent = threadCost(thread);
+  // Where the thread's work is: its own copy of the project, or the project itself for an older thread. Once
+  // the work is committed the copy is put away, and its branch holds the work.
+  const place = thread.workdir ?? thread.repo;
+  const putAway = !!thread.workdir && !!thread.committed;
   // The composer, open for changes to the work or for a question about it.
   const [asking, setAsking] = useState<false | "changes" | "question">(false);
   // The project's files, for @ in the changes box, read each time it opens.
@@ -101,14 +105,14 @@ export function ThreadView({
   useEffect(() => {
     if (!asking) return;
     let current = true;
-    bridge.projectFiles(thread.repo).then(
+    bridge.projectFiles(putAway ? thread.repo : place).then(
       (list) => current && setFiles(list),
       () => {},
     );
     return () => {
       current = false;
     };
-  }, [asking, bridge, thread.repo]);
+  }, [asking, bridge, place, putAway, thread.repo]);
   const scroller = useFollow(thread);
   const [mode, setMode] = useState<Mode>("conversation");
   useModeKeys(setMode);
@@ -116,7 +120,7 @@ export function ThreadView({
   const [chosenFile, setChosenFile] = useState<string | null>(null);
   // Read the project again whenever a run ends or Code opens.
   const ended = thread.turns.filter((t) => t.exit || t.error).length;
-  const { changes, error, act } = useChanges(bridge, thread.repo, `${ended}-${mode}-${thread.committed}`);
+  const { changes, error, act } = useChanges(bridge, putAway ? null : place, `${ended}-${mode}-${thread.committed}`);
   const fileCount = changes?.files.length ?? 0;
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
@@ -219,8 +223,8 @@ export function ThreadView({
           running={running}
           chosen={chosenFile}
           onChoose={setChosenFile}
-          onAccept={(path) => act(bridge.acceptFile(thread.repo, path))}
-          onRevert={(path) => act(bridge.revertFile(thread.repo, path))}
+          onAccept={(path) => act(bridge.acceptFile(place, path))}
+          onRevert={(path) => act(bridge.revertFile(place, path))}
         />
       )}
 

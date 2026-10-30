@@ -516,7 +516,7 @@ describe("home", () => {
   it("checks the folder before starting, and keeps the task until it's sorted out", async () => {
     localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", setupDone: true }));
     const fake = fakeBridge();
-    fake.project.diff = "diff --git a/x b/x";
+    fake.project.git = false;
     render(<App bridge={fake.bridge} />);
     const task = await screen.findByRole("textbox", { name: "Task" });
     fireEvent.change(task, { target: { value: "Add a FAQ" } });
@@ -524,12 +524,14 @@ describe("home", () => {
       fireEvent.keyDown(task, { key: "Enter" });
     });
     expect(screen.getByRole("alert").textContent).toBe(
-      "pricing-page has uncommitted changes. Commit or stash them, then send the task again.",
+      "pricing-page isn't a git repository. Shoji works in git so every change can be reviewed and undone.",
     );
     expect(fake.calls.starts).toEqual([]);
     expect((task as HTMLTextAreaElement).value).toBe("Add a FAQ");
 
-    fake.project.diff = "";
+    // Changes the person hasn't committed don't hold a thread up: it works in its own copy.
+    fake.project.git = true;
+    fake.project.diff = "diff --git a/x b/x";
     await act(async () => {
       fireEvent.keyDown(task, { key: "Enter" });
     });

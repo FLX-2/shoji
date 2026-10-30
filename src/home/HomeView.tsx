@@ -8,8 +8,6 @@ import { formatCost } from "../thread/fold";
 interface HomeViewProps {
   repo: string | null;
   hasKey: boolean;
-  /** True while a thread runs. M1 runs one thread at a time. */
-  busy: boolean;
   onPickProject: () => void;
   onOpenSettings: () => void;
   /** New threads pause after the plan. */
@@ -36,7 +34,6 @@ interface HomeViewProps {
 export function HomeView({
   repo,
   hasKey,
-  busy,
   onPickProject,
   onOpenSettings,
   planFirst,
@@ -71,7 +68,7 @@ export function HomeView({
           hero
           label="Task"
           placeholder="Describe a change…"
-          blocked={!repo || !hasKey || busy}
+          blocked={!repo || !hasKey}
           files={files}
           onSend={async (task) => {
             const started = await onStart(task, attached);
@@ -159,10 +156,8 @@ export function HomeView({
               Add it in Settings
             </button>
           </p>
-        ) : busy ? (
-          <p className="hint">A thread is running. Shoji runs one at a time for now.</p>
         ) : !repo ? (
-          <p className="hint">Choose a project folder. It must be a git repository with no uncommitted changes.</p>
+          <p className="hint">Choose a project folder. It must be a git repository.</p>
         ) : null}
       </div>
     </div>
