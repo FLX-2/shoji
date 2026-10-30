@@ -45,6 +45,8 @@ const MIGRATIONS: &[&str] = &["
     );
     CREATE INDEX runs_by_thread ON runs(thread_id);
     CREATE INDEX calls_by_run ON calls(run_id);
+", "
+    ALTER TABLE runs ADD COLUMN ask TEXT;
 "];
 
 pub struct Ledger(Mutex<Connection>);
@@ -73,6 +75,8 @@ pub struct RunRecord {
     pub started_at: i64,
     /// ready, needs-work, stopped, failed or planned; none while the run is going.
     pub status: Option<String>,
+    /// What the person asked for in this run, as the thread shows it; none for runs from before it was kept.
+    pub ask: Option<String>,
     pub calls: Vec<CallRecord>,
 }
 
@@ -147,6 +151,24 @@ impl Ledger {
             params![thread, kind, log, at],
         )?;
         Ok(conn.last_insert_rowid())
+    }
+
+    /// Keeps what the person asked for in a run, so a reopened thread can show it.
+    pub fn note_ask(&self, run: i64, ask: &str) -> Result<()> {
+        self.0
+            .lock()
+            .unwrap()
+            .execute("UPDATE runs SET ask = ?2 WHERE id = ?1", params![run, ask])?;
+        Ok(())
+    }
+
+    /// Where a run's events were written, for reading a thread back.
+    pub fn log_of(&self, run: i64) -> Result<Option<String>> {
+        self.0
+            .lock()
+            .unwrap()
+            .query_row("SELECT log FROM runs WHERE id = ?1", [run], |row| row.get(0))
+            .optional()
     }
 
     /// Keeps what receipts need from one runtime event: each call, and how the run ended.
@@ -247,7 +269,7 @@ impl Ledger {
             })?
             .collect::<Result<Vec<_>>>()?;
         let mut runs = conn.prepare(
-            "SELECT id, kind, started_at, status FROM runs WHERE thread_id = ?1 ORDER BY started_at, id",
+            "SELECT id, kind, started_at, status, ask FROM runs WHERE thread_id = ?1 ORDER BY started_at, id",
         )?;
         let mut calls = conn.prepare(
             "SELECT at, role, step, model, effort, input_tokens, output_tokens, cache_write_tokens,
@@ -262,6 +284,7 @@ impl Ledger {
                         kind: row.get(1)?,
                         started_at: row.get(2)?,
                         status: row.get(3)?,
+                        ask: row.get(4)?,
                         calls: Vec::new(),
                     })
                 })?
@@ -356,7 +379,10 @@ mod tests {
             .start_run(thread, "changes", "/logs/2.jsonl", 2000)
             .unwrap();
         ledger.end_run(changes, "stopped").unwrap();
+        ledger.note_ask(changes, "Make it blue").unwrap();
         ledger.commit(thread, "abc1234", 3000).unwrap();
+        assert_eq!(ledger.log_of(changes).unwrap().as_deref(), Some("/logs/2.jsonl"));
+        assert_eq!(ledger.log_of(99).unwrap(), None);
 
         let threads = ledger.threads().unwrap();
         assert_eq!(threads.len(), 1);
@@ -368,6 +394,7 @@ mod tests {
         assert_eq!(t.runs.len(), 2);
         assert_eq!(t.runs[0].status.as_deref(), Some("ready"));
         assert_eq!(t.runs[1].status.as_deref(), Some("stopped"));
+        assert_eq!((t.runs[0].ask.as_deref(), t.runs[1].ask.as_deref()), (None, Some("Make it blue")));
         let calls = &t.runs[0].calls;
         assert_eq!(calls.len(), 2);
         assert_eq!(

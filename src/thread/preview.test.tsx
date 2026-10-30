@@ -18,7 +18,10 @@ describe("Preview in a thread", () => {
   let answering = true;
   beforeEach(() => {
     answering = true;
-    vi.stubGlobal("fetch", vi.fn(async () => (answering ? new Response() : Promise.reject(new TypeError("refused")))));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => (answering ? new Response() : Promise.reject(new TypeError("refused")))),
+    );
     localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", planFirst: false }));
   });
   afterEach(() => {

@@ -28,6 +28,8 @@ import { WindowControls } from "./shell/WindowControls";
 import { SECTIONS, type SectionId } from "./shell/sections";
 import { formatCost } from "./thread/fold";
 import { DEFAULT_PREVIEW } from "./thread/PreviewView";
+import { reopen, workThreads } from "./thread/reopen";
+import { ThreadList } from "./thread/ThreadList";
 import { ThreadView } from "./thread/ThreadView";
 import { isRunning, threadCost, useThread } from "./thread/useThread";
 
@@ -59,7 +61,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const allowed = useRef(prefs.allowedCommands);
   allowed.current = prefs.allowedCommands;
   const allowedIn = useCallback((repo: string) => allowed.current[repo] ?? [], []);
-  const { thread, start, requestChanges, keepGoing, fix, build, replan, question, stop, commit } = useThread(
+  const { thread, start, requestChanges, keepGoing, fix, build, replan, question, stop, commit, open } = useThread(
     bridge,
     allowedIn,
   );
@@ -86,7 +88,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     // Only at launch: forgetting the key later in Settings shouldn't pull the person into setup.
   }, [bridge]);
 
-  // The ledger, read again whenever a run starts or ends: today's spend for the daily limit,
+  // The ledger, read again whenever a run starts or ends: the thread list, today's spend for the daily limit,
   // recent tasks for Home's estimate, and Stack's Watching row.
   const [ledger, setLedger] = useState<LedgerThread[]>([]);
   useEffect(() => {
@@ -94,7 +96,9 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       .ledgerThreads()
       .then(setLedger)
       .catch(() => setLedger([]));
-  }, [bridge, running]);
+    // Read again on a commit or on opening Threads too, so each thread shows where it got to.
+  }, [bridge, running, section, thread?.committed]);
+  const pastThreads = useMemo(() => workThreads(ledger), [ledger]);
   // The project's files, for @ in the task box, read again when the project changes or a run ends.
   const [projectFiles, setProjectFiles] = useState<string[]>([]);
   useEffect(() => {
@@ -242,35 +246,54 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 onSave={stack.save}
                 ledger={ledger}
               />
-            ) : section === "threads" && thread ? (
-              <ThreadView
-                bridge={bridge}
-                thread={thread}
-                onStop={stop}
-                onRequestChanges={requestChanges}
-                onKeepGoing={() => withinDay("Keeping this thread going", prefs.cap, () => keepGoing(prefs.cap))}
-                onFix={() => withinDay("Fixing what the review found", prefs.cap, () => fix(prefs.cap))}
-                more={prefs.cap}
-                onRetry={() =>
-                  withinDay("This thread", thread.cap, () =>
-                    start(thread.task, thread.repo, thread.stack, thread.cap, prefs.planFirst, thread.attachments),
-                  )
-                }
-                onBuild={build}
-                onReplan={replan}
-                onQuestion={question}
-                onCommit={commit}
-                onAnswer={(command, allow, always) => {
-                  if (always) {
-                    const now = prefs.allowedCommands[thread.repo] ?? [];
-                    setPrefs({ allowedCommands: { ...prefs.allowedCommands, [thread.repo]: [...now, command] } });
-                  }
-                  return bridge.answerAsk(allow);
-                }}
-                showCosts={prefs.showCosts}
-                previewUrl={prefs.previewUrls[thread.repo] ?? DEFAULT_PREVIEW}
-                onPreviewUrl={(url) => setPrefs({ previewUrls: { ...prefs.previewUrls, [thread.repo]: url } })}
-              />
+            ) : section === "threads" && (thread || pastThreads.length > 0) ? (
+              <div className="threads">
+                {pastThreads.length > 0 && (
+                  <ThreadList
+                    threads={pastThreads}
+                    current={thread?.id}
+                    busy={running}
+                    showCosts={prefs.showCosts}
+                    onOpen={async (record) => open(await reopen(bridge, record, prefs.cap))}
+                    onNew={() => setSection("home")}
+                  />
+                )}
+                {thread ? (
+                  <ThreadView
+                    bridge={bridge}
+                    thread={thread}
+                    onStop={stop}
+                    onRequestChanges={requestChanges}
+                    onKeepGoing={() => withinDay("Keeping this thread going", prefs.cap, () => keepGoing(prefs.cap))}
+                    onFix={() => withinDay("Fixing what the review found", prefs.cap, () => fix(prefs.cap))}
+                    more={prefs.cap}
+                    onRetry={() =>
+                      withinDay("This thread", thread.cap, () =>
+                        start(thread.task, thread.repo, thread.stack, thread.cap, prefs.planFirst, thread.attachments),
+                      )
+                    }
+                    onBuild={build}
+                    onReplan={replan}
+                    onQuestion={question}
+                    onCommit={commit}
+                    onAnswer={(command, allow, always) => {
+                      if (always) {
+                        const now = prefs.allowedCommands[thread.repo] ?? [];
+                        setPrefs({ allowedCommands: { ...prefs.allowedCommands, [thread.repo]: [...now, command] } });
+                      }
+                      return bridge.answerAsk(allow);
+                    }}
+                    showCosts={prefs.showCosts}
+                    previewUrl={prefs.previewUrls[thread.repo] ?? DEFAULT_PREVIEW}
+                    onPreviewUrl={(url) => setPrefs({ previewUrls: { ...prefs.previewUrls, [thread.repo]: url } })}
+                  />
+                ) : (
+                  <div className="empty">
+                    <h2>Pick a thread</h2>
+                    <p>Read its plan, steps and review again, or carry it on where it stopped.</p>
+                  </div>
+                )}
+              </div>
             ) : (
               <>
                 <div className="mh">

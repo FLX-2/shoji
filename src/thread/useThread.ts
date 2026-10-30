@@ -119,6 +119,7 @@ export function useThread(bridge: Bridge, allowedIn: (repo: string) => string[] 
           stack: next.stack,
           cap: next.cap - spent,
           changes,
+          ask: turn.ask,
           ...(planOnly && { planOnly }),
           ...(next.attachments?.length && { attachments: next.attachments }),
           ...(allowedIn(next.repo).length && { allowedCommands: allowedIn(next.repo) }),
@@ -214,7 +215,13 @@ export function useThread(bridge: Bridge, allowedIn: (repo: string) => string[] 
     setThread((t) => (t ? { ...t, committed: sha } : t));
   }, [bridge, thread]);
 
-  return { thread, start, requestChanges, keepGoing, fix, build, replan, question, stop, commit };
+  /** Shows a past thread, read back from the ledger, so the person can read it or carry it on. */
+  const open = useCallback((past: Thread) => {
+    if (current.current !== null) return;
+    setThread(past);
+  }, []);
+
+  return { thread, start, requestChanges, keepGoing, fix, build, replan, question, stop, commit, open };
 }
 
 /** The last part of a path, on any system. */

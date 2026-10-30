@@ -10,6 +10,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   const project = { diff: "", accepted: [] as string[], files: [] as string[] };
   /** What the ledger holds; tests fill it. */
   const ledger: LedgerThread[] = [];
+  /** Each ledger run's events, as its log on disk would hold them; tests fill it. */
+  const logs: Record<number, RuntimeEvent[]> = {};
   /** stack.lock as the app would find it on disk. */
   const files = { stackLock: null as string | null, hasNotes: false };
   const onEvent: ((run: number, event: RuntimeEvent) => void)[] = [];
@@ -77,6 +79,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     changes: async () => ({ diff: project.diff, accepted: project.accepted }),
     projectFiles: async () => [...project.files],
     ledgerThreads: async () => ledger,
+    runEvents: async (run) => logs[run] ?? [],
     readStackLock: async () => files.stackLock,
     writeStackLock: async (contents) => {
       calls.lockWrites.push(contents);
@@ -122,6 +125,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     calls,
     project,
     ledger,
+    logs,
     files,
     picked,
     /** Sends events from the latest run. */
