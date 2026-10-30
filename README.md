@@ -28,6 +28,8 @@ The first time Shoji opens, setup asks for your Anthropic API key, picks a stack
 - **Code:** every file the thread changed, with its diff.
 - **Preview:** your project's dev server at 360, 768 or 1280 px. You run the dev server. The address is remembered per project and starts at `http://localhost:5173`.
 
+Ask a question about a thread's work at any point. The Scout model reads the code and answers in the conversation, and nothing in the project changes.
+
 A role can run the project's checks at any time. Any other command, such as installing a package, waits for you to allow it once, always for that project, or not at all.
 
 **Receipts.** What each thread cost, step by step, against running everything on one strong model. You can export a month as CSV.

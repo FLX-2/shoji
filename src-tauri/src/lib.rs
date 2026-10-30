@@ -212,8 +212,8 @@ struct Changes {
     plan: String,
     /// The thread's branch, which the project must still be on.
     branch: String,
-    /// "changes" to the work (the default), "build" for an approved plan, or "replan" for notes
-    /// on the plan.
+    /// "changes" to the work (the default), "build" for an approved plan, "replan" for notes
+    /// on the plan, or "question" for a question about the work, which changes nothing.
     #[serde(default)]
     kind: Option<String>,
     /// Checks that failed before the thread's first build, which these changes leave alone.
@@ -229,6 +229,7 @@ impl Changes {
         match self.kind.as_deref() {
             Some("build") => "build",
             Some("replan") => "replan",
+            Some("question") => "question",
             _ => "changes",
         }
     }
