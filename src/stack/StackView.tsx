@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { EFFORTS, MODELS, type ModelId } from "../../runtime/src/models";
 import { ROLES, STACKS, type Role, type Seat, type Stack, type StackName } from "../../runtime/src/stack";
-import type { Bridge, TrialRequest } from "../bridge";
+import type { Bridge, LedgerThread, TrialRequest } from "../bridge";
 import {
   changedRoles,
   describeStack,
@@ -15,6 +15,7 @@ import {
 } from "./lock";
 import { TrialSection } from "./TrialSection";
 import type { Trial } from "./useTrial";
+import { watch } from "./watch";
 
 interface StackViewProps {
   bridge: Bridge;
@@ -28,6 +29,8 @@ interface StackViewProps {
   /** Why stack.lock couldn't be read, if it couldn't. */
   error: string | null;
   onSave: (stack: Stack) => Promise<void>;
+  /** The person's past threads, for the Watching row. */
+  ledger: LedgerThread[];
 }
 
 const MODEL_IDS = Object.keys(MODELS) as ModelId[];
@@ -47,6 +50,7 @@ export function StackView({
   lock,
   error,
   onSave,
+  ledger,
 }: StackViewProps) {
   const [draft, setDraft] = useState<Stack | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -170,6 +174,8 @@ export function StackView({
             onStop={onStopTrial}
           />
 
+          <Watching ledger={ledger} stack={stack} />
+
           <section className="prices" aria-labelledby="prices-h">
             <h2 id="prices-h">Prices</h2>
             <div className="ptable" role="table" aria-label="Prices per million tokens">
@@ -207,6 +213,38 @@ export function StackView({
         <History lock={lock} current={stack} onUse={(s) => edit(s)} />
       </div>
     </>
+  );
+}
+
+/** Models in the saved stack that got slower, dearer or worse at their role this week. */
+function Watching({ ledger, stack }: { ledger: LedgerThread[]; stack: Stack }) {
+  const { compared, regressions } = useMemo(() => watch(ledger, stack, Date.now()), [ledger, stack]);
+  if (!compared) return null;
+  return (
+    <section className="watching" aria-labelledby="watch-h">
+      <div>
+        <h2 id="watch-h">Watching</h2>
+        <p className="d">Each model in your stack, this week of your work against the four weeks before.</p>
+      </div>
+      {regressions.length === 0 ? (
+        <p className="d">No model in your stack got slower, dearer or worse this week.</p>
+      ) : (
+        <div className="card">
+          {regressions.map((r) => (
+            <div key={r.role} className="srow watch">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4l9 16H3z" />
+                <path d="M12 10v4M12 17v.5" />
+              </svg>
+              <div>
+                <b>{r.headline}</b>
+                <span className="d">{r.detail}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
