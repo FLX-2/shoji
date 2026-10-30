@@ -20,6 +20,10 @@ const USAGE = `Usage: shoji-runtime --task "<what to change>" [options]
        shoji-runtime --trial-file <file> [options]
        shoji-runtime --notes [options]
 
+A task that starts with a command, such as "/fix-issue 12", runs that command from the
+project's .claude/commands or ~/.claude/commands. Skills in .claude/skills and
+~/.claude/skills are offered to Scout and Build.
+
 Options:
   --repo <path>       Project folder, a git repository (default: current folder)
   --stack <name>      ${Object.keys(STACKS).join(", ")} (default: balanced)

@@ -8,6 +8,8 @@ import { BudgetExceeded, Meter, RefusedError } from "./meter";
 import * as prompts from "./prompts";
 import { type Mcp, NO_MCP } from "./mcp";
 import type { ModelProvider } from "./provider";
+import { findSkills } from "./skills";
+import { expandCommand } from "./slash";
 import { ROLES, type Role, type Seat, type Stack } from "./stack";
 import { COMMAND_TOOLS, READ_TOOLS, WRITE_TOOLS } from "./tools";
 import type { Workspace } from "./workspace";
@@ -57,12 +59,17 @@ const MAX_FILES_CHARS = 60_000;
  * With `changes`, it runs again from the build on the person's notes.
  */
 export async function runThread(input: ThreadInput): Promise<ThreadResult> {
-  const { task, stack, workspace, checks, emit, changes, approved, replan } = input;
+  const { stack, workspace, checks, emit, approved } = input;
+  // A task or a request that starts with one of the project's commands, such as "/fix-issue 12", is that command's text.
+  const task = expandCommand(input.task, workspace);
+  const changes = input.changes && { ...input.changes, notes: expandCommand(input.changes.notes, workspace) };
+  const replan = input.replan && { ...input.replan, notes: expandCommand(input.replan.notes, workspace) };
   const meter = new Meter(input.provider, emit, input.cap);
   const state = { plan: "", review: "", checks: [] as CheckResult[], escalated: false };
   // The project's AGENTS.md and CLAUDE.md, which Plan, Build and Review all follow.
   const guide = projectInstructions(workspace);
   const mcp = input.mcp ?? NO_MCP;
+  const skills = findSkills(workspace);
 
   const step = async (name: string, role: Role, seat: Seat, work: () => Promise<string>) => {
     emit({ type: "step", step: name, role, model: seat.model, status: "running" });
@@ -97,12 +104,17 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
         prompt: withAttachments(prompt, input.attachments),
         tools,
         mcp: input.mcp,
+        skills,
         onTool: (tool, input) =>
           emit({
             type: "tool",
             step: name,
             tool,
-            target: mcp.owns(tool) ? mcp.label(tool) : (input.path ?? input.pattern ?? input.command ?? ""),
+            target: mcp.owns(tool)
+              ? mcp.label(tool)
+              : skills.owns(tool)
+                ? input.name
+                : (input.path ?? input.pattern ?? input.command ?? ""),
           }),
       }),
     );
@@ -119,8 +131,14 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     emit({ type: "checks", step: name, results: state.checks });
     return state.checks.every((c) => c.ok || c.failedBefore);
   };
-  const builderTools = [...READ_TOOLS, ...WRITE_TOOLS, ...(checks.length ? COMMAND_TOOLS : []), ...mcp.tools];
-  const lookingTools = [...READ_TOOLS, ...mcp.readOnly];
+  const builderTools = [
+    ...READ_TOOLS,
+    ...WRITE_TOOLS,
+    ...(checks.length ? COMMAND_TOOLS : []),
+    ...skills.tools,
+    ...mcp.tools,
+  ];
+  const lookingTools = [...READ_TOOLS, ...skills.tools, ...mcp.readOnly];
 
   try {
     state.plan = changes ? changes.plan : (approved ?? (await planFor()));
@@ -140,7 +158,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     const asked = changes
       ? `\n\nThe work so far is already in the project. The person asked for these changes:\n${changes.notes}`
       : "";
-    const buildPrompt = `Task: ${task}${guide}\n\nPlan:\n${state.plan}${commandsNote}${asked}`;
+    const buildPrompt = `Task: ${task}${guide}${skills.note}\n\nPlan:\n${state.plan}${commandsNote}${asked}`;
     const buildStep = changes ? "changes" : "build";
     await agent(buildStep, "build", stack.build, prompts.BUILD, buildPrompt, builderTools);
 
@@ -253,7 +271,14 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
 
   async function planFor(): Promise<string> {
     const asked = replan ? `\n\nThe person also asked: ${replan.notes}` : "";
-    const brief = await agent("scout", "scout", stack.scout, prompts.SCOUT, `Task: ${task}${asked}`, lookingTools);
+    const brief = await agent(
+      "scout",
+      "scout",
+      stack.scout,
+      prompts.SCOUT,
+      `Task: ${task}${asked}${skills.note}`,
+      lookingTools,
+    );
     return step("plan", "plan", stack.plan, async () =>
       textOf(
         await meter.send("plan", "plan", {

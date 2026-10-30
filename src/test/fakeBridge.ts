@@ -2,6 +2,7 @@ import { act } from "@testing-library/react";
 import type { RuntimeEvent } from "../../runtime/src/events";
 import type { NotesEvent } from "../../runtime/src/notes";
 import type { TrialEvent } from "../../runtime/src/trial";
+import type { SlashCommand } from "../shell/mention";
 import type { Bridge, KeyStatus, LedgerThread, NotesRequest, RunExit, RunRequest, TrialRequest } from "../bridge";
 
 /** Stands in for the Rust side: records what the app asks for and plays back runtime events. */
@@ -11,6 +12,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     diff: "",
     accepted: [] as string[],
     files: [] as string[],
+    commands: [] as SlashCommand[],
     git: true,
     /** Changed files' text, for the editor. */
     contents: {} as Record<string, string>,
@@ -108,6 +110,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       if (!project.git) throw new Error("fatal: not a git repository");
       return [...project.files];
     },
+    projectCommands: async () => [...project.commands],
     ledgerThreads: async () => [...ledger],
     runEvents: async (run) => logs[run] ?? [],
     readStackLock: async () => files.stackLock,

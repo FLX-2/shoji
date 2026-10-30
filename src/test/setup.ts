@@ -13,3 +13,6 @@ if (typeof HTMLCanvasElement !== "undefined") {
 if (typeof window !== "undefined") {
   globalThis.fetch = (() => Promise.reject(new TypeError("Tests have no network."))) as typeof fetch;
 }
+
+// Commands and skills from the person's own ~/.claude stay out of tests, which name their own.
+process.env.SHOJI_CLAUDE_HOME = "/nonexistent/shoji-test-claude-home";

@@ -23,6 +23,7 @@ import { estimateCost, tierStack, type Tier } from "./stack/tier";
 import { useStack } from "./stack/useStack";
 import { trialProgress, useTrial } from "./stack/useTrial";
 import { Mark } from "./shell/Mark";
+import type { SlashCommand } from "./shell/mention";
 import { Rail } from "./shell/Rail";
 import { WindowControls } from "./shell/WindowControls";
 import { SECTIONS, type SectionId } from "./shell/sections";
@@ -124,12 +125,19 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   // The project's files, for @ in the task box, read again when the project changes. Threads work in their
   // own copies, so the project itself only changes in the person's hands.
   const [projectFiles, setProjectFiles] = useState<string[]>([]);
+  // And its commands, for / at the start of a task.
+  const [projectCommands, setProjectCommands] = useState<SlashCommand[]>([]);
   useEffect(() => {
     setProjectFiles([]);
+    setProjectCommands([]);
     if (!prefs.repo) return;
     let current = true;
     bridge.projectFiles(prefs.repo).then(
       (files) => current && setProjectFiles(files),
+      () => {},
+    );
+    bridge.projectCommands(prefs.repo).then(
+      (commands) => current && setProjectCommands(commands),
       () => {},
     );
     return () => {
@@ -240,6 +248,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                   )
                 }
                 files={projectFiles}
+                commands={projectCommands}
                 onStart={async (task, attachments) => {
                   const repo = prefs.repo;
                   if (!repo) return false;

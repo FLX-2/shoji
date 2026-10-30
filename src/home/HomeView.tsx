@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ClipIcon } from "../shell/ClipIcon";
 import { Composer } from "../shell/Composer";
+import type { SlashCommand } from "../shell/mention";
 import { fileName } from "../thread/useThread";
 import { TIERS, type Tier } from "../stack/tier";
 import { formatCost } from "../thread/fold";
@@ -28,6 +29,8 @@ interface HomeViewProps {
   onStart: (task: string, attachments: string[]) => void | boolean | Promise<void | boolean>;
   /** The project's files, which the task can mention with @. */
   files: string[];
+  /** The commands a task can start with, after a /. */
+  commands: SlashCommand[];
 }
 
 /** Start: pick a project and describe a change. */
@@ -46,6 +49,7 @@ export function HomeView({
   onSavePasted,
   onStart,
   files,
+  commands,
 }: HomeViewProps) {
   const [attached, setAttached] = useState<string[]>([]);
   const [attachProblem, setAttachProblem] = useState<string | null>(null);
@@ -70,6 +74,7 @@ export function HomeView({
           placeholder="Describe a change…"
           blocked={!repo || !hasKey}
           files={files}
+          commands={commands}
           onSend={async (task) => {
             const started = await onStart(task, attached);
             if (started !== false) setAttached([]);

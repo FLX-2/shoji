@@ -1,6 +1,7 @@
 mod ledger;
 #[cfg(unix)]
 mod shell_path;
+mod slash;
 mod server;
 mod terminal;
 #[cfg(target_os = "macos")]
@@ -980,6 +981,7 @@ pub fn run() {
             answer_ask,
             changes,
             project_files,
+            slash::project_commands,
             accept_file,
             revert_file,
             commit_thread,

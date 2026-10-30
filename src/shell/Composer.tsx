@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { matchFiles, mentionAt } from "./mention";
+import { commandAt, matchCommands, matchFiles, mentionAt, type SlashCommand } from "./mention";
 
 interface ComposerProps {
   label: string;
@@ -20,6 +20,18 @@ interface ComposerProps {
   above?: ReactNode;
   /** The project's files. Typing @ offers them, and a picked one goes into the text as @path. */
   files?: string[];
+  /** The commands a task can start with. Typing / first offers them, and a picked one starts the text. */
+  commands?: SlashCommand[];
+}
+
+/** One line of the list under the text: a file after @, or a command after a leading /. */
+interface Offer {
+  key: string;
+  name: string;
+  /** Shown beside the name, dimmer: the file's folder, or what the command does. */
+  detail: string;
+  /** What picking it puts in place of what was typed. */
+  insert: string;
 }
 
 /** Where the person writes a task or the changes they want. Enter sends; Shift+Enter adds a line; Escape cancels, where that's offered. */
@@ -35,6 +47,7 @@ export function Composer({
   onPasteImages,
   above,
   files,
+  commands,
 }: ComposerProps) {
   const [text, setText] = useState("");
   const ready = text.trim() !== "" && !blocked;
@@ -42,15 +55,35 @@ export function Composer({
   const listId = useId();
   const [caret, setCaret] = useState(0);
   const [active, setActive] = useState(0);
-  // Escape closes the list for the @ it was open on; typing another @ opens it again.
+  // Escape closes the list for the @ or / it was open on; typing another opens it again.
   const [dismissed, setDismissed] = useState<number | null>(null);
-  const mention = files?.length ? mentionAt(text, caret) : null;
-  const matches = mention && mention.start !== dismissed ? matchFiles(files!, mention.query) : [];
+  const command = commands?.length ? commandAt(text, caret) : null;
+  const mention = !command && files?.length ? mentionAt(text, caret) : null;
+  const typed = command ? { start: 0, query: command.query } : mention;
+  const matches: Offer[] =
+    !typed || typed.start === dismissed
+      ? []
+      : command
+        ? matchCommands(commands!, command.query).map((c) => ({
+            key: c.name,
+            name: c.hint ? `/${c.name} ${c.hint}` : `/${c.name}`,
+            detail: c.description,
+            insert: `/${c.name} `,
+          }))
+        : matchFiles(files!, mention!.query).map((file) => {
+            const cut = file.lastIndexOf("/") + 1;
+            return {
+              key: file,
+              name: file.slice(cut),
+              detail: cut > 0 ? file.slice(0, cut - 1) : "",
+              insert: `@${file} `,
+            };
+          });
   const open = matches.length > 0;
   const picked = Math.min(active, matches.length - 1);
   const moveTo = useRef<number | null>(null);
 
-  useEffect(() => setActive(0), [mention?.query]);
+  useEffect(() => setActive(0), [typed?.query]);
   useEffect(() => {
     if (moveTo.current === null || !box.current) return;
     box.current.setSelectionRange(moveTo.current, moveTo.current);
@@ -58,11 +91,10 @@ export function Composer({
     moveTo.current = null;
   }, [text]);
 
-  const choose = (file: string) => {
-    if (!mention) return;
-    const inserted = `@${file} `;
-    moveTo.current = mention.start + inserted.length;
-    setText(text.slice(0, mention.start) + inserted + text.slice(caret));
+  const choose = (offer: Offer) => {
+    if (!typed) return;
+    moveTo.current = typed.start + offer.insert.length;
+    setText(text.slice(0, typed.start) + offer.insert + text.slice(caret));
   };
   const send = async () => {
     if (!ready) return;
@@ -87,7 +119,7 @@ export function Composer({
         value={text}
         autoFocus={autoFocus}
         rows={hero ? 3 : 2}
-        aria-autocomplete={files ? "list" : undefined}
+        aria-autocomplete={files || commands ? "list" : undefined}
         aria-controls={open ? listId : undefined}
         aria-activedescendant={open ? `${listId}-${picked}` : undefined}
         onChange={(e) => {
@@ -116,7 +148,7 @@ export function Composer({
             }
             if (e.key === "Escape") {
               e.preventDefault();
-              setDismissed(mention!.start);
+              setDismissed(typed!.start);
               return;
             }
           }
@@ -130,27 +162,29 @@ export function Composer({
         }}
       />
       {open && (
-        <ul className="mentions" id={listId} role="listbox" aria-label="Project files">
-          {matches.map((file, i) => {
-            const cut = file.lastIndexOf("/") + 1;
-            return (
-              <li
-                key={file}
-                id={`${listId}-${i}`}
-                role="option"
-                aria-selected={i === picked}
-                // Picking mustn't take the focus from the text.
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  choose(file);
-                }}
-                onMouseMove={() => i !== picked && setActive(i)}
-              >
-                <b>{file.slice(cut)}</b>
-                {cut > 0 && <span>{file.slice(0, cut - 1)}</span>}
-              </li>
-            );
-          })}
+        <ul
+          className={command ? "mentions commands" : "mentions"}
+          id={listId}
+          role="listbox"
+          aria-label={command ? "Commands" : "Project files"}
+        >
+          {matches.map((offer, i) => (
+            <li
+              key={offer.key}
+              id={`${listId}-${i}`}
+              role="option"
+              aria-selected={i === picked}
+              // Picking mustn't take the focus from the text.
+              onMouseDown={(e) => {
+                e.preventDefault();
+                choose(offer);
+              }}
+              onMouseMove={() => i !== picked && setActive(i)}
+            >
+              <b>{offer.name}</b>
+              {offer.detail && <span>{offer.detail}</span>}
+            </li>
+          ))}
         </ul>
       )}
       {above}

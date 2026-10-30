@@ -7,6 +7,7 @@ import type { Catalog } from "../runtime/src/models";
 import type { NotesEvent } from "../runtime/src/notes";
 import type { Stack } from "../runtime/src/stack";
 import type { TrialEvent, TrialTask } from "../runtime/src/trial";
+import type { SlashCommand } from "./shell/mention";
 
 export interface KeyStatus {
   saved: boolean;
@@ -190,6 +191,8 @@ export const bridge = {
   changes: (repo: string) => invoke<ProjectChanges>("changes", { repo }),
   /** The project's files, as git sees them, for mentioning with @ in the task. */
   projectFiles: (repo: string) => invoke<string[]>("project_files", { repo }),
+  /** The project's commands and the person's own, which a task can start with after a /. */
+  projectCommands: (repo: string) => invoke<SlashCommand[]>("project_commands", { repo }),
   /** Keeps a file's changes by staging it. */
   acceptFile: (repo: string, path: string) => invoke<void>("accept_file", { repo, path }),
   /** Puts a file back as it was at the last commit. */
