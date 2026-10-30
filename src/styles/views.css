@@ -77,6 +77,13 @@
   border-color: rgba(255, 255, 255, 0.24);
 }
 
+/* A chip that is switched on lifts like a picked segment. */
+.chip[aria-pressed="true"] {
+  background: var(--z3);
+  border-color: var(--z4);
+  color: var(--z10);
+}
+
 .chip svg {
   width: 12px;
   height: 12px;
@@ -744,11 +751,14 @@
   max-width: 58ch;
 }
 
+/* Every choice of one from a few is drawn like the thread's Conversation and Code switch: a quiet
+   5px tray, and the picked option lifted one tone as a 3px tile. White fill is kept for the one
+   button that moves the work on, so a pick never inverts. */
 .seg {
   display: inline-flex;
-  border: 1px solid var(--z3);
+  border: 1px solid var(--hair);
   border-radius: 5px;
-  padding: 3px;
+  padding: 2px;
   background: var(--z1);
   gap: 2px;
 }
@@ -756,21 +766,26 @@
 .seg button {
   all: unset;
   cursor: pointer;
-  font-size: 12px;
-  padding: 4px 11px;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  font-size: 12.5px;
+  padding: 0 11px;
   border-radius: 3px;
   color: var(--z7);
   white-space: nowrap;
+  transition:
+    color var(--d-quick) var(--e-out),
+    background-color var(--d-quick) var(--e-out);
 }
 
 .seg button:hover {
-  color: var(--z10);
+  color: var(--z9);
 }
 
 .seg button[aria-checked="true"] {
-  background: var(--z9);
-  color: var(--z0);
-  font-weight: 500;
+  background: var(--z3);
+  color: var(--z10);
 }
 
 .keyform,
@@ -814,16 +829,21 @@
   color: var(--z6);
 }
 
+/* A switch is a small tray with a lifted knob: dim and left when off, light and right when on. */
 .sw {
   all: unset;
+  box-sizing: border-box;
   cursor: pointer;
   width: 32px;
   height: 18px;
-  border-radius: 4px;
-  background: var(--z4);
+  border: 1px solid var(--hair);
+  border-radius: 5px;
+  background: var(--z1);
   position: relative;
   flex: none;
-  transition: background-color var(--d-quick) var(--e-out);
+  transition:
+    background-color var(--d-quick) var(--e-out),
+    border-color var(--d-quick) var(--e-out);
 }
 
 .sw::after {
@@ -831,22 +851,27 @@
   position: absolute;
   left: 2px;
   top: 2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 2.5px;
-  background: var(--z8);
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--z6);
   transition:
     transform var(--d-quick) var(--e-move),
     background-color var(--d-quick) var(--e-out);
 }
 
+.sw:hover::after {
+  background: var(--z7);
+}
+
 .sw[aria-checked="true"] {
-  background: var(--z9);
+  background: var(--z3);
+  border-color: var(--z4);
 }
 
 .sw[aria-checked="true"]::after {
   transform: translateX(14px);
-  background: var(--z0);
+  background: var(--z10);
 }
 
 .btn.solid {
@@ -1158,9 +1183,18 @@
 .mh .period {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--z7);
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--hair);
+  border-radius: 5px;
+  background: var(--z1);
+  font-size: 12.5px;
+  color: var(--z9);
+}
+
+.mh .period > span {
+  padding: 0 8px;
+  font-variant-numeric: tabular-nums;
 }
 
 .mh .step {
@@ -1168,16 +1202,16 @@
   cursor: pointer;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
   font-size: 15px;
   color: var(--z7);
 }
 
 .mh .step:hover {
   color: var(--z10);
-  background: var(--z2);
+  background: var(--z3);
 }
 
 .mh .step:disabled {
@@ -1221,11 +1255,13 @@
   scrollbar-color: var(--z4) transparent;
 }
 
+/* Figures sit in a bento strip: one hairline frame, cells joined on hairlines, square corners. */
 .figures {
   margin: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 28px 32px;
+  border: 1px solid var(--hair);
+  overflow: hidden;
 }
 
 @media (max-width: 1180px) {
@@ -1238,6 +1274,11 @@
   display: grid;
   align-content: start;
   gap: 6px;
+  padding: 16px 18px 18px;
+  /* The hairlines between cells; the frame clips the ones along its own edge. */
+  box-shadow:
+    -1px 0 0 var(--hair),
+    0 -1px 0 var(--hair);
 }
 
 .figures dt {
@@ -1615,7 +1656,10 @@ button.rrow:focus-visible {
 
 .figures.small {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px 28px;
+}
+
+.figures.small div {
+  padding: 12px 16px 14px;
 }
 
 .figures.small dd {
@@ -2143,7 +2187,11 @@ button.rrow:focus-visible {
 /* Accent swatches */
 .swatches {
   display: flex;
-  gap: 6px;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--hair);
+  border-radius: 5px;
+  background: var(--z1);
 }
 
 .swc {
@@ -2152,16 +2200,19 @@ button.rrow:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid var(--hair);
-  border-radius: 5px;
-  padding: 3px 11px 3px 4px;
-  font-size: 12px;
+  height: 24px;
+  border-radius: 3px;
+  padding: 0 11px 0 6px;
+  font-size: 12.5px;
   color: var(--z7);
+  transition:
+    color var(--d-quick) var(--e-out),
+    background-color var(--d-quick) var(--e-out);
 }
 
 .swc i {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
 }
 
@@ -2170,7 +2221,7 @@ button.rrow:focus-visible {
 }
 
 .swc[aria-checked="true"] {
-  border-color: var(--z9);
+  background: var(--z3);
   color: var(--z10);
 }
 
