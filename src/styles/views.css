@@ -925,6 +925,67 @@
   resize: vertical;
 }
 
+.srow.mcp {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 10px;
+}
+
+.srow.mcp .d {
+  max-width: 64ch;
+}
+
+.srow.mcp textarea {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--hair);
+  border-radius: 5px;
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+  resize: vertical;
+  color: var(--z10);
+  background: var(--z1);
+  user-select: text;
+}
+
+.srow.mcp textarea::placeholder {
+  color: var(--z5);
+}
+
+.srow.mcp textarea:focus-visible {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.mcplist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+}
+
+.mcplist li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.mcplist code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--z7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .srow.private .btn {
   margin: 8px 0 0 -10px;
 }

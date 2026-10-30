@@ -326,6 +326,7 @@ export function ThreadView({
         <CommandAsk
           key={lastRun.asking}
           command={lastRun.asking}
+          tool={!!lastRun.askingTool}
           step={now ? ROLE_NAMES[now.role].label : undefined}
           project={fileName(thread.repo)}
           onAnswer={(allow, always) => onAnswer(lastRun.asking!, allow, always)}
@@ -456,11 +457,14 @@ export function ThreadView({
 /** A run waiting for the person to allow a command beyond the project's checks. */
 function CommandAsk({
   command,
+  tool,
   step,
   project,
   onAnswer,
 }: {
   command: string;
+  /** It's an MCP tool that may change something, rather than a command. */
+  tool: boolean;
   step?: string;
   project: string;
   onAnswer: (allow: boolean, always: boolean) => Promise<void>;
@@ -471,10 +475,17 @@ function CommandAsk({
     onAnswer(allow, always).catch(() => setSent(false));
   };
   return (
-    <div className="review cmdask" role="alertdialog" aria-label="Allow this command?">
-      <p>
-        {step ?? "Shoji"} wants to run <code>{command}</code>. Checks run on their own; anything else waits for you.
-      </p>
+    <div className="review cmdask" role="alertdialog" aria-label={tool ? "Allow this tool?" : "Allow this command?"}>
+      {tool ? (
+        <p>
+          {step ?? "Shoji"} wants to use <code>{command}</code> from an MCP server. Tools that only look run on their
+          own; anything that could change something waits for you.
+        </p>
+      ) : (
+        <p>
+          {step ?? "Shoji"} wants to run <code>{command}</code>. Checks run on their own; anything else waits for you.
+        </p>
+      )}
       <button type="button" className="btn solid" onClick={() => answer(true)} disabled={sent}>
         Allow
       </button>
@@ -514,6 +525,11 @@ function TurnView({ turn, run, live, waiting }: { turn: Turn; run: RunView; live
               ))}
             </ol>
           )}
+          {run.unreached?.map((u) => (
+            <p key={u.server} className="esc">
+              Couldn't reach the {u.server} MCP server, so this run went on without it. {u.error}
+            </p>
+          ))}
           <Outcome turn={turn} run={run} live={live} />
         </div>
       </div>
@@ -572,6 +588,8 @@ function Work({ step, showPlan }: { step: StepView; showPlan: boolean }) {
   const reads = step.tools.filter((t) => READS.has(t.tool));
   const edits = unique(step.tools.filter((t) => EDITS.has(t.tool)).map((t) => t.target));
   const commands = step.tools.filter((t) => t.tool === "run_command").map((t) => t.target);
+  // MCP tools come named as "server: tool".
+  const used = step.tools.filter((t) => t.tool.startsWith("mcp__")).map((t) => t.target);
   const output = step.output?.trim();
 
   const items = [
@@ -597,6 +615,15 @@ function Work({ step, showPlan }: { step: StepView; showPlan: boolean }) {
       <Item key="commands" icon={ICONS.term} summary={listSummary("Ran", unique(commands))}>
         <ul className="files">
           {commands.map((c, i) => (
+            <li key={i}>{c}</li>
+          ))}
+        </ul>
+      </Item>
+    ),
+    used.length > 0 && (
+      <Item key="mcp" icon={ICONS.term} summary={listSummary("Used", unique(used))}>
+        <ul className="files">
+          {used.map((c, i) => (
             <li key={i}>{c}</li>
           ))}
         </ul>

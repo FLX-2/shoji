@@ -44,6 +44,8 @@ export interface Prefs {
   devCommands: Record<string, string>;
   /** Download the current models and prices once a day. */
   updateModels: boolean;
+  /** The MCP servers the person added, as the JSON they pasted, so it reads back as they wrote it. */
+  mcpServers: string;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -67,6 +69,7 @@ export const DEFAULT_PREFS: Prefs = {
   previewUrls: {},
   devCommands: {},
   updateModels: true,
+  mcpServers: "",
 };
 
 const STORE = "shoji.prefs";

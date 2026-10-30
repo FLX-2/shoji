@@ -85,4 +85,41 @@ describe("Settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Use the defaults" }));
     expect(JSON.parse(localStorage.getItem("shoji.prefs")!).privateFiles).toEqual(DEFAULT_PRIVATE);
   });
+
+  it("takes MCP servers pasted as JSON, says what's wrong, and gives them to each thread's runs", async () => {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", planFirst: false }));
+    const fake = fakeBridge();
+    render(<App bridge={fake.bridge} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    });
+    const box = screen.getByRole("textbox", { name: /^MCP servers/ });
+    fireEvent.change(box, { target: { value: '{"mcpServers": {"github": {"command": "npx"' } });
+    expect(screen.getByRole("alert").textContent).toMatch(/^That isn't valid JSON yet/);
+    fireEvent.change(box, { target: { value: '{"mcpServers": {"my github": {"command": "npx"}}}' } });
+    expect(screen.getByRole("alert").textContent).toBe(
+      `"my github" can't be a server's name: use letters, digits, - and _.`,
+    );
+
+    const pasted = {
+      mcpServers: {
+        github: { command: "npx", args: ["-y", "@modelcontextprotocol/server-github"], env: { TOKEN: "t" } },
+        docs: { url: "https://docs.example.com/mcp" },
+      },
+    };
+    fireEvent.change(box, { target: { value: JSON.stringify(pasted, null, 2) } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText("npx -y @modelcontextprotocol/server-github")).toBeTruthy();
+    expect(screen.getByText("https://docs.example.com/mcp")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    });
+    const task = await screen.findByRole("textbox", { name: "Task" });
+    fireEvent.change(task, { target: { value: "Close issue 7" } });
+    await act(async () => {
+      fireEvent.keyDown(task, { key: "Enter" });
+    });
+    expect(fake.calls.starts[0].mcpServers).toEqual(pasted);
+  });
 });

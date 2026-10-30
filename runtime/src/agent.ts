@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import type { Mcp } from "./mcp";
 import type { Meter } from "./meter";
 import type { Role, Seat } from "./stack";
 import { runTool } from "./tools";
@@ -22,8 +23,11 @@ export interface AgentRun {
   maxTurns?: number;
   /** Called before each tool runs, so the app can show the work as it happens. */
   onTool?: (name: string, input: Record<string, string>) => void;
-  /** Asks the person about a command that isn't allowed yet. Without it, such a command is refused. */
-  ask?: (command: string) => Promise<boolean>;
+  /** Asks the person about a command, or an MCP tool that changes things, that isn't allowed yet. Without it,
+   *  such a command or tool is refused. */
+  ask?: (command: string, tool?: boolean) => Promise<boolean>;
+  /** The MCP servers' tools, called here when a role uses one. */
+  mcp?: Mcp;
 }
 
 export function textOf(message: Anthropic.Message): string {
@@ -35,8 +39,32 @@ export function textOf(message: Anthropic.Message): string {
 
 /** One role working on one step: a tool loop on the role's model until it answers. */
 export async function runAgent(run: AgentRun): Promise<string> {
-  const { meter, workspace, allowedCommands, role, step, seat, system, prompt, tools, maxTurns = 12, onTool, ask } = run;
+  const {
+    meter,
+    workspace,
+    allowedCommands,
+    role,
+    step,
+    seat,
+    system,
+    prompt,
+    tools,
+    maxTurns = 12,
+    onTool,
+    ask,
+    mcp,
+  } = run;
   const use = async (name: string, input: Record<string, string>) => {
+    if (mcp?.owns(name)) {
+      // A tool that only looks runs at once; one that may change something waits for the person, like a command.
+      const label = mcp.label(name);
+      if (!mcp.isReadOnly(name) && !allowedCommands.includes(label)) {
+        if (!ask || !(await ask(label, true)))
+          return `Error: the person didn't allow ${label}. Do the task without it.`;
+      }
+      onTool?.(name, input);
+      return mcp.call(name, input);
+    }
     const command = input.command ?? "";
     if (name === "run_command" && !allowedCommands.includes(command) && ask) {
       // Shown as run only once the person allows it.

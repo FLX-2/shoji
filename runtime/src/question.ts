@@ -2,6 +2,7 @@ import { OUT_OF_TURNS, runAgent } from "./agent";
 import type { Emit, ThreadResult } from "./events";
 import { diffOf } from "./git";
 import { projectInstructions } from "./instructions";
+import { type Mcp, NO_MCP } from "./mcp";
 import { BudgetExceeded, Meter, RefusedError } from "./meter";
 import * as prompts from "./prompts";
 import type { ModelProvider } from "./provider";
@@ -24,6 +25,8 @@ export interface QuestionInput {
   /** Hard spending cap, in dollars. */
   cap: number;
   emit: Emit;
+  /** The person's MCP servers; the answer uses only the tools that look. */
+  mcp?: Mcp;
 }
 
 /**
@@ -32,6 +35,8 @@ export interface QuestionInput {
  */
 export async function answerQuestion(input: QuestionInput): Promise<ThreadResult> {
   const { task, plan, question, seat, workspace, emit } = input;
+  // Only the tools that look: an answer changes nothing.
+  const mcp = input.mcp ?? NO_MCP;
   const meter = new Meter(input.provider, emit, input.cap);
   const step = "answer";
   const finish = (status: ThreadResult["status"], reason?: string): ThreadResult => {
@@ -67,9 +72,16 @@ export async function answerQuestion(input: QuestionInput): Promise<ThreadResult
       seat,
       system: prompts.QUESTION,
       prompt: `Task: ${task}${projectInstructions(workspace)}\n\nPlan:\n${plan}\n\nThe work so far:\n${shown || "(no changes yet)"}\n\nThe person asks: ${question}`,
-      tools: READ_TOOLS,
+      tools: [...READ_TOOLS, ...mcp.readOnly],
+      mcp,
       maxTurns: 8,
-      onTool: (tool, input) => emit({ type: "tool", step, tool, target: input.path ?? input.pattern ?? "" }),
+      onTool: (tool, input) =>
+        emit({
+          type: "tool",
+          step,
+          tool,
+          target: mcp.owns(tool) ? mcp.label(tool) : (input.path ?? input.pattern ?? ""),
+        }),
     });
     emit({ type: "step", step, role: "scout", model: seat.model, status: "done", output: answer });
     if (!answer || answer === OUT_OF_TURNS) return finish("failed", "The answer ran out of turns before it finished.");

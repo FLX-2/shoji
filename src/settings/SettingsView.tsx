@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { type McpServer, parseMcpServers } from "../../runtime/src/mcpConfig";
 import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import type { Stack } from "../../runtime/src/stack";
 import type { KeyStatus } from "../bridge";
@@ -84,6 +85,15 @@ export function SettingsView({
               on={prefs.updateModels}
               onToggle={() => onChange({ updateModels: !prefs.updateModels })}
             />
+          </div>
+        </section>
+
+        <section className="sg" aria-labelledby="s-tools">
+          <h2 id="s-tools" className="k">
+            Tools
+          </h2>
+          <div className="card">
+            <McpRow prefs={prefs} onChange={onChange} />
           </div>
         </section>
 
@@ -295,6 +305,70 @@ function PrivateRow({ prefs, onChange }: { prefs: Prefs; onChange: (change: Part
         }}
         onBlur={() => setTyped(prefs.privateFiles.join("\n"))}
       />
+    </div>
+  );
+}
+
+/** The person's MCP servers, or why the JSON they pasted can't be used, with nothing to say for none. */
+export function readMcpServers(text: string): { servers: McpServer[]; problem?: string } {
+  if (!text.trim()) return { servers: [] };
+  try {
+    return { servers: parseMcpServers(JSON.parse(text)) };
+  } catch (e) {
+    const problem = e instanceof SyntaxError ? `That isn't valid JSON yet: ${e.message}` : String((e as Error).message);
+    return { servers: [], problem };
+  }
+}
+
+const EXAMPLE = `{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "…" }
+    }
+  }
+}`;
+
+/** MCP servers, pasted as JSON in the shape their READMEs give. */
+function McpRow({ prefs, onChange }: { prefs: Prefs; onChange: (change: Partial<Prefs>) => void }) {
+  const { servers, problem } = readMcpServers(prefs.mcpServers);
+  return (
+    <div className="srow mcp">
+      <label htmlFor="s-mcp">
+        <b>MCP servers</b>
+        <span className="d">
+          Tools for every role from servers you add, such as GitHub, a database or your docs. Paste the JSON from a
+          server's README. Shoji starts each server in the thread's copy of the project. Tools that only look run on
+          their own; anything that could change something waits for you, like a command. What you paste stays on this
+          computer.
+        </span>
+      </label>
+      <textarea
+        id="s-mcp"
+        rows={Math.min(16, Math.max(6, prefs.mcpServers.split("\n").length))}
+        spellCheck={false}
+        autoComplete="off"
+        placeholder={EXAMPLE}
+        value={prefs.mcpServers}
+        onChange={(e) => onChange({ mcpServers: e.target.value })}
+      />
+      {problem ? (
+        <p className="d" role="alert">
+          {problem}
+        </p>
+      ) : (
+        servers.length > 0 && (
+          <ul className="mcplist">
+            {servers.map((s) => (
+              <li key={s.name}>
+                <b>{s.name}</b>
+                <code>{s.url ?? [s.command, ...(s.args ?? [])].join(" ")}</code>
+              </li>
+            ))}
+          </ul>
+        )
+      )}
     </div>
   );
 }

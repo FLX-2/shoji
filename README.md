@@ -33,6 +33,8 @@ Ask a question about a thread's work at any point. The Scout model reads the cod
 
 A role can run the project's checks at any time. Any other command, such as installing a package, waits for you to allow it once, always for that project, or not at all.
 
+**MCP servers.** Add servers in Settings, under Tools, by pasting the JSON from a server's README (`{"mcpServers": {…}}`, with a `command` or a `url`). Each run starts them in the thread's copy of the project. Scout gets the tools that only look; Build gets them all. A tool that could change something waits for you, like a command. A server that can't be reached is named in the conversation, and the run goes on without it.
+
 **Receipts.** What each thread cost, step by step, against running everything on one strong model. You can export a month as CSV.
 
 **Stack.** Which model and effort takes each role, saved to `stack.lock` with its history. A trial replays your latest accepted tasks on another stack, in scratch copies of your project, and reports what changed. Watching compares this week with the four weeks before, and names a model that got slower, more expensive or worse at its role.
@@ -44,6 +46,7 @@ A role can run the project's checks at any time. Any other command, such as inst
 - Your API key stays in the system keychain. Shoji sends it only to Anthropic.
 - Your code goes only to the model provider, and only what a role reads or you attach.
 - **Private files** never go at all. By default those are env files and keys: `.env`, `.env.*` (but not `.env.example`), `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*` and `.npmrc`. No role can read, change, list or search them, and the reviewer's diff leaves them out. Edit the list in Settings, under Data, with patterns as in `.gitignore`.
+- MCP servers get only what a role sends their tools. Shoji passes a server the environment a program needs plus what you set in its `env`, never your API key. The JSON you paste, tokens included, stays on this computer.
 - Receipts and run logs stay on your computer. There is no Shoji server, and Shoji sends no usage data.
 - Once a day Shoji downloads the list of models and their prices from this repository, [`catalog/models.json`](catalog/models.json), so a new model or price needs no new release. The download carries nothing about you or your work. Turn it off in Settings, under Data.
 
