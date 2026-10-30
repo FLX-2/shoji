@@ -25,7 +25,7 @@ The first time Shoji opens, setup asks for your Anthropic API key, picks a stack
 **Threads.** Scout reads the code, Plan writes the steps, Build makes the change and Review judges it. Plan, Build and Review follow the project's own `AGENTS.md` and `CLAUDE.md` when it has them, and Plan also reads the `SHOJI.md` notes that setup can write. With Check the plan first on, the thread pauses after the plan so you can build it or ask for another. Each thread has three views:
 
 - **Conversation:** each step with its model, its work and what it cost.
-- **Code:** every file the thread changed, with its diff.
+- **Code:** every file the thread changed, with its diff. Click a line's number to comment on it, then send your comments to Build as one request for changes.
 - **Preview:** your project's dev server at 360, 768 or 1280 px. You run the dev server. The address is remembered per project and starts at `http://localhost:5173`.
 
 A role can run the project's checks at any time. Any other command, such as installing a package, waits for you to allow it once, always for that project, or not at all.

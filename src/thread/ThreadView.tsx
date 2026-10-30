@@ -3,6 +3,7 @@ import type { CheckResult } from "../../runtime/src/events";
 import { MODELS } from "../../runtime/src/models";
 import type { Bridge } from "../bridge";
 import { CodeView } from "../code/CodeView";
+import { commentsNote, type LineComment } from "../code/comments";
 import { useChanges } from "../code/useChanges";
 import { ClipIcon } from "../shell/ClipIcon";
 import { ROLE_NAMES } from "../stack/lock";
@@ -96,6 +97,9 @@ export function ThreadView({
   const ended = thread.turns.filter((t) => t.exit || t.error).length;
   const { changes, error, act } = useChanges(bridge, thread.repo, `${ended}-${mode}-${thread.committed}`);
   const fileCount = changes?.files.length ?? 0;
+  // Comments on lines of the diff, kept across views until they go to Build.
+  const [comments, setComments] = useState<LineComment[]>([]);
+  useEffect(() => setComments([]), [thread.id]);
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
 
@@ -105,7 +109,15 @@ export function ThreadView({
   const planned = lastRun.result?.status === "planned";
   // The review sent it back. Fixing can't help a check whose program isn't on this computer.
   const fixable = lastRun.result?.status === "needs-work" && !lastRun.result.checks.some((c) => c.missing);
-  const outcome = running ? undefined : lastRun.result ? lastRun.result.status : last.stoppedByYou ? "stopped" : "failed";
+  // The work can take changes: it has a plan, isn't committed, and has money left.
+  const canChange = !running && !thread.committed && runs.some((run) => run.result?.plan) && spent < thread.cap;
+  const outcome = running
+    ? undefined
+    : lastRun.result
+      ? lastRun.result.status
+      : last.stoppedByYou
+        ? "stopped"
+        : "failed";
 
   const commit = () => {
     setCommitting(true);
@@ -116,24 +128,26 @@ export function ThreadView({
   };
 
   const now = lastRun.steps.findLast((s) => s.running);
-  const stage = running
-    ? lastRun.asking
-      ? "Waiting for you"
-      : now
-      ? (
-          <>
-            {stepLabel(lastRun.steps, lastRun.steps.indexOf(now))}
-            <span className="mn"> · {MODELS[now.model].label}</span>
-          </>
-        )
-      : last.stoppedByYou
-        ? "Stopping"
-        : "Starting"
-    : lastRun.result
-      ? STATUS[lastRun.result.status]
-      : last.stoppedByYou
-        ? STATUS.stopped
-        : STATUS.failed;
+  const stage = running ? (
+    lastRun.asking ? (
+      "Waiting for you"
+    ) : now ? (
+      <>
+        {stepLabel(lastRun.steps, lastRun.steps.indexOf(now))}
+        <span className="mn"> · {MODELS[now.model].label}</span>
+      </>
+    ) : last.stoppedByYou ? (
+      "Stopping"
+    ) : (
+      "Starting"
+    )
+  ) : lastRun.result ? (
+    STATUS[lastRun.result.status]
+  ) : last.stoppedByYou ? (
+    STATUS.stopped
+  ) : (
+    STATUS.failed
+  );
 
   return (
     <section className="thread">
@@ -191,6 +205,13 @@ export function ThreadView({
           onChoose={setChosenFile}
           onAccept={(path) => act(bridge.acceptFile(thread.repo, path))}
           onRevert={(path) => act(bridge.revertFile(thread.repo, path))}
+          comments={comments}
+          {...(canChange && { onComments: setComments })}
+          onSendComments={() => {
+            onRequestChanges(commentsNote(comments));
+            setComments([]);
+            setMode("conversation");
+          }}
         />
       )}
 
@@ -404,7 +425,10 @@ function StepRow({
       <div className="sb">
         <div className="sl">
           {stepLabel(steps, index)}
-          <span className="m mn" title={step.cost > 0 ? `${MODELS[step.model].label} · ${formatCost(step.cost)}` : MODELS[step.model].label}>
+          <span
+            className="m mn"
+            title={step.cost > 0 ? `${MODELS[step.model].label} · ${formatCost(step.cost)}` : MODELS[step.model].label}
+          >
             {modelName(step.model)}
           </span>
         </div>
@@ -500,7 +524,10 @@ function Checks({ checks }: { checks: CheckResult[] }) {
               <i className={c.ok ? "good" : "bad"}>{c.ok ? "✓" : "✗"}</i> {c.command}
               {c.failedBefore && <span className="was"> · failed before the change too</span>}
               {c.newFailures && (
-                <span className="was"> · failed before the change too, with {count(c.newFailures.length, "new failure")}</span>
+                <span className="was">
+                  {" "}
+                  · failed before the change too, with {count(c.newFailures.length, "new failure")}
+                </span>
               )}
             </b>
             {"\n"}
@@ -534,7 +561,8 @@ function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean 
   const result = run.result;
   let text: string;
   if (turn.error) text = turn.error;
-  else if (!result) text = turn.stoppedByYou ? "You stopped this thread." : turn.exit?.error || "The runtime quit before it finished.";
+  else if (!result)
+    text = turn.stoppedByYou ? "You stopped this thread." : turn.exit?.error || "The runtime quit before it finished.";
   else if (result.status === "ready")
     text = result.reason
       ? `Ready to accept. ${result.reason}`

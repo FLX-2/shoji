@@ -1101,6 +1101,7 @@
   min-height: 0;
   display: grid;
   grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
 }
 
 .codeview > .empty {
@@ -1294,6 +1295,94 @@
   text-align: right;
   padding-right: 12px;
   user-select: none;
+}
+
+/* A line's number opens a comment on it. */
+.diff button.ln {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  color: var(--z5);
+  text-align: right;
+  padding-right: 12px;
+  user-select: none;
+}
+
+.diff button.ln:hover {
+  color: var(--z10);
+  background: var(--z3);
+}
+
+.diff button.ln:focus-visible {
+  outline: 2px solid var(--z10);
+  outline-offset: -2px;
+}
+
+.diff .l.add button.ln {
+  color: var(--z8);
+}
+
+/* A comment under its line, set in from the gutters and joined on hairlines. */
+.diff .lc {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-left: 88px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--hair2);
+  border-bottom: 1px solid var(--hair2);
+  background: var(--z2);
+  font-family: var(--sans);
+  font-size: 13px;
+  white-space: normal;
+}
+
+.diff .lc p {
+  flex: 1;
+  margin: 0;
+  color: var(--z9);
+  white-space: pre-wrap;
+}
+
+.diff .lc.draft {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.diff .lc textarea {
+  all: unset;
+  display: block;
+  min-height: 40px;
+  color: var(--z10);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.diff .lc textarea::placeholder {
+  color: var(--z6);
+}
+
+.diff .lc .acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* The comments waiting to go to Build, along the bottom of Code. */
+.codeview .cbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--hair);
+  font-size: 13px;
+  color: var(--z8);
+}
+
+.codeview .cbar span {
+  margin-right: auto;
 }
 
 .diff .tx {
