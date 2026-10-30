@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LimitAsk, type Ask } from "./budget/LimitAsk";
 import { spentOn } from "./budget/daily";
-import { keepingPrivate, bridge as tauriBridge, type Bridge, type KeyStatus, type LedgerThread } from "./bridge";
+import {
+  bridge as tauriBridge,
+  carrying,
+  type Bridge,
+  type Carried,
+  type KeyStatus,
+  type LedgerThread,
+} from "./bridge";
 import { folderName, HomeView } from "./home/HomeView";
 import { Field } from "./look/Field";
 import { lookStyle } from "./look/LookRows";
@@ -10,6 +17,7 @@ import { usePrefs } from "./settings/prefs";
 import { SettingsView } from "./settings/SettingsView";
 import { SetupView } from "./setup/SetupView";
 import { notesProgress, useNotes } from "./setup/useNotes";
+import { useModelCatalog } from "./stack/catalog";
 import { StackView } from "./stack/StackView";
 import { estimateCost, tierStack, type Tier } from "./stack/tier";
 import { useStack } from "./stack/useStack";
@@ -40,10 +48,11 @@ const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent
 function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const [section, setSection] = useState<SectionId>("home");
   const [prefs, setPrefs] = usePrefs();
-  // Every run, trial and notes run carries the private files as they are when it starts.
-  const privateFiles = useRef(prefs.privateFiles);
-  privateFiles.current = prefs.privateFiles;
-  const bridge = useMemo(() => keepingPrivate(given, () => privateFiles.current), [given]);
+  const catalog = useModelCatalog(prefs.updateModels);
+  // Every run, trial and notes run carries the private files and the model list as they are when it starts.
+  const carried = useRef<Carried>({ privateFiles: prefs.privateFiles });
+  carried.current = { privateFiles: prefs.privateFiles, models: catalog ?? undefined };
+  const bridge = useMemo(() => carrying(given, () => carried.current), [given]);
   const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
   const stack = useStack(bridge, prefs.stack);
   // Read through a ref, so a command allowed mid-thread counts for the thread's next run.
@@ -181,7 +190,10 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 estimate={estimate}
                 onPickAttachments={() => bridge.pickAttachments()}
                 onSavePasted={async (image) =>
-                  bridge.saveAttachment(image.name || "pasted.png", Array.from(new Uint8Array(await image.arrayBuffer())))
+                  bridge.saveAttachment(
+                    image.name || "pasted.png",
+                    Array.from(new Uint8Array(await image.arrayBuffer())),
+                  )
                 }
                 onStart={async (task, attachments) => {
                   const repo = prefs.repo;

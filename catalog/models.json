@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "updated": "2026-10-28",
+  "models": {
+    "claude-opus-5-5": { "label": "Opus 5.5", "input": 4, "output": 20, "cacheRead": 0.2 },
+    "claude-sonnet-5-5": { "label": "Sonnet 5.5", "input": 2, "output": 10, "cacheRead": 0.2 },
+    "claude-haiku-5-5": { "label": "Haiku 5.5", "input": 0.1, "output": 0.5, "cacheRead": 0.01 }
+  }
+}

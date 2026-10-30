@@ -8,3 +8,8 @@ if (typeof HTMLCanvasElement !== "undefined") {
     disconnect() {}
   };
 }
+
+// Tests never reach the network: a test that needs fetch stubs it.
+if (typeof window !== "undefined") {
+  globalThis.fetch = (() => Promise.reject(new TypeError("Tests have no network."))) as typeof fetch;
+}

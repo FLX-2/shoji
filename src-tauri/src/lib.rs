@@ -175,6 +175,8 @@ struct RunRequest {
     allowed_commands: Vec<String>,
     /// Patterns for files no role may read, change or list. None keeps the runtime's own.
     private_files: Option<Vec<String>>,
+    /// The downloaded model list, as the runtime's --models-json takes it. None keeps the built-in one.
+    models: Option<serde_json::Value>,
 }
 
 /// The runtime's --private flags. An empty list is passed as one empty pattern, which keeps
@@ -185,6 +187,11 @@ fn private_args(patterns: &Option<Vec<String>>) -> Vec<String> {
         Some(list) if list.is_empty() => vec!["--private=".into()],
         Some(list) => list.iter().map(|pattern| format!("--private={pattern}")).collect(),
     }
+}
+
+/// The runtime's --models-json flag, joined with = so the list can't be read as a flag of its own.
+fn models_args(models: &Option<serde_json::Value>) -> Vec<String> {
+    models.iter().map(|list| format!("--models-json={list}")).collect()
 }
 
 #[derive(Serialize)]
@@ -302,6 +309,7 @@ fn start_run(
     args.extend(request.attachments.iter().map(|file| format!("--attach={file}")));
     args.extend(request.allowed_commands.iter().map(|command| format!("--allow={command}")));
     args.extend(private_args(&request.private_files));
+    args.extend(models_args(&request.models));
     if let Some(changes) = request.changes {
         let plan = runs.join(format!("{stamp}-plan.md"));
         fs::write(&plan, &changes.plan).map_err(|e| e.to_string())?;
@@ -407,6 +415,8 @@ struct TrialRequest {
     tasks: Vec<serde_json::Value>,
     /// Patterns for files no role may read, change or list. None keeps the runtime's own.
     private_files: Option<Vec<String>>,
+    /// The downloaded model list, as the runtime's --models-json takes it. None keeps the built-in one.
+    models: Option<serde_json::Value>,
 }
 
 /// Replays accepted tasks on a candidate stack in scratch copies of the project. The project
@@ -442,6 +452,7 @@ fn start_trial(
         .start_run(thread, "trial", &log.display().to_string(), stamp)
         .map_err(|e| e.to_string())?;
     let private = private_args(&request.private_files);
+    let models = models_args(&request.models);
     let mut args = vec![
         "--json".to_string(),
         "--repo".into(),
@@ -456,6 +467,7 @@ fn start_trial(
         log.display().to_string(),
     ];
     args.extend(private);
+    args.extend(models);
     let command = app.shell().sidecar("shoji-runtime").map_err(|e| e.to_string())?;
     let (events, child) = command
         .args(args)
@@ -481,6 +493,8 @@ struct NotesRequest {
     cap: f64,
     /// Patterns for files the scout may not read or list. None keeps the runtime's own.
     private_files: Option<Vec<String>>,
+    /// The downloaded model list, as the runtime's --models-json takes it. None keeps the built-in one.
+    models: Option<serde_json::Value>,
 }
 
 /// Has the scout read the project and write SHOJI.md, the notes Plan reads before every task.
@@ -517,6 +531,7 @@ fn start_notes(
         .start_run(thread, "notes", &log.display().to_string(), stamp)
         .map_err(|e| e.to_string())?;
     let private = private_args(&request.private_files);
+    let models = models_args(&request.models);
     let mut args = vec![
         "--json".to_string(),
         "--repo".into(),
@@ -530,6 +545,7 @@ fn start_notes(
         log.display().to_string(),
     ];
     args.extend(private);
+    args.extend(models);
     let command = app.shell().sidecar("shoji-runtime").map_err(|e| e.to_string())?;
     let (events, child) = command
         .args(args)
@@ -877,6 +893,13 @@ mod tests {
             private_args(&Some(vec![".env".into(), "--help".into()])),
             vec!["--private=.env", "--private=--help"]
         );
+    }
+
+    #[test]
+    fn passes_the_model_list_as_one_joined_flag() {
+        assert!(models_args(&None).is_empty());
+        let list = serde_json::json!({ "version": 1, "models": {} });
+        assert_eq!(models_args(&Some(list)), vec![r#"--models-json={"models":{},"version":1}"#]);
     }
 
     #[test]
