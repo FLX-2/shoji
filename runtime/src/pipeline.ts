@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { MAX_TOKENS, runAgent, textOf } from "./agent";
+import { MAX_TOKENS, OUT_OF_TURNS, runAgent, textOf } from "./agent";
 import { runChecks } from "./commands";
 import type { CheckResult, Emit, ThreadResult } from "./events";
 import { diffOf } from "./git";
@@ -155,8 +155,14 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
 
     state.review = await review();
     if (!approves(state.review) && fixRounds < 2) {
-      await fix(`fix-${fixRounds + 1}`, seat, state.review);
+      const fixed = await fix(`fix-${fixRounds + 1}`, seat, state.review);
       passing = check(`fix-${fixRounds + 1}`);
+      // Half-done work would only draw the same notes again, so stop and say where it got to.
+      if (fixed === OUT_OF_TURNS)
+        return finish(
+          "needs-work",
+          "The fix ran out of turns before it finished, so Shoji stopped instead of reviewing half-done work. The review's notes above say what it was working on, and Fix it picks it up from there.",
+        );
       state.review = await review();
     }
 
