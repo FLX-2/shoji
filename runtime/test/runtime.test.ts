@@ -15,7 +15,7 @@ import { AnthropicProvider, type ModelProvider } from "../src/provider";
 import { STACKS } from "../src/stack";
 import { runTool } from "../src/tools";
 import { Workspace } from "../src/workspace";
-import { CHECK, roleOf, team, tempRepo, UNBROKEN } from "./helpers";
+import { CHECK, reply, roleOf, team, tempRepo, UNBROKEN } from "./helpers";
 
 const usage = (u: object) => ({ input_tokens: 0, output_tokens: 0, ...u }) as Parameters<typeof costOf>[1];
 
@@ -274,6 +274,44 @@ describe("thread pipeline", () => {
     const build = provider.requests.find((r) => roleOf(r) === "builder")!;
     expect(build.messages[0].content).toContain(`These checks already failed before any change`);
     expect(JSON.stringify(provider.requests.at(-1)!.messages)).toContain("it failed before this change too");
+    expect(provider.requests.at(-1)!.system).toContain("A check that failed before this change is not a reason for FIX");
+  });
+
+  it("stops at a fix that ran out of turns instead of reviewing unfinished work", async () => {
+    const ALWAYS_FAILS = `node -e "process.exit(1)"`;
+    const scripted = team(() => true, "VERDICT: FIX\n1. Update the old test.");
+    // The first fix round keeps reaching for tools until its turns are gone.
+    const provider: ModelProvider = {
+      send: (request) =>
+        roleOf(request) === "builder" && JSON.stringify(request.messages[0]).includes("A first attempt")
+          ? Promise.resolve(reply([{ tool: "read_file", input: { path: "src/hello.js" } }]))
+          : scripted.send(request),
+    };
+    const { result, events } = await run(provider, 1, undefined, [UNBROKEN, ALWAYS_FAILS]);
+
+    const steps = events.flatMap((e) => (e.type === "step" && e.status === "running" ? [e.step] : []));
+    expect(steps).toEqual(["scout", "plan", "build", "review", "fix-1"]);
+    expect(result.status).toBe("needs-work");
+    expect(result.review).toBe("VERDICT: FIX\n1. Update the old test.");
+    expect(result.reason).toMatch(/^The fix ran out of turns before it finished, so Shoji stopped/);
+    expect(result.reason).toMatch(/left that failure alone. The review's notes above say what's left.$/);
+  });
+
+  it("doesn't review a check fix that ran out of turns either", async () => {
+    const scripted = team(() => false);
+    const provider: ModelProvider = {
+      send: (request) =>
+        roleOf(request) === "builder" && JSON.stringify(request.messages[0]).includes("A first attempt")
+          ? Promise.resolve(reply([{ tool: "read_file", input: { path: "src/hello.js" } }]))
+          : scripted.send(request),
+    };
+    const { result, events } = await run(provider, 5, undefined, [UNBROKEN]);
+
+    const steps = events.flatMap((e) => (e.type === "step" && e.status === "running" ? [e.step] : []));
+    expect(steps).toEqual(["scout", "plan", "build", "fix-1", "fix-2"]);
+    expect(result.status).toBe("needs-work");
+    expect(result.review).toBe("");
+    expect(result.reason).toBe("The fix ran out of turns before it finished, so Shoji stopped instead of reviewing unfinished work.");
   });
 
   it("still fixes a check the build broke, and keeps leaving the old failure to later runs", async () => {

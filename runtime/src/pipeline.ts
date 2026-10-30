@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { MAX_TOKENS, runAgent, textOf } from "./agent";
+import { MAX_TOKENS, OUT_OF_TURNS, runAgent, textOf } from "./agent";
 import { runChecks } from "./commands";
 import type { CheckResult, Emit, ThreadResult } from "./events";
 import { diffOf } from "./git";
@@ -48,7 +48,7 @@ const MAX_FILES_CHARS = 60_000;
 export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   const { task, stack, workspace, checks, emit, changes, approved, replan } = input;
   const meter = new Meter(input.provider, emit, input.cap);
-  const state = { plan: "", review: "", checks: [] as CheckResult[], escalated: false };
+  const state = { plan: "", review: "", checks: [] as CheckResult[], escalated: false, ranOut: false };
 
   const step = async (name: string, role: Role, seat: Seat, work: () => Promise<string>) => {
     emit({ type: "step", step: name, role, model: seat.model, status: "running" });
@@ -102,8 +102,8 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     const buildStep = changes ? "changes" : "build";
     await agent(buildStep, "build", stack.build, prompts.BUILD, buildPrompt, builderTools);
 
-    const fix = (name: string, seat: Seat, notes: string) =>
-      agent(
+    const fix = async (name: string, seat: Seat, notes: string) => {
+      const output = await agent(
         name,
         "build",
         seat,
@@ -111,6 +111,8 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
         `${buildPrompt}\n\nA first attempt is already in the project. Fix what's wrong:\n${notes}`,
         builderTools,
       );
+      state.ranOut = output === OUT_OF_TURNS;
+    };
     const failures = () =>
       state.checks
         .filter((c) => !c.ok && !c.failedBefore)
@@ -149,34 +151,48 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
         ),
       );
 
-    state.review = await review();
-    if (!approves(state.review) && fixRounds < 2) {
+    // A fix that ran out of turns is unfinished, so there's nothing yet for a review to judge.
+    if (!state.ranOut) state.review = await review();
+    if (!state.ranOut && !approves(state.review) && fixRounds < 2) {
       await fix(`fix-${fixRounds + 1}`, seat, state.review);
       passing = check(`fix-${fixRounds + 1}`);
-      state.review = await review();
+      if (!state.ranOut) state.review = await review();
     }
 
+    const ranOut = state.ranOut
+      ? "The fix ran out of turns before it finished, so Shoji stopped instead of reviewing unfinished work."
+      : "";
+    const because = (...reasons: string[]) => reasons.filter(Boolean).join(" ") || undefined;
     if (missing.length) {
       const which = missing.length === 1 ? "its program isn't" : "their programs aren't";
       return finish(
         "needs-work",
-        `Shoji couldn't run ${missing.join(" or ")}: ${which} on this computer, so it didn't try to fix the checks. The review judged the change without them.`,
+        because(
+          ranOut,
+          `Shoji couldn't run ${missing.join(" or ")}: ${which} on this computer, so it didn't try to fix the checks. The review judged the change without them.`,
+        ),
       );
     }
     const status = passing && approves(state.review) ? "ready" : "needs-work";
     const old = state.checks.filter((c) => c.failedBefore).map((c) => c.command);
     if (old.length) {
       const was = old.length === 1 ? "was already failing" : "were already failing";
+      const left =
+        status === "ready"
+          ? "Everything else passes and the review approved the change."
+          : state.review
+            ? "The review's notes above say what's left."
+            : "";
       return finish(
         status,
-        `${old.join(" and ")} ${was} before Shoji changed anything, so it left ${old.length === 1 ? "that failure" : "those failures"} alone. ${
-          status === "ready"
-            ? "Everything else passes and the review approved the change."
-            : "The review's notes above say what's left."
-        }`,
+        because(
+          ranOut,
+          `${old.join(" and ")} ${was} before Shoji changed anything, so it left ${old.length === 1 ? "that failure" : "those failures"} alone.`,
+          left,
+        ),
       );
     }
-    return finish(status);
+    return finish(status, because(ranOut));
   } catch (error) {
     if (error instanceof BudgetExceeded) return finish("stopped", error.message);
     if (error instanceof RefusedError) return finish("failed", error.message);
@@ -267,7 +283,7 @@ export function reviewPrompt(task: string, diff: string, checks: CheckResult[]):
                 : c.missing
                   ? "couldn't run, its program isn't installed here"
                   : c.failedBefore
-                    ? `failed, and it failed before this change too. Unless the task is to make it pass, don't hold that against the change\n${c.output}`
+                    ? `failed, and it failed before this change too. Unless the task is to make it pass, don't hold that against the change or ask for it to be fixed\n${c.output}`
                     : `failed\n${c.output}`
             }`,
         )

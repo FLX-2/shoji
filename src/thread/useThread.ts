@@ -56,9 +56,9 @@ export function commitMessage(thread: Thread): string {
 }
 
 const KEEP_GOING =
-  "The last run stopped at its spending limit before it finished. Carry on from where it stopped: finish the task and get the checks passing.";
+  "The last run stopped at its spending limit before it finished. Carry on from where it stopped and finish the task.";
 
-const FIX = "The last run ended with work left to do. Fix what the review asked for and get the checks passing.";
+const FIX = "The last run ended with work left to do. Finish it and fix what the review asked for.";
 
 /** Runs one thread through the runtime: the task, then any changes the person asks for. */
 export function useThread(bridge: Bridge) {
