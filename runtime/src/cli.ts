@@ -12,7 +12,7 @@ import { defaultChecks } from "./project";
 import { AnthropicProvider } from "./provider";
 import { describeStacks, parseStack, type Stack, STACKS, type StackName } from "./stack";
 import { describeBriefing, finished, runTrial, type TrialEvent, type TrialTask } from "./trial";
-import { Workspace } from "./workspace";
+import { DEFAULT_PRIVATE, Workspace } from "./workspace";
 
 const USAGE = `Usage: shoji-runtime --task "<what to change>" [options]
        shoji-runtime --trial-file <file> [options]
@@ -45,6 +45,9 @@ Options:
                       an "ask" event and reads {"allow":true} or {"allow":false} on stdin
   --attach <file>     A screenshot, PDF or text file for every role to see with the task;
                       repeat for more
+  --private <pattern> A file no role may read, change or list, as in .gitignore; repeat
+                      for more. Without it, env files and keys are private. An empty
+                      pattern keeps nothing private
   --trial-file <file> Replay accepted tasks on the stack instead of running one, each in a
                       scratch copy of the project at the parent of its accepted commit. The
                       file holds {"tasks":[{"task":…,"commit":<accepted>,"was":<dollars>},…]};
@@ -174,6 +177,7 @@ async function main() {
       "failing-test-before": { type: "string", multiple: true },
       attach: { type: "string", multiple: true },
       allow: { type: "string", multiple: true },
+      private: { type: "string", multiple: true },
       "trial-file": { type: "string" },
       notes: { type: "boolean", default: false },
       log: { type: "string" },
@@ -217,9 +221,12 @@ async function main() {
   };
   const provider = new AnthropicProvider(apiKey, values["base-url"]);
 
+  const privateFiles = values.private ?? DEFAULT_PRIVATE;
+
   if (values.notes) {
     const result = await writeNotes({
       root,
+      privateFiles,
       seat: stack.scout,
       provider,
       cap,
@@ -236,6 +243,7 @@ async function main() {
       stack,
       provider,
       cap,
+      privateFiles,
       checks: values.check ? () => values.check! : undefined,
       emit: (event) => write(event, describeTrial(event)),
     });
@@ -256,7 +264,7 @@ async function main() {
     task: values.task,
     stack,
     provider,
-    workspace: new Workspace(root),
+    workspace: new Workspace(root, privateFiles),
     checks: values.check ?? defaultChecks(root),
     cap,
     changes,

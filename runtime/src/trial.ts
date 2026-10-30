@@ -60,6 +60,8 @@ export interface TrialInput {
   provider: ModelProvider;
   /** Hard spending cap for the whole trial, in dollars. */
   cap: number;
+  /** Patterns, as in .gitignore, for files no role may read, change or list. */
+  privateFiles?: string[];
   /** The check commands for a copy; the project's own scripts by default. */
   checks?: (copy: string) => string[];
   emit: (event: TrialEvent) => void;
@@ -98,7 +100,7 @@ export async function runTrial(input: TrialInput): Promise<Briefing> {
         task: task.task,
         stack,
         provider: input.provider,
-        workspace: new Workspace(copy),
+        workspace: new Workspace(copy, input.privateFiles),
         checks: (input.checks ?? defaultChecks)(copy),
         cap: left,
         emit: (event) => emit({ type: "runtime", index, event }),

@@ -31,6 +31,8 @@ export interface NotesInput {
   provider: ModelProvider;
   /** Hard spending cap, in dollars. */
   cap: number;
+  /** Patterns, as in .gitignore, for files the scout may not read or list. */
+  privateFiles?: string[];
   emit: (event: NotesEvent) => void;
 }
 
@@ -54,7 +56,7 @@ export async function writeNotes(input: NotesInput): Promise<NotesResult> {
     emit({ type: "step", step, role: "scout", model: seat.model, status: "running" });
     const notes = await runAgent({
       meter,
-      workspace: new Workspace(root),
+      workspace: new Workspace(root, input.privateFiles),
       allowedCommands: [],
       role: "scout",
       step,
