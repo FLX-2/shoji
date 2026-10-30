@@ -140,6 +140,7 @@ describe("a thread in the app", () => {
         cap: 0.5,
         planOnly: true,
         privateFiles: DEFAULT_PRIVATE,
+        ask: "Add an annual toggle to the pricing cards",
       },
     ]);
 
@@ -357,8 +358,15 @@ describe("a thread in the app", () => {
       { command: "pnpm test", ok: true, output: "" },
       { command: "pnpm lint", ok: false, output: "2 errors", failedBefore: true },
     ];
-    fake.emit(running("build", "build", SONNET), done("build", "build", SONNET), { type: "checks", step: "build", results: checks });
-    fake.emit(running("review", "review", HAIKU), done("review", "review", HAIKU, "VERDICT: REVISE\n1. Fix the import."));
+    fake.emit(running("build", "build", SONNET), done("build", "build", SONNET), {
+      type: "checks",
+      step: "build",
+      results: checks,
+    });
+    fake.emit(
+      running("review", "review", HAIKU),
+      done("review", "review", HAIKU, "VERDICT: REVISE\n1. Fix the import."),
+    );
     fake.emit(
       result("needs-work", 0.36, {
         review: "VERDICT: REVISE\n1. Fix the import.",
@@ -391,7 +399,11 @@ describe("a thread in the app", () => {
   it("counts a check with new failures as failed, though it was failing before", async () => {
     const fake = await startThread();
     const checks = [{ command: "pnpm test", ok: false, output: " FAIL  b.test.ts", newFailures: ["FAIL b.test.ts"] }];
-    fake.emit(running("build", "build", SONNET), done("build", "build", SONNET), { type: "checks", step: "build", results: checks });
+    fake.emit(running("build", "build", SONNET), done("build", "build", SONNET), {
+      type: "checks",
+      step: "build",
+      results: checks,
+    });
     fake.emit(result("needs-work", 0.2, { failingBefore: ["pnpm test"], checks }));
     fake.exit(1);
 

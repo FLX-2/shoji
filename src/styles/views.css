@@ -2444,3 +2444,95 @@ button.rrow:focus-visible {
   border-radius: 3px;
   padding: 1px 5px;
 }
+
+/* Threads: the person's threads in a pane beside the one on show, joined on a hairline. */
+.threads {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 252px minmax(0, 1fr);
+}
+
+.threads > :only-child {
+  grid-column: 1 / -1;
+}
+
+.threads > .thread,
+.threads > .empty {
+  min-width: 0;
+}
+
+.tlist {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--hair);
+  background: var(--pane);
+}
+
+.tlist .thead {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 10px 8px;
+  border-bottom: 1px solid var(--hair2);
+}
+
+.tlist ul {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+}
+
+.tlist li button {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  cursor: pointer;
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: 3px;
+}
+
+.tlist li button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tlist li button[aria-current="true"] {
+  background: var(--z3);
+}
+
+.tlist li button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.tlist li button:focus-visible {
+  outline: 2px solid var(--z10);
+  outline-offset: -2px;
+}
+
+.tlist b {
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--z9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tlist button[aria-current="true"] b {
+  color: var(--z10);
+}
+
+.tlist .meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  font-size: 12px;
+  color: var(--z6);
+}

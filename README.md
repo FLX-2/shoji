@@ -22,7 +22,7 @@ The first time Shoji opens, setup asks for your Anthropic API key, picks a stack
 
 **Home.** Describe a task. Attach screenshots, PDFs or text files with the clip, or paste an image. Pick how much the task is worth: Draft moves Build and Review down one model, Max puts Build on the Plan model, and Balanced follows your stack. Once you've finished a few tasks, Home shows what a task usually costs at that setting.
 
-**Threads.** Scout reads the code, Plan writes the steps, Build makes the change and Review judges it. Plan, Build and Review follow the project's own `AGENTS.md` and `CLAUDE.md` when it has them, and Plan also reads the `SHOJI.md` notes that setup can write. With Check the plan first on, the thread pauses after the plan so you can build it or ask for another. Each thread has three views:
+**Threads.** Scout reads the code, Plan writes the steps, Build makes the change and Review judges it. Plan, Build and Review follow the project's own `AGENTS.md` and `CLAUDE.md` when it has them, and Plan also reads the `SHOJI.md` notes that setup can write. With Check the plan first on, the thread pauses after the plan so you can build it or ask for another. Every thread you start is listed beside the one on show, with where it got to and what it cost. Open any of them to read it again, or carry it on. Each thread has three views:
 
 - **Conversation:** each step with its model, its work and what it cost.
 - **Code:** every file the thread changed, with its diff.

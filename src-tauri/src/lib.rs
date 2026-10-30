@@ -177,6 +177,8 @@ struct RunRequest {
     private_files: Option<Vec<String>>,
     /// The downloaded model list, as the runtime's --models-json takes it. None keeps the built-in one.
     models: Option<serde_json::Value>,
+    /// What the person asked for, as the thread shows it, kept so a reopened thread can show it again.
+    ask: Option<String>,
 }
 
 /// The runtime's --private flags. An empty list is passed as one empty pattern, which keeps
@@ -258,6 +260,7 @@ fn start_run(
     ledger: State<Ledger>,
     request: RunRequest,
 ) -> Result<Started, String> {
+    let ask = request.ask.clone();
     let mut slot = run.child.lock().unwrap();
     if slot.is_some() {
         return Err("A thread is already running.".into());
@@ -331,9 +334,11 @@ fn start_run(
             .map(|thread| (thread, "task".to_string())),
     }
     .and_then(|(thread, kind)| {
-        ledger
-            .start_run(thread, &kind, &log.display().to_string(), stamp)
-            .map(|entry| (thread, entry))
+        let entry = ledger.start_run(thread, &kind, &log.display().to_string(), stamp)?;
+        if let Some(ask) = &ask {
+            ledger.note_ask(entry, ask)?;
+        }
+        Ok((thread, entry))
     })
     .map_err(|e| e.to_string());
     let spawned = recorded.and_then(|ids| {
@@ -724,6 +729,24 @@ fn write_stack_lock(app: AppHandle, contents: String) -> Result<(), String> {
     fs::rename(&partial, data.join("stack.lock")).map_err(|e| e.to_string())
 }
 
+/// A run's events as the runtime wrote them, for reopening a past thread. Only runs the ledger
+/// knows are read, and only from the app's own runs folder.
+#[tauri::command]
+async fn run_events(app: AppHandle, ledger: State<'_, Ledger>, run: i64) -> Result<Vec<serde_json::Value>, String> {
+    let log = ledger.log_of(run).map_err(|e| e.to_string())?.ok_or("Shoji has no record of that run.")?;
+    let runs = app.path().app_data_dir().map_err(|e| e.to_string())?.join("runs");
+    read_events(&runs, Path::new(&log))
+}
+
+fn read_events(runs: &Path, log: &Path) -> Result<Vec<serde_json::Value>, String> {
+    if !log.starts_with(runs) {
+        return Err("That run's log isn't in Shoji's runs folder.".into());
+    }
+    // A log that's gone, such as one removed by hand, just shows nothing.
+    let Ok(text) = fs::read_to_string(log) else { return Ok(Vec::new()) };
+    Ok(text.lines().filter_map(|line| serde_json::from_str(line).ok()).collect())
+}
+
 /// Every thread in the ledger with its runs and calls, newest first, for Receipts.
 #[tauri::command]
 async fn ledger_threads(ledger: State<'_, Ledger>) -> Result<Vec<ThreadRecord>, String> {
@@ -859,6 +882,7 @@ pub fn run() {
             revert_file,
             commit_thread,
             ledger_threads,
+            run_events,
             export_csv,
             read_stack_lock,
             write_stack_lock
@@ -900,6 +924,19 @@ mod tests {
         assert!(models_args(&None).is_empty());
         let list = serde_json::json!({ "version": 1, "models": {} });
         assert_eq!(models_args(&Some(list)), vec![r#"--models-json={"models":{},"version":1}"#]);
+    }
+
+    #[test]
+    fn reads_a_runs_events_only_from_the_runs_folder() {
+        let runs = std::env::temp_dir().join(format!("shoji-runs-{}", std::process::id()));
+        fs::create_dir_all(&runs).unwrap();
+        let log = runs.join("1.jsonl");
+        fs::write(&log, "{\"type\":\"tool\"}\nnot json\n{\"type\":\"result\"}\n").unwrap();
+        let events = read_events(&runs, &log).unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[1]["type"], "result");
+        assert!(read_events(&runs, &runs.join("gone.jsonl")).unwrap().is_empty());
+        assert!(read_events(&runs, Path::new("/etc/passwd")).is_err());
     }
 
     #[test]
