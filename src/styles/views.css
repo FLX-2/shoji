@@ -1176,6 +1176,39 @@
   border-color: rgba(255, 255, 255, 0.3);
 }
 
+.terminal {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--solid);
+}
+
+.terminal .term {
+  flex: 1;
+  min-height: 0;
+  padding: 10px 0 0 14px;
+}
+
+.terminal .xterm-viewport {
+  scrollbar-width: thin;
+  scrollbar-color: var(--z4) transparent;
+}
+
+.termbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 18px;
+  border-top: 1px solid var(--hair);
+  font-size: 12.5px;
+  color: var(--z8);
+}
+
+.termbar .btn {
+  margin-left: auto;
+}
+
 .pvframe {
   height: 100%;
   overflow: hidden;

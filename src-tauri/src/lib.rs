@@ -2,6 +2,7 @@ mod ledger;
 #[cfg(unix)]
 mod shell_path;
 mod server;
+mod terminal;
 #[cfg(target_os = "macos")]
 mod titlebar;
 mod worktree;
@@ -23,6 +24,7 @@ use tauri_plugin_shell::ShellExt;
 
 use ledger::{Ledger, ThreadRecord};
 use server::Servers;
+use terminal::Terminals;
 
 /// Where the Anthropic key lives in the system keychain.
 const KEY_SERVICE: &str = "app.shoji.desktop";
@@ -677,6 +679,7 @@ fn slug(task: &str) -> String {
 async fn commit_thread(
     ledger: State<'_, Ledger>,
     servers: State<'_, Servers>,
+    terminals: State<'_, Terminals>,
     repo: String,
     branch: String,
     message: String,
@@ -688,6 +691,7 @@ async fn commit_thread(
     // The work is on its branch now, and the copy is put away so the branch can be checked out.
     if let Some(dir) = workdir {
         servers.stop_in(&dir);
+        terminals.close_in(&dir);
         worktree::remove(&repo, &dir);
     }
     Ok(sha)
@@ -703,6 +707,28 @@ fn start_server(app: AppHandle, servers: State<Servers>, dir: String, command: S
 #[tauri::command]
 fn stop_server(servers: State<Servers>, id: u64) {
     servers.stop(id);
+}
+
+/// Opens the person's shell in a thread's copy, at the given size. Returns the terminal's
+/// number; what it prints arrives as `terminal-output`, and its end as `terminal-exit`.
+#[tauri::command]
+fn open_terminal(app: AppHandle, terminals: State<Terminals>, dir: String, cols: u16, rows: u16) -> Result<u64, String> {
+    terminals.open(&app, &dir, cols, rows)
+}
+
+#[tauri::command]
+fn write_terminal(terminals: State<Terminals>, id: u64, data: String) -> Result<(), String> {
+    terminals.write(id, &data)
+}
+
+#[tauri::command]
+fn resize_terminal(terminals: State<Terminals>, id: u64, cols: u16, rows: u16) {
+    terminals.resize(id, cols, rows);
+}
+
+#[tauri::command]
+fn close_terminal(terminals: State<Terminals>, id: u64) {
+    terminals.close(id);
 }
 
 /// Asks where to save a CSV file, then writes it there. Returns the path, or none if cancelled.
@@ -912,6 +938,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Run::default())
         .manage(Servers::default())
+        .manage(Terminals::default())
         .setup(|app| {
             let data = app.path().app_data_dir()?;
             fs::create_dir_all(&data)?;
@@ -956,7 +983,11 @@ pub fn run() {
             start_server,
             stop_server,
             read_file,
-            write_file
+            write_file,
+            open_terminal,
+            write_terminal,
+            resize_terminal,
+            close_terminal
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -964,6 +995,7 @@ pub fn run() {
             // Dev servers are the person's own processes, so they go when Shoji does.
             if let tauri::RunEvent::Exit = event {
                 app.state::<Servers>().stop_all();
+                app.state::<Terminals>().close_all();
             }
         });
 }

@@ -204,6 +204,17 @@ export const bridge = {
   readFile: (repo: string, path: string) => invoke<string>("read_file", { repo, path }),
   /** Saves the person's own edit to one of the thread's changed files. */
   writeFile: (repo: string, path: string, contents: string) => invoke<void>("write_file", { repo, path, contents }),
+  /** Opens the person's shell in a folder at a size in characters, and returns the terminal's number. */
+  openTerminal: (dir: string, cols: number, rows: number) => invoke<number>("open_terminal", { dir, cols, rows }),
+  writeTerminal: (terminal: number, data: string) => invoke<void>("write_terminal", { id: terminal, data }),
+  resizeTerminal: (terminal: number, cols: number, rows: number) =>
+    invoke<void>("resize_terminal", { id: terminal, cols, rows }),
+  /** Ends a terminal's shell. Its end arrives through onTerminalExit. */
+  closeTerminal: (terminal: number) => invoke<void>("close_terminal", { id: terminal }),
+  onTerminalOutput: (handler: (terminal: number, data: string) => void) =>
+    listen<{ terminal: number; data: string }>("terminal-output", (e) => handler(e.payload.terminal, e.payload.data)),
+  onTerminalExit: (handler: (terminal: number) => void) =>
+    listen<{ terminal: number }>("terminal-exit", (e) => handler(e.payload.terminal)),
   /** Starts the project's dev server in a folder with the person's command, and returns its number. */
   startServer: (dir: string, command: string) => invoke<number>("start_server", { dir, command }),
   /** Stops a dev server and everything it started. Its end arrives through onServerExit. */
