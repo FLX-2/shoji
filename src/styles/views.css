@@ -1649,6 +1649,23 @@ button.rrow:focus-visible {
   margin: 4px 0 0 -10px;
 }
 
+.srow.watch {
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.srow.watch svg {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  fill: none;
+  stroke: var(--z8);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .trial {
   display: grid;
   gap: 14px;

@@ -69,8 +69,8 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
     // Only at launch: forgetting the key later in Settings shouldn't pull the person into setup.
   }, [bridge]);
 
-  // The ledger, read again whenever a run starts or ends: today's spend for the daily limit, and
-  // recent tasks for Home's estimate.
+  // The ledger, read again whenever a run starts or ends: today's spend for the daily limit,
+  // recent tasks for Home's estimate, and Stack's Watching row.
   const [ledger, setLedger] = useState<LedgerThread[]>([]);
   useEffect(() => {
     bridge
@@ -204,6 +204,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 lock={stack.lock}
                 error={stack.error}
                 onSave={stack.save}
+                ledger={ledger}
               />
             ) : section === "threads" && thread ? (
               <ThreadView
