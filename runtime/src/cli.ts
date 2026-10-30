@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import readline from "node:readline";
 import { parseArgs } from "node:util";
 import { readAttachments } from "./attachments";
 import type { RuntimeEvent } from "./events";
@@ -39,6 +40,9 @@ Options:
   --failing-test-before <name>
                       A failure one of those checks named then, so a new one still counts;
                       repeat for more
+  --allow <command>   A command beyond the checks that may run without asking; repeat
+                      for more. Any other command asks first: with --json, the run writes
+                      an "ask" event and reads {"allow":true} or {"allow":false} on stdin
   --attach <file>     A screenshot, PDF or text file for every role to see with the task;
                       repeat for more
   --trial-file <file> Replay accepted tasks on the stack instead of running one, each in a
@@ -61,6 +65,23 @@ The API key comes from SHOJI_API_KEY or ANTHROPIC_API_KEY.`;
 function fail(message: string): never {
   process.stderr.write(`${message}\n`);
   process.exit(2);
+}
+
+let answers: AsyncIterator<string> | undefined;
+
+/** Waits for the person's answer about a command: a JSON line from the app, or y or n at a terminal.
+ *  An answer that never comes, because the input closed, is no. */
+async function askPerson(command: string, json: boolean | undefined): Promise<boolean> {
+  if (!json) process.stderr.write(`Allow \`${command}\` to run? [y/N] `);
+  answers ??= readline.createInterface({ input: process.stdin, terminal: false })[Symbol.asyncIterator]();
+  const { value, done } = await answers.next();
+  if (done) return false;
+  if (!json) return /^\s*y(es)?\s*$/i.test(value);
+  try {
+    return (JSON.parse(value) as { allow?: unknown }).allow === true;
+  } catch {
+    return false;
+  }
 }
 
 /** The attached files, read now so one Shoji can't send stops the run before it spends. */
@@ -86,6 +107,10 @@ function describe(event: RuntimeEvent): string | null {
         .join("\n");
     case "escalate":
       return `  moving up to ${MODELS[event.to].label}: ${event.reason}`;
+    case "ask":
+      return null; // The question itself is asked on stderr.
+    case "answer":
+      return `  ${event.allowed ? "allowed" : "not allowed"}: ${event.command}`;
     case "result": {
       const r = event.result;
       const roles = Object.entries(r.costByRole)
@@ -148,6 +173,7 @@ async function main() {
       "failing-before": { type: "string", multiple: true },
       "failing-test-before": { type: "string", multiple: true },
       attach: { type: "string", multiple: true },
+      allow: { type: "string", multiple: true },
       "trial-file": { type: "string" },
       notes: { type: "boolean", default: false },
       log: { type: "string" },
@@ -240,6 +266,8 @@ async function main() {
     failingBefore: values["failing-before"],
     failingTestsBefore: values["failing-test-before"],
     ...(values.attach?.length && { attachments: attached(values.attach) }),
+    allowed: values.allow,
+    ask: (command) => askPerson(command, values.json),
     emit: (event) => write(event, describe(event)),
   });
   process.exitCode = result.status === "ready" || result.status === "planned" ? 0 : 1;

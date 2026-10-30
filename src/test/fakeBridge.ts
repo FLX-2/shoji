@@ -29,6 +29,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     exports: [] as { name: string; contents: string }[],
     lockWrites: [] as string[],
     pasted: [] as { name: string; bytes: number[] }[],
+    answers: [] as boolean[],
   };
   /** What the attach dialog answers with; tests fill it. */
   const picked: string[] = [];
@@ -66,6 +67,9 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     startNotes: async (request) => {
       calls.notes.push(request);
       return files.hasNotes ? null : ++runs;
+    },
+    answerAsk: async (allow) => {
+      calls.answers.push(allow);
     },
     stopRun: async () => {
       calls.stops++;

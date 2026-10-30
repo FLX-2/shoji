@@ -33,6 +33,8 @@ export interface Prefs {
   showModels: boolean;
   /** The first-run setup was finished once, so it doesn't open on its own again. */
   setupDone: boolean;
+  /** Commands beyond the checks that the person always allows, by project folder. */
+  allowedCommands: Record<string, string[]>;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -51,6 +53,7 @@ export const DEFAULT_PREFS: Prefs = {
   showCosts: true,
   showModels: true,
   setupDone: false,
+  allowedCommands: {},
 };
 
 const STORE = "shoji.prefs";

@@ -170,6 +170,9 @@ struct RunRequest {
     /// Screenshots and files the person attached to the thread's task.
     #[serde(default)]
     attachments: Vec<String>,
+    /// Commands beyond the checks that the person allowed in this project.
+    #[serde(default)]
+    allowed_commands: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -285,6 +288,7 @@ fn start_run(
         args.push("--plan-only".into());
     }
     args.extend(request.attachments.iter().map(|file| format!("--attach={file}")));
+    args.extend(request.allowed_commands.iter().map(|command| format!("--allow={command}")));
     if let Some(changes) = request.changes {
         let plan = runs.join(format!("{stamp}-plan.md"));
         fs::write(&plan, &changes.plan).map_err(|e| e.to_string())?;
@@ -518,6 +522,16 @@ fn start_notes(
     *slot = Some((id, child, entry));
     watch(app, events, id, entry);
     Ok(Some(id))
+}
+
+/// The person's answer to the running thread's question about a command.
+#[tauri::command]
+fn answer_ask(run: State<Run>, allow: bool) -> Result<(), String> {
+    let mut slot = run.child.lock().unwrap();
+    let (_, child, _) = slot.as_mut().ok_or("No thread is running.")?;
+    child
+        .write(format!("{{\"allow\":{allow}}}\n").as_bytes())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -802,6 +816,7 @@ pub fn run() {
             start_trial,
             start_notes,
             stop_run,
+            answer_ask,
             changes,
             accept_file,
             revert_file,

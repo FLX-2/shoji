@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LimitAsk, type Ask } from "./budget/LimitAsk";
 import { spentOn } from "./budget/daily";
 import { bridge as tauriBridge, type Bridge, type KeyStatus, type LedgerThread } from "./bridge";
@@ -41,7 +41,11 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
   const [prefs, setPrefs] = usePrefs();
   const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
   const stack = useStack(bridge, prefs.stack);
-  const { thread, start, requestChanges, keepGoing, fix, build, replan, stop, commit } = useThread(bridge);
+  // Read through a ref, so a command allowed mid-thread counts for the thread's next run.
+  const allowed = useRef(prefs.allowedCommands);
+  allowed.current = prefs.allowedCommands;
+  const allowedIn = useCallback((repo: string) => allowed.current[repo] ?? [], []);
+  const { thread, start, requestChanges, keepGoing, fix, build, replan, stop, commit } = useThread(bridge, allowedIn);
   const trials = useTrial(bridge);
   const trialRunning = !!trials.trial && trialProgress(trials.trial).running;
   const notes = useNotes(bridge);
@@ -212,12 +216,19 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 more={prefs.cap}
                 onRetry={() =>
                   withinDay("This thread", thread.cap, () =>
-                    start(thread.task, thread.repo, thread.stack, thread.cap, prefs.planFirst),
+                    start(thread.task, thread.repo, thread.stack, thread.cap, prefs.planFirst, thread.attachments),
                   )
                 }
                 onBuild={build}
                 onReplan={replan}
                 onCommit={commit}
+                onAnswer={(command, allow, always) => {
+                  if (always) {
+                    const now = prefs.allowedCommands[thread.repo] ?? [];
+                    setPrefs({ allowedCommands: { ...prefs.allowedCommands, [thread.repo]: [...now, command] } });
+                  }
+                  return bridge.answerAsk(allow);
+                }}
                 showCosts={prefs.showCosts}
               />
             ) : (

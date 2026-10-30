@@ -67,7 +67,7 @@ const KEEP_GOING =
 const FIX = "The last run ended with work left to do. Fix what the review asked for.";
 
 /** Runs one thread through the runtime: the task, then any changes the person asks for. */
-export function useThread(bridge: Bridge) {
+export function useThread(bridge: Bridge, allowedIn: (repo: string) => string[] = () => []) {
   const [thread, setThread] = useState<Thread | null>(null);
   // The run the last turn is waiting on. "starting" until the runtime gives its number.
   const current = useRef<number | "starting" | null>(null);
@@ -117,6 +117,7 @@ export function useThread(bridge: Bridge) {
           changes,
           ...(planOnly && { planOnly }),
           ...(next.attachments?.length && { attachments: next.attachments }),
+          ...(allowedIn(next.repo).length && { allowedCommands: allowedIn(next.repo) }),
         });
         const held = early.current.get(id);
         early.current.clear();
@@ -128,7 +129,7 @@ export function useThread(bridge: Bridge) {
         updateLast((t) => ({ ...t, error: String(error) }));
       }
     },
-    [bridge, updateLast],
+    [bridge, updateLast, allowedIn],
   );
 
   /** Starts a thread. With `planFirst`, it pauses once the plan is written. */

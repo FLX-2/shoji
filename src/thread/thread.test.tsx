@@ -397,6 +397,43 @@ describe("a thread in the app", () => {
     expect(screen.getByText("· failed before the change too, with 1 new failure")).toBeTruthy();
   });
 
+  it("waits for the person before a command beyond the checks, and remembers one always allowed", async () => {
+    const fake = await startThread();
+    fake.emit(running("build", "build", SONNET), { type: "ask", step: "build", command: "npm install" });
+
+    expect(document.querySelector(".stage")?.textContent).toContain("Waiting for you");
+    const ask = screen.getByRole("alertdialog", { name: "Allow this command?" });
+    expect(ask.textContent).toContain("Build wants to run npm install.");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Always allow in pricing-page" }));
+    });
+    expect(fake.calls.answers).toEqual([true]);
+    expect(JSON.parse(localStorage.getItem("shoji.prefs")!).allowedCommands).toEqual({
+      "/work/pricing-page": ["npm install"],
+    });
+
+    fake.emit({ type: "answer", step: "build", command: "npm install", allowed: true });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    fake.emit(done("build", "build", SONNET), result("stopped", 0.5, { plan: "1. Add it." }));
+    fake.exit(1);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Keep going/ }));
+    });
+    expect(fake.calls.starts[1].allowedCommands).toEqual(["npm install"]);
+  });
+
+  it("tells the run when the person turns a command down", async () => {
+    const fake = await startThread();
+    fake.emit(running("build", "build", SONNET), { type: "ask", step: "build", command: "curl example.com" });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Don't allow" }));
+    });
+    expect(fake.calls.answers).toEqual([false]);
+    fake.emit({ type: "answer", step: "build", command: "curl example.com", allowed: false });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(JSON.parse(localStorage.getItem("shoji.prefs")!).allowedCommands ?? {}).toEqual({});
+  });
+
   it("draws the plan's markdown as text, not as marks", async () => {
     const fake = await startThread();
     fake.emit(

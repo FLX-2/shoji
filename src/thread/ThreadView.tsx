@@ -5,6 +5,7 @@ import type { Bridge } from "../bridge";
 import { CodeView } from "../code/CodeView";
 import { useChanges } from "../code/useChanges";
 import { ClipIcon } from "../shell/ClipIcon";
+import { ROLE_NAMES } from "../stack/lock";
 import { Composer } from "../shell/Composer";
 import {
   approves,
@@ -18,7 +19,7 @@ import {
   type ToolUse,
 } from "./fold";
 import { Markdown } from "./Markdown";
-import { isRunning, threadCost, type Thread, type Turn } from "./useThread";
+import { fileName, isRunning, threadCost, type Thread, type Turn } from "./useThread";
 
 interface ThreadViewProps {
   bridge: Bridge;
@@ -38,6 +39,8 @@ interface ThreadViewProps {
   /** Plans again from the person's notes on the plan. */
   onReplan: (notes: string) => void;
   onCommit: () => Promise<void>;
+  /** The person's answer about a command the run wants; `always` allows it in this project from now on. */
+  onAnswer: (command: string, allow: boolean, always: boolean) => Promise<void>;
   /** What the thread has cost, on the review bar. Off in Settings hides it. */
   showCosts: boolean;
 }
@@ -67,6 +70,7 @@ export function ThreadView({
   onBuild,
   onReplan,
   onCommit,
+  onAnswer,
   showCosts,
 }: ThreadViewProps) {
   const last = thread.turns[thread.turns.length - 1];
@@ -105,7 +109,9 @@ export function ThreadView({
 
   const now = lastRun.steps.findLast((s) => s.running);
   const stage = running
-    ? now
+    ? lastRun.asking
+      ? "Waiting for you"
+      : now
       ? (
           <>
             {stepLabel(lastRun.steps, lastRun.steps.indexOf(now))}
@@ -184,6 +190,16 @@ export function ThreadView({
           ))}
         </div>
       </div>
+
+      {mode === "conversation" && running && lastRun.asking && (
+        <CommandAsk
+          key={lastRun.asking}
+          command={lastRun.asking}
+          step={now ? ROLE_NAMES[now.role].label : undefined}
+          project={fileName(thread.repo)}
+          onAnswer={(allow, always) => onAnswer(lastRun.asking!, allow, always)}
+        />
+      )}
 
       {mode === "conversation" &&
         !running &&
@@ -272,6 +288,41 @@ export function ThreadView({
           </div>
         ))}
     </section>
+  );
+}
+
+/** A run waiting for the person to allow a command beyond the project's checks. */
+function CommandAsk({
+  command,
+  step,
+  project,
+  onAnswer,
+}: {
+  command: string;
+  step?: string;
+  project: string;
+  onAnswer: (allow: boolean, always: boolean) => Promise<void>;
+}) {
+  const [sent, setSent] = useState(false);
+  const answer = (allow: boolean, always = false) => {
+    setSent(true);
+    onAnswer(allow, always).catch(() => setSent(false));
+  };
+  return (
+    <div className="review cmdask" role="alertdialog" aria-label="Allow this command?">
+      <p>
+        {step ?? "Shoji"} wants to run <code>{command}</code>. Checks run on their own; anything else waits for you.
+      </p>
+      <button type="button" className="btn solid" onClick={() => answer(true)} disabled={sent}>
+        Allow
+      </button>
+      <button type="button" className="btn" onClick={() => answer(true, true)} disabled={sent}>
+        Always allow in {project}
+      </button>
+      <button type="button" className="btn" onClick={() => answer(false)} disabled={sent}>
+        Don't allow
+      </button>
+    </div>
   );
 }
 
