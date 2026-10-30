@@ -34,5 +34,8 @@ export default defineConfig(() => ({
   test: {
     environment: "jsdom",
     setupFiles: ["src/test/setup.ts"],
+    // Trial and runtime tests clone repositories and run checks as real processes, which Windows
+    // runners can take several seconds over; 5s timed them out there with nothing wrong.
+    testTimeout: 20_000,
   },
 }));
