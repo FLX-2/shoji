@@ -140,6 +140,7 @@ export function useThread(bridge: Bridge) {
       const results = thread.turns.map((t) => foldRun(t.events).result);
       const plan = results.map((r) => r?.plan).findLast(Boolean) ?? "";
       const failingBefore = [...new Set(results.flatMap((r) => r?.failingBefore ?? []))];
+      const failingTestsBefore = [...new Set(results.flatMap((r) => r?.failingTestsBefore ?? []))];
       run(
         { ...thread, cap: thread.cap + extra },
         { ask, kind, events: [] },
@@ -150,6 +151,7 @@ export function useThread(bridge: Bridge) {
           branch: thread.branch ?? "",
           ...(kind !== "changes" && { kind }),
           ...(failingBefore.length && { failingBefore }),
+          ...(failingTestsBefore.length && { failingTestsBefore }),
         },
         kind === "replan",
       );

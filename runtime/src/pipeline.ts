@@ -35,6 +35,8 @@ export interface ThreadInput {
   /** Checks that failed before the thread's first build. A changes run can't see the project as it
    *  was, so it's told. */
   failingBefore?: string[];
+  /** The failures those checks named then. */
+  failingTestsBefore?: string[];
 }
 
 
@@ -72,12 +74,16 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
           emit({ type: "tool", step: name, tool, target: input.path ?? input.pattern ?? input.command ?? "" }),
       }),
     );
-  // Checks that already fail before Shoji changes anything aren't this thread's to fix.
+  // Checks that already fail before Shoji changes anything aren't this thread's to fix, unless
+  // they name a failure that wasn't there before: a test the change broke inside a failing suite.
   let failingBefore = new Set(input.failingBefore ?? []);
+  let testsBefore = new Set(input.failingTestsBefore ?? []);
   const check = (name: string) => {
-    state.checks = runChecks(workspace.root, checks).map((c) =>
-      !c.ok && failingBefore.has(c.command) ? { ...c, failedBefore: true } : c,
-    );
+    state.checks = runChecks(workspace.root, checks).map((c) => {
+      if (c.ok || !failingBefore.has(c.command)) return c;
+      const fresh = testsBefore.size ? (c.failing ?? []).filter((f) => !testsBefore.has(f)) : [];
+      return fresh.length ? { ...c, newFailures: fresh } : { ...c, failedBefore: true };
+    });
     emit({ type: "checks", step: name, results: state.checks });
     return state.checks.every((c) => c.ok || c.failedBefore);
   };
@@ -89,6 +95,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     if (!changes) {
       const before = runChecks(workspace.root, checks).filter((c) => !c.ok && !c.missing);
       failingBefore = new Set(before.map((c) => c.command));
+      testsBefore = new Set(before.flatMap((c) => c.failing ?? []));
     }
     const commandsNote = checks.length
       ? `\n\nCheck commands you can run: ${checks.join(", ")}${
@@ -104,7 +111,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
 
     // Even when a review asks, an old failure stays out of a fix round, or the round spends itself there.
     const leaveOld = failingBefore.size
-      ? `\n\nLeave ${[...failingBefore].join(" and ")} failing as it was before, even if the notes above mention it, unless the task itself is about it.`
+      ? `\n\nLeave the failures ${[...failingBefore].join(" and ")} already had before any change, even if the notes above mention them, unless the task itself is about them.`
       : "";
     const fix = (name: string, seat: Seat, notes: string) =>
       agent(
@@ -118,7 +125,11 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     const failures = () =>
       state.checks
         .filter((c) => !c.ok && !c.failedBefore)
-        .map((c) => `${c.command} failed:\n${c.output}`)
+        .map((c) =>
+          c.newFailures
+            ? `${c.command} already failed before any change, but these failures are new:\n${c.newFailures.join("\n")}\n\n${c.output}`
+            : `${c.command} failed:\n${c.output}`,
+        )
         .join("\n\n");
 
     let fixRounds = 0;
@@ -233,6 +244,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
       review: state.review,
       checks: state.checks,
       ...(failingBefore.size && { failingBefore: [...failingBefore] }),
+      ...(testsBefore.size && { failingTestsBefore: [...testsBefore] }),
       escalated: state.escalated,
       cost: meter.spent,
       costByRole,
@@ -278,6 +290,8 @@ export function reviewPrompt(task: string, diff: string, checks: CheckResult[]):
                   ? "couldn't run, its program isn't installed here"
                   : c.failedBefore
                     ? `failed, and it failed before this change too, so it isn't this change's to fix\n${c.output}`
+                    : c.newFailures
+                      ? `failed. It failed before this change too, but these failures are new, so they are this change's to fix: ${c.newFailures.join(", ")}\n${c.output}`
                     : `failed\n${c.output}`
             }`,
         )

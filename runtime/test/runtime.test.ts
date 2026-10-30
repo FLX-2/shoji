@@ -292,6 +292,21 @@ describe("thread pipeline", () => {
     expect(events.filter((e) => e.type === "step" && e.step === "review" && e.status === "done")).toHaveLength(1);
   });
 
+  it("fixes a test the build broke inside a suite that was already failing", async () => {
+    // Fails before any change with one test, and names a second once the greeting breaks.
+    const SUITE = `node -e "console.log(' FAIL  old.test.js'); if (require('fs').readFileSync('src/hello.js','utf8').includes('broken')) console.log(' FAIL  greeting.test.js'); process.exit(1)"`;
+    const provider = team((r) => String(r.messages[0].content).includes("Fix what's wrong"));
+    const { result, events } = await run(provider, 1, undefined, [SUITE]);
+
+    const built = events.find((e) => e.type === "checks" && e.step === "build");
+    expect(built?.type === "checks" && built.results[0]).toMatchObject({ newFailures: ["FAIL greeting.test.js"] });
+    const fix = provider.requests.find((r) => String(r.messages[0].content).includes("Fix what's wrong"))!;
+    expect(fix.messages[0].content).toContain("but these failures are new:\nFAIL greeting.test.js");
+    expect(result.status).toBe("ready");
+    expect(result.checks[0]).toMatchObject({ failedBefore: true, failing: ["FAIL old.test.js"] });
+    expect(result.failingTestsBefore).toEqual(["FAIL old.test.js"]);
+  });
+
   it("still fixes a check the build broke, and keeps leaving the old failure to later runs", async () => {
     const ALWAYS_FAILS = `node -e "process.exit(1)"`;
     const provider = team(() => false);
@@ -320,7 +335,7 @@ describe("thread pipeline", () => {
     expect(fix.messages[0].content).toContain(`${UNBROKEN} failed`);
     expect(fix.messages[0].content).not.toContain(`${ALWAYS_FAILS} failed`);
     // The review asked for fixes too, and the round it started is still told to leave the old failure.
-    expect(fix.messages[0].content).toContain(`Leave ${ALWAYS_FAILS} failing as it was before`);
+    expect(fix.messages[0].content).toContain(`Leave the failures ${ALWAYS_FAILS} already had before any change`);
     const review = provider.requests.filter((r) => roleOf(r) === "reviewer").at(-1)!;
     expect(review.system).toContain("isn't the change's to fix");
   });

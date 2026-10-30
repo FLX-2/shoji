@@ -35,6 +35,9 @@ Options:
   --failing-before <command>
                       A check that failed before the thread's first build, for a --changes
                       run to leave alone; repeat for more
+  --failing-test-before <name>
+                      A failure one of those checks named then, so a new one still counts;
+                      repeat for more
   --trial-file <file> Replay accepted tasks on the stack instead of running one, each in a
                       scratch copy of the project at the parent of its accepted commit. The
                       file holds {"tasks":[{"task":…,"commit":<accepted>,"was":<dollars>},…]};
@@ -67,7 +70,7 @@ function describe(event: RuntimeEvent): string | null {
       return `  $${event.call.cost.toFixed(4)}  ${event.call.inputTokens} in, ${event.call.outputTokens} out, ${event.call.cacheReadTokens} cached`;
     case "checks":
       return event.results
-        .map((c) => `  ${c.ok ? "passed" : c.failedBefore ? "failed, as it did before" : "failed"}: ${c.command}`)
+        .map((c) => `  ${c.ok ? "passed" : c.failedBefore ? "failed, as it did before" : c.newFailures ? `failed, newly: ${c.newFailures.join(", ")}` : "failed"}: ${c.command}`)
         .join("\n");
     case "escalate":
       return `  moving up to ${MODELS[event.to].label}: ${event.reason}`;
@@ -131,6 +134,7 @@ async function main() {
       replan: { type: "string" },
       "plan-file": { type: "string" },
       "failing-before": { type: "string", multiple: true },
+      "failing-test-before": { type: "string", multiple: true },
       "trial-file": { type: "string" },
       notes: { type: "boolean", default: false },
       log: { type: "string" },
@@ -221,6 +225,7 @@ async function main() {
     approved: values.build ? plan : undefined,
     replan,
     failingBefore: values["failing-before"],
+    failingTestsBefore: values["failing-test-before"],
     emit: (event) => write(event, describe(event)),
   });
   process.exitCode = result.status === "ready" || result.status === "planned" ? 0 : 1;

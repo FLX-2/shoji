@@ -34,6 +34,8 @@ export interface ChangesRequest {
   kind?: "changes" | "build" | "replan";
   /** Checks that failed before the thread's first build, which these changes leave alone. */
   failingBefore?: string[];
+  /** The failures those checks named then, so a new one inside them still counts. */
+  failingTestsBefore?: string[];
 }
 
 export interface TrialRequest {

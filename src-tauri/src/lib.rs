@@ -151,6 +151,9 @@ struct Changes {
     /// Checks that failed before the thread's first build, which these changes leave alone.
     #[serde(default)]
     failing_before: Vec<String>,
+    /// The failures those checks named then, so a new one inside them still counts.
+    #[serde(default)]
+    failing_tests_before: Vec<String>,
 }
 
 impl Changes {
@@ -241,6 +244,7 @@ fn start_run(
         args.extend(["--plan-file".into(), plan.display().to_string()]);
         // Joined with = so a command can't be read as a flag of its own.
         args.extend(changes.failing_before.iter().map(|command| format!("--failing-before={command}")));
+        args.extend(changes.failing_tests_before.iter().map(|name| format!("--failing-test-before={name}")));
         match changes.kind() {
             "build" => args.push("--build".into()),
             kind => args.extend([format!("--{kind}"), changes.notes]),
