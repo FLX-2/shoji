@@ -19,6 +19,7 @@ import { Rail } from "./shell/Rail";
 import { WindowControls } from "./shell/WindowControls";
 import { SECTIONS, type SectionId } from "./shell/sections";
 import { formatCost } from "./thread/fold";
+import { DEFAULT_PREVIEW } from "./thread/PreviewView";
 import { ThreadView } from "./thread/ThreadView";
 import { isRunning, threadCost, useThread } from "./thread/useThread";
 
@@ -235,6 +236,8 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                   return bridge.answerAsk(allow);
                 }}
                 showCosts={prefs.showCosts}
+                previewUrl={prefs.previewUrls[thread.repo] ?? DEFAULT_PREVIEW}
+                onPreviewUrl={(url) => setPrefs({ previewUrls: { ...prefs.previewUrls, [thread.repo]: url } })}
               />
             ) : (
               <>
