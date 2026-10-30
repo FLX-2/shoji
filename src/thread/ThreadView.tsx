@@ -87,6 +87,19 @@ export function ThreadView({
   const lastRun = runs[runs.length - 1];
   const spent = threadCost(thread);
   const [asking, setAsking] = useState(false);
+  // The project's files, for @ in the changes box, read each time it opens.
+  const [files, setFiles] = useState<string[]>([]);
+  useEffect(() => {
+    if (!asking) return;
+    let current = true;
+    bridge.projectFiles(thread.repo).then(
+      (list) => current && setFiles(list),
+      () => {},
+    );
+    return () => {
+      current = false;
+    };
+  }, [asking, bridge, thread.repo]);
   const scroller = useFollow(thread);
   const [mode, setMode] = useState<Mode>("conversation");
   useModeKeys(setMode);
@@ -241,6 +254,7 @@ export function ThreadView({
               setAsking(false);
               (planned ? onReplan : onRequestChanges)(notes);
             }}
+            files={files}
           />
         ) : planned ? (
           <div className="review">

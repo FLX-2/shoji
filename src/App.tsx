@@ -99,6 +99,21 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     // Read again on a commit or on opening Threads too, so each thread shows where it got to.
   }, [bridge, running, section, thread?.committed]);
   const pastThreads = useMemo(() => workThreads(ledger), [ledger]);
+  // The project's files, for @ in the task box, read again when the project changes or a run ends.
+  const [projectFiles, setProjectFiles] = useState<string[]>([]);
+  useEffect(() => {
+    setProjectFiles([]);
+    if (!prefs.repo || running) return;
+    let current = true;
+    bridge.projectFiles(prefs.repo).then(
+      (files) => current && setProjectFiles(files),
+      () => {},
+    );
+    return () => {
+      current = false;
+    };
+  }, [bridge, prefs.repo, running]);
+
   const spentToday = useMemo(() => spentOn(ledger, new Date()), [ledger]);
   const [tier, setTier] = useState<Tier>("balanced");
   const estimate = useMemo(
@@ -202,6 +217,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     Array.from(new Uint8Array(await image.arrayBuffer())),
                   )
                 }
+                files={projectFiles}
                 onStart={async (task, attachments) => {
                   const repo = prefs.repo;
                   if (!repo) return false;

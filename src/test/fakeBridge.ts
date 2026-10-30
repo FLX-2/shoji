@@ -7,7 +7,7 @@ import type { Bridge, KeyStatus, LedgerThread, NotesRequest, RunExit, RunRequest
 /** Stands in for the Rust side: records what the app asks for and plays back runtime events. */
 export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   /** The project's changes as git would report them; tests set these. */
-  const project = { diff: "", accepted: [] as string[] };
+  const project = { diff: "", accepted: [] as string[], files: [] as string[] };
   /** What the ledger holds; tests fill it. */
   const ledger: LedgerThread[] = [];
   /** Each ledger run's events, as its log on disk would hold them; tests fill it. */
@@ -76,7 +76,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     stopRun: async () => {
       calls.stops++;
     },
-    changes: async () => ({ ...project }),
+    changes: async () => ({ diff: project.diff, accepted: project.accepted }),
+    projectFiles: async () => [...project.files],
     ledgerThreads: async () => ledger,
     runEvents: async (run) => logs[run] ?? [],
     readStackLock: async () => files.stackLock,

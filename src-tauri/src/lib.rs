@@ -798,6 +798,24 @@ fn read_changes(repo: &str) -> Result<ProjectChanges, String> {
     Ok(ProjectChanges { diff, accepted })
 }
 
+/// Most files the task box offers to mention; a project bigger than this offers the first ones git lists.
+const MOST_FILES: usize = 20_000;
+
+/// The project's files, as git sees them: committed or new, leaving out what .gitignore ignores.
+/// The task box offers them after an @.
+#[tauri::command]
+async fn project_files(repo: String) -> Result<Vec<String>, String> {
+    list_files(&repo)
+}
+
+fn list_files(repo: &str) -> Result<Vec<String>, String> {
+    let listed = git(repo, &["ls-files", "--cached", "--others", "--exclude-standard", "--deduplicate"])?;
+    let mut files = names(&listed);
+    files.sort();
+    files.truncate(MOST_FILES);
+    Ok(files)
+}
+
 /// Refuses a path that isn't one of the project's current changes.
 fn changed_file(repo: &str, path: &str) -> Result<(), String> {
     let inside = Path::new(path)
@@ -878,6 +896,7 @@ pub fn run() {
             stop_run,
             answer_ask,
             changes,
+            project_files,
             accept_file,
             revert_file,
             commit_thread,
@@ -917,6 +936,18 @@ mod tests {
             private_args(&Some(vec![".env".into(), "--help".into()])),
             vec!["--private=.env", "--private=--help"]
         );
+    }
+
+    #[test]
+    fn lists_committed_and_new_files_but_not_ignored_ones() {
+        let root = repo("files");
+        let dir = Path::new(&root);
+        fs::write(dir.join(".gitignore"), "build/\n").unwrap();
+        fs::create_dir_all(dir.join("build")).unwrap();
+        fs::write(dir.join("build/out.js"), "").unwrap();
+        fs::write(dir.join("new.txt"), "").unwrap();
+        let files = list_files(&root).unwrap();
+        assert_eq!(files, vec![".gitignore", "a.txt", "b.txt", "new.txt"]);
     }
 
     #[test]
