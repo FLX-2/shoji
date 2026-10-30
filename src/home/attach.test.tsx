@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import type { ThreadResult } from "../../runtime/src/events";
 import App from "../App";
 import { fakeBridge } from "../test/fakeBridge";
 
@@ -42,8 +43,8 @@ describe("attaching files to a task", () => {
     expect(document.querySelector(".umsg .attached")?.textContent).toBe("mock.pngimage.png");
 
     const costByRole = { scout: 0, plan: 0, build: 0, review: 0 };
-    const stopped = { status: "stopped", plan: "1. Match it.", diff: "", review: "", checks: [], escalated: false, cost: 0.5 } as const;
-    fake.emit({ type: "result", result: { ...stopped, costByRole } });
+    const stopped: ThreadResult = { status: "stopped", plan: "", diff: "", review: "", checks: [], escalated: false, cost: 0.5, costByRole };
+    fake.emit({ type: "result", result: stopped });
     fake.exit(1);
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /^Keep going/ }));
