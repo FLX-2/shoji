@@ -44,9 +44,11 @@ export const WRITE_TOOLS: Anthropic.Tool[] = [
 ];
 
 export const COMMAND_TOOLS: Anthropic.Tool[] = [
-  tool("run_command", "Run one of the project's check commands, such as its tests or typecheck.", {
-    command: "The command, exactly as listed in the allowed commands",
-  }),
+  tool(
+    "run_command",
+    "Run a command in the project. Its check commands run at once. Any other command, such as installing a package, waits for the person to allow it, so run one only when the task needs it.",
+    { command: "The command to run" },
+  ),
 ];
 
 /** Runs one tool call. Failures come back as text for the model to read, never as exceptions. */

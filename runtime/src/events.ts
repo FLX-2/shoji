@@ -38,6 +38,9 @@ export type RuntimeEvent =
   | { type: "tool"; step: string; tool: string; target: string }
   | { type: "call"; call: CallRecord }
   | { type: "checks"; step: string; results: CheckResult[] }
+  /** A step wants a command that isn't a check and that the person hasn't allowed. It waits for an answer. */
+  | { type: "ask"; step: string; command: string }
+  | { type: "answer"; step: string; command: string; allowed: boolean }
   | { type: "escalate"; step: string; from: ModelId; to: ModelId; reason: string }
   | { type: "result"; result: ThreadResult };
 

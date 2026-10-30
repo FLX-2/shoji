@@ -40,6 +40,10 @@ export interface ThreadInput {
   failingTestsBefore?: string[];
   /** Screenshots and files the person attached to the task. Every role sees them. */
   attachments?: Attachments;
+  /** Commands beyond the checks that the person already allowed in this project. */
+  allowed?: string[];
+  /** Asks the person whether a command may run. Without it, only checks and `allowed` commands run. */
+  ask?: (command: string) => Promise<boolean>;
 }
 
 
@@ -61,12 +65,26 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     emit({ type: "step", step: name, role, model: seat.model, status: "done", output });
     return output;
   };
+  // What the person answered about each command this thread, so nothing is asked twice.
+  const answers = new Map((input.allowed ?? []).map((command) => [command, true]));
+  const askAbout = (name: string) =>
+    input.ask &&
+    (async (command: string) => {
+      const known = answers.get(command);
+      if (known !== undefined) return known;
+      emit({ type: "ask", step: name, command });
+      const allowed = await input.ask!(command);
+      emit({ type: "answer", step: name, command, allowed });
+      answers.set(command, allowed);
+      return allowed;
+    });
   const agent = (name: string, role: Role, seat: Seat, system: string, prompt: string, tools: typeof READ_TOOLS) =>
     step(name, role, seat, () =>
       runAgent({
         meter,
         workspace,
-        allowedCommands: checks,
+        allowedCommands: [...checks, ...(input.allowed ?? [])],
+        ask: askAbout(name),
         role,
         step: name,
         seat,

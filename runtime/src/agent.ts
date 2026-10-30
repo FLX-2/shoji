@@ -22,6 +22,8 @@ export interface AgentRun {
   maxTurns?: number;
   /** Called before each tool runs, so the app can show the work as it happens. */
   onTool?: (name: string, input: Record<string, string>) => void;
+  /** Asks the person about a command that isn't allowed yet. Without it, such a command is refused. */
+  ask?: (command: string) => Promise<boolean>;
 }
 
 export function textOf(message: Anthropic.Message): string {
@@ -33,7 +35,18 @@ export function textOf(message: Anthropic.Message): string {
 
 /** One role working on one step: a tool loop on the role's model until it answers. */
 export async function runAgent(run: AgentRun): Promise<string> {
-  const { meter, workspace, allowedCommands, role, step, seat, system, prompt, tools, maxTurns = 12, onTool } = run;
+  const { meter, workspace, allowedCommands, role, step, seat, system, prompt, tools, maxTurns = 12, onTool, ask } = run;
+  const use = async (name: string, input: Record<string, string>) => {
+    const command = input.command ?? "";
+    if (name === "run_command" && !allowedCommands.includes(command) && ask) {
+      // Shown as run only once the person allows it.
+      if (!(await ask(command))) return `Error: the person didn't allow ${command}. Do the task without it.`;
+      onTool?.(name, input);
+      return runTool(workspace, [command], name, input);
+    }
+    onTool?.(name, input);
+    return runTool(workspace, allowedCommands, name, input);
+  };
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }];
 
   for (let turn = 0; turn < maxTurns; turn++) {
@@ -50,18 +63,13 @@ export async function runAgent(run: AgentRun): Promise<string> {
     const uses = response.content.filter((block) => block.type === "tool_use");
     if (response.stop_reason !== "tool_use" || uses.length === 0) return textOf(response);
 
-    messages.push({
-      role: "user",
-      content: uses.map((use) => {
-        const input = use.input as Record<string, string>;
-        onTool?.(use.name, input);
-        return {
-          type: "tool_result" as const,
-          tool_use_id: use.id,
-          content: runTool(workspace, allowedCommands, use.name, input),
-        };
-      }),
-    });
+    // One at a time, since a command may wait for the person.
+    const results: Anthropic.ToolResultBlockParam[] = [];
+    for (const call of uses) {
+      const input = call.input as Record<string, string>;
+      results.push({ type: "tool_result", tool_use_id: call.id, content: await use(call.name, input) });
+    }
+    messages.push({ role: "user", content: results });
   }
   return OUT_OF_TURNS;
 }

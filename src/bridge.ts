@@ -24,6 +24,8 @@ export interface RunRequest {
   planOnly?: boolean;
   /** Screenshots and files attached to the thread's task, as paths. */
   attachments?: string[];
+  /** Commands beyond the checks that may run without asking. */
+  allowedCommands?: string[];
 }
 
 export interface ChangesRequest {
@@ -128,6 +130,8 @@ export const bridge = {
   /** Has Scout write the project's SHOJI.md. Returns its run number, or null if the project has notes already. */
   startNotes: (request: NotesRequest) => invoke<number | null>("start_notes", { request }),
   stopRun: () => invoke<void>("stop_run"),
+  /** Answers the running thread's question about a command. */
+  answerAsk: (allow: boolean) => invoke<void>("answer_ask", { allow }),
   changes: (repo: string) => invoke<ProjectChanges>("changes", { repo }),
   /** Keeps a file's changes by staging it. */
   acceptFile: (repo: string, path: string) => invoke<void>("accept_file", { repo, path }),

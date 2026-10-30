@@ -3,6 +3,7 @@ import type { Stack } from "../../runtime/src/stack";
 import type { KeyStatus } from "../bridge";
 import { AccentRow, BackgroundRow, DensityRow, FrostRow, MotionRow, OpaqueRow, SwitchRow } from "../look/LookRows";
 import { describeStack } from "../stack/lock";
+import { fileName } from "../thread/useThread";
 import { MoneyRow } from "./MoneyRow";
 import type { Prefs } from "./prefs";
 
@@ -65,6 +66,7 @@ export function SettingsView({
               on={prefs.planFirst}
               onToggle={() => onChange({ planFirst: !prefs.planFirst })}
             />
+            <AllowedRows prefs={prefs} onChange={onChange} />
           </div>
         </section>
 
@@ -210,3 +212,29 @@ function KeyRow({
     </div>
   );
 }
+
+/** Commands the person chose to always allow, beyond the checks, for each project. Ask again
+ *  takes one off, so Shoji asks about it next time. */
+function AllowedRows({ prefs, onChange }: { prefs: Prefs; onChange: (change: Partial<Prefs>) => void }) {
+  const forget = (repo: string, command: string) => {
+    const left = (prefs.allowedCommands[repo] ?? []).filter((c) => c !== command);
+    const { [repo]: _, ...others } = prefs.allowedCommands;
+    onChange({ allowedCommands: left.length ? { ...others, [repo]: left } : others });
+  };
+  return Object.entries(prefs.allowedCommands).flatMap(([repo, commands]) =>
+    commands.map((command) => (
+      <div className="srow" key={`${repo}\n${command}`}>
+        <div>
+          <b>
+            Always allowed in {fileName(repo)}: <code>{command}</code>
+          </b>
+          <span className="d">Shoji runs it without asking. Your checks always run.</span>
+        </div>
+        <button type="button" className="btn sm" onClick={() => forget(repo, command)}>
+          Ask again
+        </button>
+      </div>
+    )),
+  );
+}
+

@@ -28,6 +28,8 @@ export interface RunView {
   steps: StepView[];
   result?: ThreadResult;
   cost: number;
+  /** A command the run is waiting for the person to allow or turn down. */
+  asking?: string;
 }
 
 /** Folds one run's events into its steps, in order. */
@@ -37,6 +39,7 @@ export function foldRun(events: RuntimeEvent[]): RunView {
   const last = (name: string) => steps.findLast((s) => s.name === name);
   let result: ThreadResult | undefined;
   let cost = 0;
+  let asking: string | undefined;
 
   for (const event of events) {
     switch (event.type) {
@@ -67,6 +70,12 @@ export function foldRun(events: RuntimeEvent[]): RunView {
       case "escalate":
         escalations.set(event.step, { from: event.from, to: event.to, reason: event.reason });
         break;
+      case "ask":
+        asking = event.command;
+        break;
+      case "answer":
+        asking = undefined;
+        break;
       case "call": {
         cost += event.call.cost;
         const step = last(event.call.step);
@@ -76,6 +85,7 @@ export function foldRun(events: RuntimeEvent[]): RunView {
       case "result":
         result = event.result;
         cost = event.result.cost;
+        asking = undefined;
         for (const step of steps) {
           if (!step.running) continue;
           step.running = false;
@@ -84,7 +94,7 @@ export function foldRun(events: RuntimeEvent[]): RunView {
         break;
     }
   }
-  return { steps, result, cost };
+  return { steps, result, cost, ...(asking !== undefined && { asking }) };
 }
 
 /** What a step is doing, or did, in a few words. */
