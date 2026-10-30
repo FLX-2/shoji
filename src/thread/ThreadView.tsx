@@ -242,6 +242,10 @@ export function ThreadView({
           onChoose={setChosenFile}
           onAccept={(path) => act(bridge.acceptFile(place, path))}
           onRevert={(path) => act(bridge.revertFile(place, path))}
+          onRead={(path) => bridge.readFile(place, path)}
+          {...(!thread.committed && {
+            onSave: (path: string, text: string) => act(bridge.writeFile(place, path, text)),
+          })}
           comments={comments}
           {...(canChange && { onComments: setComments })}
           onSendComments={() => {

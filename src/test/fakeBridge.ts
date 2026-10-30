@@ -7,7 +7,14 @@ import type { Bridge, KeyStatus, LedgerThread, NotesRequest, RunExit, RunRequest
 /** Stands in for the Rust side: records what the app asks for and plays back runtime events. */
 export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   /** The project's changes as git would report them; tests set these. */
-  const project = { diff: "", accepted: [] as string[], files: [] as string[], git: true };
+  const project = {
+    diff: "",
+    accepted: [] as string[],
+    files: [] as string[],
+    git: true,
+    /** Changed files' text, for the editor. */
+    contents: {} as Record<string, string>,
+  };
   /** What the ledger holds; tests fill it. */
   const ledger: LedgerThread[] = [];
   /** Each ledger run's events, as its log on disk would hold them; tests fill it. */
@@ -37,6 +44,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     answeredRuns: [] as number[],
     stoppedRuns: [] as number[],
     servers: [] as { dir: string; command: string }[],
+    writes: [] as { path: string; contents: string }[],
     stoppedServers: [] as number[],
   };
   /** What the attach dialog answers with; tests fill it. */
@@ -134,6 +142,14 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     onExit: async (handler) => {
       onExit.push(handler);
       return () => onExit.splice(onExit.indexOf(handler), 1);
+    },
+    readFile: async (_, path) => {
+      if (!(path in project.contents)) throw new Error(`${path} isn't one of this project's changes.`);
+      return project.contents[path];
+    },
+    writeFile: async (_, path, contents) => {
+      calls.writes.push({ path, contents });
+      project.contents[path] = contents;
     },
     startServer: async (dir, command) => {
       calls.servers.push({ dir, command });

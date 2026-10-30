@@ -851,6 +851,38 @@ async fn accept_file(repo: String, path: String) -> Result<(), String> {
     git(&repo, &["add", "--", &path]).map(|_| ())
 }
 
+/// Largest file the editor opens. Anything bigger isn't a small edit.
+const MOST_EDITED: u64 = 1_000_000;
+
+/// One of the thread's changed files, as text, for the person to edit by hand.
+#[tauri::command]
+async fn read_file(repo: String, path: String) -> Result<String, String> {
+    let file = editable(&repo, &path)?;
+    String::from_utf8(fs::read(file).map_err(|e| e.to_string())?)
+        .map_err(|_| format!("{path} isn't text, so it can't be edited here."))
+}
+
+/// Saves the person's own edit to one of the thread's changed files.
+#[tauri::command]
+async fn write_file(repo: String, path: String, contents: String) -> Result<(), String> {
+    let file = editable(&repo, &path)?;
+    fs::write(file, contents).map_err(|e| e.to_string())
+}
+
+/// A changed file that's still there as a plain file of editable size, never a link elsewhere.
+fn editable(repo: &str, path: &str) -> Result<std::path::PathBuf, String> {
+    changed_file(repo, path)?;
+    let file = Path::new(repo).join(path);
+    let meta = fs::symlink_metadata(&file).map_err(|_| format!("{path} was removed, so there's nothing to edit."))?;
+    if !meta.file_type().is_file() {
+        return Err(format!("{path} isn't a plain file, so it can't be edited here."));
+    }
+    if meta.len() > MOST_EDITED {
+        return Err(format!("{path} is too big to edit here."));
+    }
+    Ok(file)
+}
+
 /// Puts a file back as it was at the last commit. A file the thread created is removed.
 #[tauri::command]
 async fn revert_file(repo: String, path: String) -> Result<(), String> {
@@ -922,7 +954,9 @@ pub fn run() {
             read_stack_lock,
             write_stack_lock,
             start_server,
-            stop_server
+            stop_server,
+            read_file,
+            write_file
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -1016,6 +1050,25 @@ mod tests {
         changed_file(&root, "a.txt").unwrap();
         git(&root, &["add", "--", "a.txt"]).unwrap();
         assert_eq!(read_changes(&root).unwrap().accepted, vec!["a.txt"]);
+    }
+
+    #[test]
+    fn edits_only_changed_plain_files() {
+        let root = repo("edit");
+        fs::write(Path::new(&root).join("a.txt"), "changed\n").unwrap();
+        let read = |path: &str| tauri::async_runtime::block_on(read_file(root.clone(), path.into()));
+        let write =
+            |path: &str, text: &str| tauri::async_runtime::block_on(write_file(root.clone(), path.into(), text.into()));
+        assert_eq!(read("a.txt").unwrap(), "changed\n");
+        write("a.txt", "by hand\n").unwrap();
+        assert_eq!(fs::read_to_string(Path::new(&root).join("a.txt")).unwrap(), "by hand\n");
+        // Unchanged files and paths outside the project aren't the thread's to edit.
+        assert!(read("b.txt").unwrap_err().contains("isn't one of this project's changes"));
+        assert!(write("../a.txt", "x").is_err());
+        fs::write(Path::new(&root).join("bin.dat"), [0xff, 0xfe, 0x00]).unwrap();
+        // Code reads the changes first, which marks new files so they count.
+        read_changes(&root).unwrap();
+        assert!(read("bin.dat").unwrap_err().contains("isn't text"));
     }
 
     #[test]

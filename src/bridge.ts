@@ -200,6 +200,10 @@ export const bridge = {
   onNotesEvent: (handler: (run: number, event: NotesEvent) => void) =>
     listen<{ run: number; event: NotesEvent }>("runtime-event", (e) => handler(e.payload.run, e.payload.event)),
   onExit: (handler: (exit: RunExit) => void) => listen<RunExit>("runtime-exit", (e) => handler(e.payload)),
+  /** One of the thread's changed files, as text, for the person to edit by hand. */
+  readFile: (repo: string, path: string) => invoke<string>("read_file", { repo, path }),
+  /** Saves the person's own edit to one of the thread's changed files. */
+  writeFile: (repo: string, path: string, contents: string) => invoke<void>("write_file", { repo, path, contents }),
   /** Starts the project's dev server in a folder with the person's command, and returns its number. */
   startServer: (dir: string, command: string) => invoke<number>("start_server", { dir, command }),
   /** Stops a dev server and everything it started. Its end arrives through onServerExit. */
