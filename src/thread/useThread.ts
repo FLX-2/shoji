@@ -3,7 +3,7 @@ import type { RuntimeEvent } from "../../runtime/src/events";
 import { MODELS } from "../../runtime/src/models";
 import type { Stack } from "../../runtime/src/stack";
 import type { Bridge, ChangesRequest, RunExit } from "../bridge";
-import { foldRun } from "./fold";
+import { foldRun, reviewNotes } from "./fold";
 
 /** One ask and the run that answered it: the task itself, or a request for changes. */
 export interface Turn {
@@ -57,6 +57,8 @@ export function commitMessage(thread: Thread): string {
 
 const KEEP_GOING =
   "The last run stopped at its spending limit before it finished. Carry on from where it stopped: finish the task and get the checks passing.";
+
+const FIX = "The last run ended with work left to do. Fix what the review asked for and get the checks passing.";
 
 /** Runs one thread through the runtime: the task, then any changes the person asks for. */
 export function useThread(bridge: Bridge) {
@@ -133,11 +135,20 @@ export function useThread(bridge: Bridge) {
   const carryOn = useCallback(
     (ask: string, notes: string, kind: "changes" | "build" | "replan", extra = 0) => {
       if (thread?.id === undefined) return;
-      const plan = thread.turns.map((t) => foldRun(t.events).result?.plan).findLast(Boolean) ?? "";
+      const results = thread.turns.map((t) => foldRun(t.events).result);
+      const plan = results.map((r) => r?.plan).findLast(Boolean) ?? "";
+      const failingBefore = [...new Set(results.flatMap((r) => r?.failingBefore ?? []))];
       run(
         { ...thread, cap: thread.cap + extra },
         { ask, kind, events: [] },
-        { thread: thread.id, notes, plan, branch: thread.branch ?? "", ...(kind !== "changes" && { kind }) },
+        {
+          thread: thread.id,
+          notes,
+          plan,
+          branch: thread.branch ?? "",
+          ...(kind !== "changes" && { kind }),
+          ...(failingBefore.length && { failingBefore }),
+        },
         kind === "replan",
       );
     },
@@ -148,6 +159,15 @@ export function useThread(bridge: Bridge) {
 
   /** Raises the thread's limit by `extra` dollars and picks the work up where it stopped. */
   const keepGoing = useCallback((extra: number) => carryOn("Keep going", KEEP_GOING, "changes", extra), [carryOn]);
+
+  /** Raises the thread's limit by `extra` dollars and works through what the last review asked for. */
+  const fix = useCallback(
+    (extra: number) => {
+      const review = thread?.turns.map((t) => foldRun(t.events).result?.review).findLast(Boolean);
+      carryOn("Fix what the review found", review ? `${FIX}\n\nThe review said:\n${reviewNotes(review)}` : FIX, "changes", extra);
+    },
+    [thread, carryOn],
+  );
 
   /** Builds the plan the person read and approved. */
   const build = useCallback(() => carryOn("Build it", "", "build"), [carryOn]);
@@ -167,5 +187,5 @@ export function useThread(bridge: Bridge) {
     setThread((t) => (t ? { ...t, committed: sha } : t));
   }, [bridge, thread]);
 
-  return { thread, start, requestChanges, keepGoing, build, replan, stop, commit };
+  return { thread, start, requestChanges, keepGoing, fix, build, replan, stop, commit };
 }

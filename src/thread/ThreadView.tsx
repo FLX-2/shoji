@@ -16,6 +16,7 @@ import {
   type StepView,
   type ToolUse,
 } from "./fold";
+import { Markdown } from "./Markdown";
 import { isRunning, threadCost, type Thread, type Turn } from "./useThread";
 
 interface ThreadViewProps {
@@ -25,7 +26,9 @@ interface ThreadViewProps {
   onRequestChanges: (notes: string) => void;
   /** Gives a thread that stopped at its limit more to spend, and carries on. */
   onKeepGoing: () => void;
-  /** How much more Keep going allows, in dollars. */
+  /** Gives a thread the review sent back more to spend, and works through the review's notes. */
+  onFix: () => void;
+  /** How much more Keep going and Fix it allow, in dollars. */
   more: number;
   /** Starts a thread that couldn't start over again. */
   onRetry: () => void;
@@ -57,6 +60,7 @@ export function ThreadView({
   onStop,
   onRequestChanges,
   onKeepGoing,
+  onFix,
   more,
   onRetry,
   onBuild,
@@ -86,6 +90,9 @@ export function ThreadView({
   const stopped = lastRun.result?.status === "stopped";
   // Paused after the plan, for the person to build it or ask for a different one.
   const planned = lastRun.result?.status === "planned";
+  // The review sent it back. Fixing can't help a check whose program isn't on this computer.
+  const fixable = lastRun.result?.status === "needs-work" && !lastRun.result.checks.some((c) => c.missing);
+  const outcome = running ? undefined : lastRun.result ? lastRun.result.status : last.stoppedByYou ? "stopped" : "failed";
 
   const commit = () => {
     setCommitting(true);
@@ -139,7 +146,7 @@ export function ThreadView({
           </button>
         </nav>
         <div className="tend">
-          <span className="stage">
+          <span className="stage" data-outcome={outcome}>
             <span className="dot live" aria-hidden="true" />
             {stage}
           </span>
@@ -227,6 +234,11 @@ export function ThreadView({
                     Keep going, up to {formatCost(more)} more
                   </button>
                 )}
+                {fixable && (
+                  <button type="button" className="btn solid" onClick={onFix}>
+                    Fix it, up to {formatCost(more)} more
+                  </button>
+                )}
                 {runs.some((run) => run.result?.plan) && (
                   <button type="button" className="btn" onClick={() => setAsking(true)} disabled={spent >= thread.cap}>
                     Request changes
@@ -235,7 +247,7 @@ export function ThreadView({
                 {thread.branch && fileCount > 0 && (
                   <button
                     type="button"
-                    className={stopped ? "btn" : "btn solid"}
+                    className={stopped || fixable ? "btn" : "btn solid"}
                     onClick={commit}
                     disabled={committing}
                   >
@@ -300,7 +312,11 @@ function StepRow({
   return (
     <li className={now ? "st now" : finished ? "st done" : "st"}>
       <span className="c" aria-hidden="true">
-        {finished ? "✓" : index + 1}
+        {finished && (
+          <svg viewBox="0 0 12 12">
+            <path d="M2.5 6.5l2.5 2.5 4.5-5.5" />
+          </svg>
+        )}
       </span>
       <div className="sb">
         <div className="sl">
@@ -360,23 +376,23 @@ function Work({ step, showPlan }: { step: StepView; showPlan: boolean }) {
     step.checks && step.checks.length > 0 && <Checks key="checks" checks={step.checks} />,
     output && step.role === "scout" && (
       <Item key="out" icon={ICONS.note} summary="What the scout found">
-        <div className="text">{output}</div>
+        <Markdown className="text" text={output} />
       </Item>
     ),
     output && step.role === "plan" && step.name === "plan" && (
       <Item key="out" icon={ICONS.note} summary="The plan" open={showPlan}>
-        <div className="text">{output}</div>
+        <Markdown className="text" text={output} />
       </Item>
     ),
     output &&
       step.role === "review" &&
       (approves(output) ? (
         <Item key="out" icon={ICONS.note} summary="The review approved it">
-          {reviewNotes(output) && <div className="text">{reviewNotes(output)}</div>}
+          {reviewNotes(output) && <Markdown className="text" text={reviewNotes(output)} />}
         </Item>
       ) : (
         <Item key="out" icon={ICONS.note} summary="The review asked for fixes" open>
-          <div className="text">{reviewNotes(output)}</div>
+          <Markdown className="text" text={reviewNotes(output)} />
         </Item>
       )),
   ].filter(Boolean);
@@ -385,24 +401,21 @@ function Work({ step, showPlan }: { step: StepView; showPlan: boolean }) {
   if (items.length === 0 && !said) return null;
   return (
     <div className="work">
-      {said && <p className="say">{said}</p>}
+      {said && <Markdown className="say" text={said} />}
       {items}
     </div>
   );
 }
 
 function Checks({ checks }: { checks: CheckResult[] }) {
-  const failed = checks.filter((c) => !c.ok).length;
   return (
-    <Item
-      icon={ICONS.term}
-      summary={failed ? `${failed} of ${count(checks.length, "check")} failed` : `${count(checks.length, "check")} passed`}
-    >
+    <Item icon={ICONS.term} summary={checksText(checks)}>
       <pre className="tout">
         {checks.map((c) => (
           <span key={c.command}>
             <b>
-              {c.ok ? "✓" : "✗"} {c.command}
+              <i className={c.ok ? "good" : "bad"}>{c.ok ? "✓" : "✗"}</i> {c.command}
+              {c.failedBefore && <span className="was"> · failed before the change too</span>}
             </b>
             {"\n"}
             {c.ok ? "" : `${c.output.trim()}\n`}
@@ -437,11 +450,15 @@ function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean 
   if (turn.error) text = turn.error;
   else if (!result) text = turn.stoppedByYou ? "You stopped this thread." : turn.exit?.error || "The runtime quit before it finished.";
   else if (result.status === "ready")
-    text = result.checks.length
-      ? "Ready to accept. The checks pass and the review approved the change."
-      : "Ready to accept. The review approved the change. This project has no checks to run.";
+    text = result.reason
+      ? `Ready to accept. ${result.reason}`
+      : result.checks.length
+        ? "Ready to accept. The checks pass and the review approved the change."
+        : "Ready to accept. The review approved the change. This project has no checks to run.";
   else if (result.status === "needs-work")
-    text = result.reason ?? "This still needs work. The review's notes are above; request changes to carry on.";
+    text =
+      result.reason ??
+      "The review found problems, listed above. Fix it has Shoji work through them. You can also ask for changes of your own, or accept the work as it is.";
   else if (result.status === "planned")
     text = "Here's the plan. Build it as it is, or say what to change first. Nothing in the project has changed yet.";
   else if (result.status === "stopped")
@@ -496,10 +513,21 @@ function dotted(parts: ReactNode[]): ReactNode[] {
   ));
 }
 
-function checksSummary(checks: CheckResult[] | undefined): string {
-  if (!checks?.length) return "";
-  const failed = checks.filter((c) => !c.ok).length;
-  return failed ? `${failed} of ${count(checks.length, "check")} failed` : `${count(checks.length, "check")} passed`;
+/** How the checks came out, in words: new failures first, then ones that failed before the change too. */
+function checksText(checks: CheckResult[]): string {
+  const failed = checks.filter((c) => !c.ok && !c.failedBefore).length;
+  const before = checks.filter((c) => c.failedBefore).length;
+  if (failed) return `${failed} of ${count(checks.length, "check")} failed`;
+  if (before === checks.length) return `${count(before, "check")} failing, as before`;
+  if (before) return `${count(checks.length - before, "check")} passed, ${before} failing as before`;
+  return `${count(checks.length, "check")} passed`;
+}
+
+function checksSummary(checks: CheckResult[] | undefined): ReactNode {
+  if (!checks?.length) return null;
+  const failed = checks.some((c) => !c.ok && !c.failedBefore);
+  const before = checks.some((c) => c.failedBefore);
+  return <span className={failed ? "bad" : before ? undefined : "good"}>{checksText(checks)}</span>;
 }
 
 function readSummary(reads: ToolUse[]): string {

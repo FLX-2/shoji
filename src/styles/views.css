@@ -255,6 +255,14 @@
   white-space: nowrap;
 }
 
+.tbar .stage[data-outcome="ready"] .dot {
+  background: var(--good);
+}
+
+.tbar .stage[data-outcome="failed"] .dot {
+  background: var(--bad);
+}
+
 .thread .scroll {
   flex: 1;
   min-height: 0;
@@ -319,7 +327,7 @@
   content: "";
   position: absolute;
   left: 9.5px;
-  top: 28px;
+  top: 26px;
   bottom: 4px;
   width: 1px;
   background: var(--hair);
@@ -329,29 +337,47 @@
   display: none;
 }
 
+/* Each step's mark: a check once it's done, the running light while it works, and a small open
+   ring for a step the run ended in the middle of. */
 .st .c {
   width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1px solid var(--z5);
+  height: 22px;
   display: grid;
   place-items: center;
-  font-size: 11px;
-  color: var(--z8);
-  background: var(--matte);
   position: relative;
   z-index: 1;
 }
 
-.st.done .c {
-  border-color: transparent;
-  color: var(--z6);
+.st .c::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 1px solid var(--z5);
+  background: var(--matte);
 }
 
-.st.now .c {
-  border-color: var(--safe);
-  color: var(--safe);
-  box-shadow: 0 0 0 3px rgba(var(--safe-rgb), 0.14);
+.st.done .c::before {
+  display: none;
+}
+
+.st.now .c::before {
+  border: none;
+  background: var(--safe);
+  box-shadow:
+    0 0 0 3px rgba(var(--safe-rgb), 0.18),
+    0 0 10px var(--safe);
+}
+
+.st .c svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: var(--z6);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .sb {
@@ -399,7 +425,107 @@
   line-height: 1.65;
   color: var(--z9);
   max-width: 68ch;
-  white-space: pre-line;
+}
+
+/* A model's markdown: plain type, headings by weight rather than size, and lists that hang. */
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p,
+.md ul,
+.md ol,
+.md pre,
+.md blockquote {
+  margin: 0 0 0.75em;
+}
+
+.md h3,
+.md h4 {
+  margin: 1.3em 0 0.4em;
+  font-size: inherit;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--z10);
+}
+
+.md h4 {
+  font-weight: 500;
+  color: var(--z9);
+}
+
+.md ul,
+.md ol {
+  padding-left: 1.4em;
+}
+
+.md ul {
+  list-style-type: disc;
+}
+
+.md li ul {
+  list-style-type: circle;
+}
+
+.md li {
+  margin: 0.2em 0;
+  padding-left: 0.2em;
+}
+
+.md li > ul,
+.md li > ol {
+  margin: 0.2em 0 0;
+}
+
+.md ul > li::marker {
+  color: var(--z6);
+}
+
+.md ol > li::marker {
+  color: var(--z6);
+  font-variant-numeric: tabular-nums;
+}
+
+.md strong {
+  font-weight: 600;
+  color: var(--z10);
+}
+
+.md code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--z9);
+}
+
+.md pre {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  padding: 10px 12px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--z8);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.md blockquote {
+  padding-left: 12px;
+  border-left: 1px solid var(--z5);
+  color: var(--z7);
+}
+
+.md hr {
+  border: none;
+  border-top: 1px solid var(--hair);
+  margin: 1em 0;
 }
 
 .wk {
@@ -477,7 +603,7 @@
   font-size: 14px;
   line-height: 1.7;
   color: var(--z8);
-  white-space: pre-wrap;
+  user-select: text;
 }
 
 .tout,
@@ -492,6 +618,22 @@
 .tout b {
   color: var(--z10);
   font-weight: 400;
+}
+
+.tout i {
+  font-style: normal;
+}
+
+.tout .was {
+  color: var(--z6);
+}
+
+.good {
+  color: var(--good);
+}
+
+.bad {
+  color: var(--bad);
 }
 
 .files {
@@ -870,11 +1012,11 @@
 }
 
 .fl .bar i {
-  background: var(--z8);
+  background: rgba(var(--good-rgb), 0.7);
 }
 
 .fl .bar u {
-  background: var(--z5);
+  background: rgba(var(--bad-rgb), 0.6);
 }
 
 .diffpane {
@@ -993,12 +1135,12 @@
 }
 
 .diff .l.add {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--good-rgb), 0.07);
 }
 
 .diff .l.add .tx {
   color: var(--z10);
-  box-shadow: inset 2px 0 0 var(--z8);
+  box-shadow: inset 2px 0 0 rgba(var(--good-rgb), 0.7);
 }
 
 .diff .l.add .ln:nth-child(2) {
@@ -1008,7 +1150,8 @@
 .diff .l.del .tx {
   color: var(--z5);
   text-decoration: line-through;
-  text-decoration-color: var(--z5);
+  text-decoration-color: rgba(var(--bad-rgb), 0.45);
+  box-shadow: inset 2px 0 0 rgba(var(--bad-rgb), 0.55);
 }
 
 /* Receipts: the month's figures and threads on the left, the chosen thread's receipt on the right. */

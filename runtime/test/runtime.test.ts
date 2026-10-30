@@ -15,7 +15,7 @@ import { AnthropicProvider, type ModelProvider } from "../src/provider";
 import { STACKS } from "../src/stack";
 import { runTool } from "../src/tools";
 import { Workspace } from "../src/workspace";
-import { CHECK, roleOf, team, tempRepo } from "./helpers";
+import { CHECK, roleOf, team, tempRepo, UNBROKEN } from "./helpers";
 
 const usage = (u: object) => ({ input_tokens: 0, output_tokens: 0, ...u }) as Parameters<typeof costOf>[1];
 
@@ -163,7 +163,7 @@ describe("thread pipeline", () => {
   it("moves the build up to the plan model after checks fail twice", async () => {
     // Only the plan model writes a passing build.
     const provider = team((request) => request.model === "claude-opus-5-5");
-    const { result, events } = await run(provider);
+    const { result, events } = await run(provider, 1, undefined, [UNBROKEN]);
 
     expect(result.status).toBe("ready");
     expect(result.escalated).toBe(true);
@@ -256,6 +256,53 @@ describe("thread pipeline", () => {
     expect(JSON.stringify(provider.requests.at(-1)!.messages)).toContain(
       "couldn't run, its program isn't installed here",
     );
+  });
+
+  it("leaves a check that failed before any change alone, and says so", async () => {
+    const ALWAYS_FAILS = `node -e "process.exit(1)"`;
+    const provider = team(() => true);
+    const { result, events } = await run(provider, 1, undefined, [UNBROKEN, ALWAYS_FAILS]);
+
+    expect(result.status).toBe("ready");
+    expect(result.failingBefore).toEqual([ALWAYS_FAILS]);
+    expect(result.checks.map((c) => [c.ok, c.failedBefore])).toEqual([
+      [true, undefined],
+      [false, true],
+    ]);
+    expect(result.reason).toMatch(/was already failing before Shoji changed anything, so it left that failure alone/);
+    expect(events.some((e) => e.type === "step" && e.step.startsWith("fix"))).toBe(false);
+    const build = provider.requests.find((r) => roleOf(r) === "builder")!;
+    expect(build.messages[0].content).toContain(`These checks already failed before any change`);
+    expect(JSON.stringify(provider.requests.at(-1)!.messages)).toContain("it failed before this change too");
+  });
+
+  it("still fixes a check the build broke, and keeps leaving the old failure to later runs", async () => {
+    const ALWAYS_FAILS = `node -e "process.exit(1)"`;
+    const provider = team(() => false);
+    const root = tempRepo({ "src/hello.js": "export default 'hello';\n" });
+    const result = await runThread({
+      task: "Make the greeting say hello to Shoji.",
+      stack: STACKS.balanced,
+      provider,
+      workspace: new Workspace(root),
+      checks: [UNBROKEN, ALWAYS_FAILS],
+      cap: 1,
+      changes: { plan: "Change the greeting.", notes: "Keep going." },
+      failingBefore: [ALWAYS_FAILS],
+      emit: () => {},
+    });
+
+    // A changes run can't see the project as it was, so it's told which checks failed then.
+    expect(result.checks.map((c) => [c.ok, c.failedBefore])).toEqual([
+      [false, undefined],
+      [false, true],
+    ]);
+    expect(result.status).toBe("needs-work");
+    expect(provider.requests.filter((r) => roleOf(r) === "builder").length).toBeGreaterThan(2);
+    const fixes = provider.requests.filter((r) => roleOf(r) === "builder" && !Array.isArray(r.messages.at(-1)!.content));
+    const fix = fixes[fixes.length - 1];
+    expect(fix.messages[0].content).toContain(`${UNBROKEN} failed`);
+    expect(fix.messages[0].content).not.toContain(`${ALWAYS_FAILS} failed`);
   });
 
   it("shortens a call near the cap instead of stopping, while it still has room to work", async () => {

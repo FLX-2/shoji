@@ -97,20 +97,37 @@ button {
   margin-left: 8px;
 }
 
+/* Windows 11's own caption buttons: a full-height cell, a faint fill on hover, and the system's
+   red behind Close. That red is the platform's, the one red Shoji doesn't choose. */
 .winctl button {
   all: unset;
   width: 46px;
   display: grid;
   place-items: center;
-  color: var(--z7);
+  color: var(--z8);
   transition:
-    color var(--d-quick) var(--e-out),
-    background-color var(--d-quick) var(--e-out);
+    color var(--d-instant) linear,
+    background-color var(--d-instant) linear;
 }
 
 .winctl button:hover {
   color: var(--z10);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.winctl button:active {
+  color: var(--z8);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.winctl button.close:hover {
+  color: #fff;
+  background: #c42b1c;
+}
+
+.winctl button.close:active {
+  color: rgba(255, 255, 255, 0.8);
+  background: #c83c31;
 }
 
 .winctl button:focus-visible {
@@ -119,12 +136,13 @@ button {
 }
 
 .winctl svg {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
+  overflow: visible;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
+  stroke-width: 1;
+  shape-rendering: geometricPrecision;
 }
 
 .titlebar .center {
@@ -137,6 +155,7 @@ button {
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  align-self: stretch;
   gap: 10px;
 }
 

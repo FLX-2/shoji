@@ -62,7 +62,15 @@ export function CodeView({ changes, error, running, chosen, onChoose, onAccept, 
                 <span>{dirName(f.path)}</span>
               </span>
               <span className="fm">
-                {accepted ? "accepted" : f.binary ? "binary" : `+${f.additions} −${f.deletions}`}
+                {accepted ? (
+                  "accepted"
+                ) : f.binary ? (
+                  "binary"
+                ) : (
+                  <>
+                    <span className="good">+{f.additions}</span> <span className="bad">−{f.deletions}</span>
+                  </>
+                )}
               </span>
               <Bar file={f} />
             </button>

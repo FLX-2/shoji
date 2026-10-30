@@ -67,7 +67,7 @@ describe("trials", () => {
       root,
       tasks: [{ task: TASK, commit, was: 0.05 }],
       stack: STACKS.haiku,
-      provider: team(() => false, "VERDICT: CHANGES\nThe greeting is unchanged."),
+      provider: team(() => false, "VERDICT: CHANGES\nThe greeting is broken."),
       cap: 1,
       checks: () => [CHECK],
       emit: () => {},
@@ -76,8 +76,8 @@ describe("trials", () => {
       status: "needs-work",
       checksPassed: false,
       approved: false,
-      diff: "",
     });
+    expect(briefing.outcomes[0].diff).toContain("+export default 'hello, broken';");
     expect(briefing.outcomes[0].accepted).toContain("+export default 'hello, shoji';");
     expect(describeBriefing(briefing)).toContain("The review approved 0 of 1.");
     expect(describeBriefing(briefing)).toContain("The 1 that finished cost");

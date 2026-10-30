@@ -22,6 +22,8 @@ export interface CheckResult {
   output: string;
   /** The command's program couldn't be found, so the check never ran. */
   missing?: boolean;
+  /** The check failed before Shoji changed anything too, so it isn't the thread's to fix. */
+  failedBefore?: boolean;
 }
 
 export type RuntimeEvent =
@@ -44,6 +46,8 @@ export interface ThreadResult {
   diff: string;
   review: string;
   checks: CheckResult[];
+  /** Checks that failed before the thread's first build, which later runs leave alone too. */
+  failingBefore?: string[];
   escalated: boolean;
   cost: number;
   costByRole: Record<Role, number>;

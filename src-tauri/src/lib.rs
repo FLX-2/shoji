@@ -136,6 +136,7 @@ struct Started {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Changes {
     /// The thread in the ledger these changes belong to.
     thread: i64,
@@ -147,6 +148,9 @@ struct Changes {
     /// on the plan.
     #[serde(default)]
     kind: Option<String>,
+    /// Checks that failed before the thread's first build, which these changes leave alone.
+    #[serde(default)]
+    failing_before: Vec<String>,
 }
 
 impl Changes {
@@ -235,6 +239,8 @@ fn start_run(
         let plan = runs.join(format!("{stamp}-plan.md"));
         fs::write(&plan, &changes.plan).map_err(|e| e.to_string())?;
         args.extend(["--plan-file".into(), plan.display().to_string()]);
+        // Joined with = so a command can't be read as a flag of its own.
+        args.extend(changes.failing_before.iter().map(|command| format!("--failing-before={command}")));
         match changes.kind() {
             "build" => args.push("--build".into()),
             kind => args.extend([format!("--{kind}"), changes.notes]),
