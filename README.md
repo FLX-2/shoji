@@ -42,6 +42,7 @@ A role can run the project's checks at any time. Any other command, such as inst
 - Your code goes only to the model provider, and only what a role reads or you attach.
 - **Private files** never go at all. By default those are env files and keys: `.env`, `.env.*` (but not `.env.example`), `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*` and `.npmrc`. No role can read, change, list or search them, and the reviewer's diff leaves them out. Edit the list in Settings, under Data, with patterns as in `.gitignore`.
 - Receipts and run logs stay on your computer. There is no Shoji server, and Shoji sends no usage data.
+- Once a day Shoji downloads the list of models and their prices from this repository, [`catalog/models.json`](catalog/models.json), so a new model or price needs no new release. The download carries nothing about you or your work. Turn it off in Settings, under Data.
 
 ## Threads and git
 

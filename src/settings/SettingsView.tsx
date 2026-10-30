@@ -3,6 +3,7 @@ import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import type { Stack } from "../../runtime/src/stack";
 import type { KeyStatus } from "../bridge";
 import { AccentRow, BackgroundRow, DensityRow, FrostRow, MotionRow, OpaqueRow, SwitchRow } from "../look/LookRows";
+import { listedDay } from "../stack/catalog";
 import { describeStack } from "../stack/lock";
 import { fileName } from "../thread/useThread";
 import { MoneyRow } from "./MoneyRow";
@@ -77,6 +78,12 @@ export function SettingsView({
           </h2>
           <div className="card">
             <PrivateRow prefs={prefs} onChange={onChange} />
+            <SwitchRow
+              label="Keep models current"
+              description={`Once a day Shoji downloads the list of models and their prices from its GitHub repository, so a new model or price needs no update. It sends nothing about you or your work. Prices as listed on ${listedDay()}.`}
+              on={prefs.updateModels}
+              onToggle={() => onChange({ updateModels: !prefs.updateModels })}
+            />
           </div>
         </section>
 
@@ -267,8 +274,8 @@ function PrivateRow({ prefs, onChange }: { prefs: Prefs; onChange: (change: Part
       <label htmlFor="s-private">
         <b>Private files</b>
         <span className="d">
-          No role can read, change, list or search these, so they never reach a model, and the review's diff leaves
-          them out. One pattern a line, as in .gitignore. A line starting with ! keeps a file shared.
+          No role can read, change, list or search these, so they never reach a model, and the review's diff leaves them
+          out. One pattern a line, as in .gitignore. A line starting with ! keeps a file shared.
         </span>
         {!defaults && (
           <button type="button" className="btn sm ghost" onClick={() => use(DEFAULT_PRIVATE)}>

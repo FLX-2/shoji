@@ -40,6 +40,8 @@ export interface Prefs {
   privateFiles: string[];
   /** Where each project's dev server answers, by project folder, for a thread's Preview. */
   previewUrls: Record<string, string>;
+  /** Download the current models and prices once a day. */
+  updateModels: boolean;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -61,6 +63,7 @@ export const DEFAULT_PREFS: Prefs = {
   allowedCommands: {},
   privateFiles: DEFAULT_PRIVATE,
   previewUrls: {},
+  updateModels: true,
 };
 
 const STORE = "shoji.prefs";

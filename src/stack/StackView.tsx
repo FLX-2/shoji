@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { EFFORTS, MODELS, type ModelId } from "../../runtime/src/models";
+import { EFFORTS, MODELS } from "../../runtime/src/models";
 import { ROLES, STACKS, type Role, type Seat, type Stack, type StackName } from "../../runtime/src/stack";
 import type { Bridge, LedgerThread, TrialRequest } from "../bridge";
 import {
@@ -13,6 +13,7 @@ import {
   seatLabel,
   type StackLock,
 } from "./lock";
+import { listedDay } from "./catalog";
 import { TrialSection } from "./TrialSection";
 import type { Trial } from "./useTrial";
 import { watch } from "./watch";
@@ -32,8 +33,6 @@ interface StackViewProps {
   /** The person's past threads, for the Watching row. */
   ledger: LedgerThread[];
 }
-
-const MODEL_IDS = Object.keys(MODELS) as ModelId[];
 
 function when(at: number): string {
   return new Date(at).toLocaleString("en", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -110,7 +109,7 @@ export function StackView({
                     <span className="d">{ROLE_NAMES[role].does}</span>
                   </div>
                   <div className="seg" role="radiogroup" aria-label={`${ROLE_NAMES[role].label} model`}>
-                    {MODEL_IDS.map((model) => (
+                    {Object.keys(MODELS).map((model) => (
                       <button
                         key={model}
                         type="button"
@@ -191,7 +190,7 @@ export function StackView({
                   Read from cache
                 </span>
               </div>
-              {MODEL_IDS.map((model) => (
+              {Object.keys(MODELS).map((model) => (
                 <div key={model} className="prow" role="row">
                   <span role="cell">{MODELS[model].label}</span>
                   <span role="cell" className="n">
@@ -206,7 +205,7 @@ export function StackView({
                 </div>
               ))}
             </div>
-            <p className="d">Dollars per million tokens, as Anthropic listed them on 28 Oct 2026.</p>
+            <p className="d">Dollars per million tokens, as Anthropic listed them on {listedDay()}.</p>
           </section>
         </div>
 
