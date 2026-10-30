@@ -8,6 +8,8 @@ import { foldRun, reviewNotes } from "./fold";
 /** One ask and the run that answered it: the task itself, or a request for changes. */
 export interface Turn {
   ask: string;
+  /** The names of files attached to the ask. */
+  attached?: string[];
   kind: "task" | "changes" | "build" | "replan";
   events: RuntimeEvent[];
   /** Set once the run has ended. */
@@ -29,6 +31,8 @@ export interface Thread {
   branch?: string;
   /** The short hash of the commit that accepted the thread's work. */
   committed?: string;
+  /** Screenshots and files attached to the task, as paths. Every run of the thread sees them. */
+  attachments?: string[];
   turns: Turn[];
 }
 
@@ -112,6 +116,7 @@ export function useThread(bridge: Bridge) {
           cap: next.cap - spent,
           changes,
           ...(planOnly && { planOnly }),
+          ...(next.attachments?.length && { attachments: next.attachments }),
         });
         const held = early.current.get(id);
         early.current.clear();
@@ -128,8 +133,13 @@ export function useThread(bridge: Bridge) {
 
   /** Starts a thread. With `planFirst`, it pauses once the plan is written. */
   const start = useCallback(
-    (task: string, repo: string, stack: Stack, cap: number, planFirst = false) =>
-      run({ task, repo, stack, cap, turns: [] }, { ask: task, kind: "task", events: [] }, undefined, planFirst),
+    (task: string, repo: string, stack: Stack, cap: number, planFirst = false, attachments: string[] = []) =>
+      run(
+        { task, repo, stack, cap, turns: [], ...(attachments.length && { attachments }) },
+        { ask: task, kind: "task", events: [], ...(attachments.length && { attached: attachments.map(fileName) }) },
+        undefined,
+        planFirst,
+      ),
     [run],
   );
 
@@ -192,4 +202,9 @@ export function useThread(bridge: Bridge) {
   }, [bridge, thread]);
 
   return { thread, start, requestChanges, keepGoing, fix, build, replan, stop, commit };
+}
+
+/** The last part of a path, on any system. */
+export function fileName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }

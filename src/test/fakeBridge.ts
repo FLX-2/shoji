@@ -28,7 +28,10 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     commits: [] as { repo: string; branch: string; message: string; thread: number }[],
     exports: [] as { name: string; contents: string }[],
     lockWrites: [] as string[],
+    pasted: [] as { name: string; bytes: number[] }[],
   };
+  /** What the attach dialog answers with; tests fill it. */
+  const picked: string[] = [];
   let runs = 0;
 
   const bridge: Bridge = {
@@ -47,6 +50,11 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       key = { ...key, saved: false };
     },
     pickProject: async () => "/work/pricing-page",
+    pickAttachments: async () => [...picked],
+    saveAttachment: async (name, bytes) => {
+      calls.pasted.push({ name, bytes });
+      return `/data/attachments/${name}`;
+    },
     startRun: async (request) => {
       calls.starts.push(request);
       return { run: ++runs, thread: request.changes?.thread ?? 1, branch: request.changes?.branch ?? "shoji/thread" };
@@ -110,6 +118,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     project,
     ledger,
     files,
+    picked,
     /** Sends events from the latest run. */
     emit: (...events: RuntimeEvent[]) => act(() => events.forEach((event) => onEvent.forEach((h) => h(runs, event)))),
     /** Sends trial events from the latest run. */

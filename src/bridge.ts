@@ -22,6 +22,8 @@ export interface RunRequest {
   changes?: ChangesRequest;
   /** Stop once the plan is written, for the person to build or change it. */
   planOnly?: boolean;
+  /** Screenshots and files attached to the thread's task, as paths. */
+  attachments?: string[];
 }
 
 export interface ChangesRequest {
@@ -115,6 +117,10 @@ export const bridge = {
   useShellKey: () => invoke<void>("use_shell_key"),
   forgetKey: () => invoke<void>("forget_key"),
   pickProject: () => invoke<string | null>("pick_project"),
+  /** Asks for screenshots or files to attach to a task. Empty when the person cancels. */
+  pickAttachments: () => invoke<string[]>("pick_attachments"),
+  /** Keeps a pasted screenshot as a file and returns its path. */
+  saveAttachment: (name: string, bytes: number[]) => invoke<string>("save_attachment", { name, bytes }),
   /** Starts a run. Its number is carried by its events and exit. */
   startRun: (request: RunRequest) => invoke<StartedRun>("start_run", { request }),
   /** Starts a trial and returns its run number, which its events and exit carry. */

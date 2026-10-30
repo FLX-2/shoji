@@ -110,6 +110,49 @@ async fn pick_project(app: AppHandle) -> Option<String> {
         .map(|path| path.display().to_string())
 }
 
+#[tauri::command]
+async fn pick_attachments(app: AppHandle) -> Vec<String> {
+    app.dialog()
+        .file()
+        .set_title("Attach screenshots or files")
+        .blocking_pick_files()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|path| path.into_path().ok())
+        .map(|path| path.display().to_string())
+        .collect()
+}
+
+/// The most a pasted screenshot may weigh, which is the most a model takes for one image.
+const MAX_PASTED_BYTES: usize = 5 * 1024 * 1024;
+
+/// Keeps a pasted screenshot as a file in the app's data, so a run can attach it like any other.
+#[tauri::command]
+fn save_attachment(app: AppHandle, name: String, bytes: Vec<u8>) -> Result<String, String> {
+    if bytes.len() > MAX_PASTED_BYTES {
+        return Err("That image is over 5 MB, the most a model takes for one image.".into());
+    }
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("attachments");
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let file = dir.join(format!("{}-{}", now_ms(), attachment_name(&name)));
+    fs::write(&file, bytes).map_err(|e| e.to_string())?;
+    Ok(file.display().to_string())
+}
+
+/// A file name with nothing that could reach outside the folder it's written to.
+fn attachment_name(name: &str) -> String {
+    let kept: String = name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '-' })
+        .collect();
+    let kept = kept.trim_start_matches('.');
+    if kept.is_empty() { "pasted.png".into() } else { kept.into() }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RunRequest {
@@ -124,6 +167,9 @@ struct RunRequest {
     /// Stop once the plan is written, for the person to build or change it.
     #[serde(default)]
     plan_only: bool,
+    /// Screenshots and files the person attached to the thread's task.
+    #[serde(default)]
+    attachments: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -238,6 +284,7 @@ fn start_run(
     if request.plan_only {
         args.push("--plan-only".into());
     }
+    args.extend(request.attachments.iter().map(|file| format!("--attach={file}")));
     if let Some(changes) = request.changes {
         let plan = runs.join(format!("{stamp}-plan.md"));
         fs::write(&plan, &changes.plan).map_err(|e| e.to_string())?;
@@ -749,6 +796,8 @@ pub fn run() {
             use_shell_key,
             forget_key,
             pick_project,
+            pick_attachments,
+            save_attachment,
             start_run,
             start_trial,
             start_notes,
@@ -782,6 +831,14 @@ mod tests {
         git(&root, &["add", "."]).unwrap();
         git(&root, &["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "start"]).unwrap();
         root
+    }
+
+    #[test]
+    fn keeps_attachment_names_inside_their_folder() {
+        assert_eq!(attachment_name("Screenshot 2026-10-30 at 9.41.png"), "Screenshot-2026-10-30-at-9.41.png");
+        assert_eq!(attachment_name("../../etc/passwd"), "-..-etc-passwd");
+        assert_eq!(attachment_name("..\\..\\x.png"), "-..-x.png");
+        assert_eq!(attachment_name(""), "pasted.png");
     }
 
     #[test]

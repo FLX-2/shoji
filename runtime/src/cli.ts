@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { readAttachments } from "./attachments";
 import type { RuntimeEvent } from "./events";
 import { hasChanges, isGitRepo } from "./git";
 import { MODELS } from "./models";
@@ -38,6 +39,8 @@ Options:
   --failing-test-before <name>
                       A failure one of those checks named then, so a new one still counts;
                       repeat for more
+  --attach <file>     A screenshot, PDF or text file for every role to see with the task;
+                      repeat for more
   --trial-file <file> Replay accepted tasks on the stack instead of running one, each in a
                       scratch copy of the project at the parent of its accepted commit. The
                       file holds {"tasks":[{"task":…,"commit":<accepted>,"was":<dollars>},…]};
@@ -58,6 +61,15 @@ The API key comes from SHOJI_API_KEY or ANTHROPIC_API_KEY.`;
 function fail(message: string): never {
   process.stderr.write(`${message}\n`);
   process.exit(2);
+}
+
+/** The attached files, read now so one Shoji can't send stops the run before it spends. */
+function attached(files: string[]) {
+  try {
+    return readAttachments(files);
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
 }
 
 function describe(event: RuntimeEvent): string | null {
@@ -135,6 +147,7 @@ async function main() {
       "plan-file": { type: "string" },
       "failing-before": { type: "string", multiple: true },
       "failing-test-before": { type: "string", multiple: true },
+      attach: { type: "string", multiple: true },
       "trial-file": { type: "string" },
       notes: { type: "boolean", default: false },
       log: { type: "string" },
@@ -226,6 +239,7 @@ async function main() {
     replan,
     failingBefore: values["failing-before"],
     failingTestsBefore: values["failing-test-before"],
+    ...(values.attach?.length && { attachments: attached(values.attach) }),
     emit: (event) => write(event, describe(event)),
   });
   process.exitCode = result.status === "ready" || result.status === "planned" ? 0 : 1;

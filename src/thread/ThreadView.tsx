@@ -4,6 +4,7 @@ import { MODELS } from "../../runtime/src/models";
 import type { Bridge } from "../bridge";
 import { CodeView } from "../code/CodeView";
 import { useChanges } from "../code/useChanges";
+import { ClipIcon } from "../shell/ClipIcon";
 import { Composer } from "../shell/Composer";
 import {
   approves,
@@ -278,7 +279,19 @@ export function ThreadView({
 function TurnView({ turn, run, live, waiting }: { turn: Turn; run: RunView; live: boolean; waiting: boolean }) {
   return (
     <>
-      <div className="umsg">{turn.ask}</div>
+      <div className="umsg">
+        {turn.ask}
+        {turn.attached && (
+          <div className="attached">
+            {turn.attached.map((name, i) => (
+              <span key={i} className="chip">
+                <ClipIcon />
+                {name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="amsg">
         <div className="bd">
           {run.steps.length > 0 && (
