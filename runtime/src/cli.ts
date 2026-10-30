@@ -5,7 +5,7 @@ import { parseArgs } from "node:util";
 import { readAttachments } from "./attachments";
 import type { RuntimeEvent } from "./events";
 import { hasChanges, isGitRepo } from "./git";
-import { MODELS } from "./models";
+import { applyCatalog, MODELS, parseCatalog } from "./models";
 import { writeNotes, type NotesEvent } from "./notes";
 import { runThread } from "./pipeline";
 import { defaultChecks } from "./project";
@@ -55,6 +55,9 @@ Options:
   --notes             Have the stack's scout read the project and write SHOJI.md, the notes
                       Plan reads before every task. Git is told to ignore the file. A project
                       that already has one keeps it
+  --models-json <json>
+                      The downloaded model list, as {"version":1,"updated":…,"models":{…}};
+                      adds models and updates prices over the built-in list
   --log <file>        Append every event to a JSON lines file
   --json              Print events as JSON lines, for the app
   --allow-dirty       Run even if the project has uncommitted changes
@@ -106,7 +109,10 @@ function describe(event: RuntimeEvent): string | null {
       return `  $${event.call.cost.toFixed(4)}  ${event.call.inputTokens} in, ${event.call.outputTokens} out, ${event.call.cacheReadTokens} cached`;
     case "checks":
       return event.results
-        .map((c) => `  ${c.ok ? "passed" : c.failedBefore ? "failed, as it did before" : c.newFailures ? `failed, newly: ${c.newFailures.join(", ")}` : "failed"}: ${c.command}`)
+        .map(
+          (c) =>
+            `  ${c.ok ? "passed" : c.failedBefore ? "failed, as it did before" : c.newFailures ? `failed, newly: ${c.newFailures.join(", ")}` : "failed"}: ${c.command}`,
+        )
         .join("\n");
     case "escalate":
       return `  moving up to ${MODELS[event.to].label}: ${event.reason}`;
@@ -166,6 +172,7 @@ async function main() {
       repo: { type: "string", default: process.cwd() },
       stack: { type: "string", default: "balanced" },
       "stack-json": { type: "string" },
+      "models-json": { type: "string" },
       cap: { type: "string", default: "0.50" },
       check: { type: "string", multiple: true },
       changes: { type: "string" },
@@ -189,6 +196,14 @@ async function main() {
   });
   if (values.help) return void process.stdout.write(`${USAGE}\n`);
   if (!values.task && !values["trial-file"] && !values.notes) fail(USAGE);
+  // Before the stack, which may name a model only the list knows.
+  if (values["models-json"] !== undefined) {
+    try {
+      applyCatalog(parseCatalog(JSON.parse(values["models-json"])));
+    } catch (e) {
+      fail(`Couldn't use the model list: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
   let stack: Stack;
   if (values["stack-json"] !== undefined) {
     try {

@@ -1,10 +1,9 @@
-import fs from "node:fs";
-import path from "node:path";
 import { MAX_TOKENS, OUT_OF_TURNS, runAgent, textOf } from "./agent";
 import { type Attachments, withAttachments } from "./attachments";
 import { runChecks } from "./commands";
 import type { CheckResult, Emit, ThreadResult } from "./events";
 import { diffOf } from "./git";
+import { projectInstructions, projectNotes } from "./instructions";
 import { BudgetExceeded, Meter, RefusedError } from "./meter";
 import * as prompts from "./prompts";
 import type { ModelProvider } from "./provider";
@@ -57,6 +56,8 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   const { task, stack, workspace, checks, emit, changes, approved, replan } = input;
   const meter = new Meter(input.provider, emit, input.cap);
   const state = { plan: "", review: "", checks: [] as CheckResult[], escalated: false };
+  // The project's AGENTS.md and CLAUDE.md, which Plan, Build and Review all follow.
+  const guide = projectInstructions(workspace);
 
   const step = async (name: string, role: Role, seat: Seat, work: () => Promise<string>) => {
     emit({ type: "step", step: name, role, model: seat.model, status: "running" });
@@ -127,7 +128,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     const asked = changes
       ? `\n\nThe work so far is already in the project. The person asked for these changes:\n${changes.notes}`
       : "";
-    const buildPrompt = `Task: ${task}\n\nPlan:\n${state.plan}${commandsNote}${asked}`;
+    const buildPrompt = `Task: ${task}${guide}\n\nPlan:\n${state.plan}${commandsNote}${asked}`;
     const buildStep = changes ? "changes" : "build";
     await agent(buildStep, "build", stack.build, prompts.BUILD, buildPrompt, builderTools);
 
@@ -185,7 +186,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
                 role: "user",
                 content: withAttachments(
                   reviewPrompt(
-                    task + asked,
+                    task + asked + guide,
                     diffOf(workspace.root, (file) => workspace.isPrivate(file)),
                     state.checks,
                   ),
@@ -251,7 +252,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
             {
               role: "user",
               content: withAttachments(
-                `Task: ${task}${projectNotes(workspace)}${replanNotes()}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief, mentionedFiles(`${task}${replan ? ` ${replan.notes}` : ""}`))}`,
+                `Task: ${task}${projectNotes(workspace)}${guide}${replanNotes()}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief, mentionedFiles(`${task}${replan ? ` ${replan.notes}` : ""}`))}`,
                 input.attachments,
               ),
             },
@@ -293,12 +294,6 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
 
 export function approves(review: string): boolean {
   return /^\s*VERDICT:\s*APPROVE/i.test(review);
-}
-
-/** SHOJI.md holds the project's own notes for the team, written during setup. */
-function projectNotes(workspace: Workspace): string {
-  const file = path.join(workspace.root, "SHOJI.md");
-  return fs.existsSync(file) ? `\n\nProject notes (SHOJI.md):\n${fs.readFileSync(file, "utf8")}` : "";
 }
 
 /** Files the person named with @ in the task, such as @src/app.ts, that are in the project. */

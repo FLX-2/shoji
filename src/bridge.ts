@@ -2,6 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { CallRecord, RuntimeEvent } from "../runtime/src/events";
+import type { Catalog } from "../runtime/src/models";
 import type { NotesEvent } from "../runtime/src/notes";
 import type { Stack } from "../runtime/src/stack";
 import type { TrialEvent, TrialTask } from "../runtime/src/trial";
@@ -28,6 +29,8 @@ export interface RunRequest {
   allowedCommands?: string[];
   /** Patterns, as in .gitignore, for files no role may read, change or list. */
   privateFiles?: string[];
+  /** The downloaded model list, when there is one, with version 1 as the runtime reads it. */
+  models?: Catalog & { version: 1 };
 }
 
 export interface ChangesRequest {
@@ -55,6 +58,8 @@ export interface TrialRequest {
   tasks: TrialTask[];
   /** Patterns, as in .gitignore, for files no role may read, change or list. */
   privateFiles?: string[];
+  /** The downloaded model list, when there is one, with version 1 as the runtime reads it. */
+  models?: Catalog & { version: 1 };
 }
 
 export interface NotesRequest {
@@ -65,15 +70,27 @@ export interface NotesRequest {
   cap: number;
   /** Patterns, as in .gitignore, for files no role may read, change or list. */
   privateFiles?: string[];
+  /** The downloaded model list, when there is one, with version 1 as the runtime reads it. */
+  models?: Catalog & { version: 1 };
 }
 
-/** The bridge, with the person's private files added to everything that starts the runtime. */
-export function keepingPrivate(bridge: Bridge, privateFiles: () => string[]): Bridge {
+/** What every run, trial and notes run carries from the app's settings as they are when it starts. */
+export interface Carried {
+  privateFiles: string[];
+  models?: Catalog;
+}
+
+/** The bridge, with the person's private files and the model list added to everything that starts the runtime. */
+export function carrying(bridge: Bridge, carried: () => Carried): Bridge {
+  const add = <T extends object>(request: T) => {
+    const { privateFiles, models } = carried();
+    return { ...request, privateFiles, ...(models && { models: { version: 1 as const, ...models } }) };
+  };
   return {
     ...bridge,
-    startRun: (request) => bridge.startRun({ ...request, privateFiles: privateFiles() }),
-    startTrial: (request) => bridge.startTrial({ ...request, privateFiles: privateFiles() }),
-    startNotes: (request) => bridge.startNotes({ ...request, privateFiles: privateFiles() }),
+    startRun: (request) => bridge.startRun(add(request)),
+    startTrial: (request) => bridge.startTrial(add(request)),
+    startNotes: (request) => bridge.startNotes(add(request)),
   };
 }
 

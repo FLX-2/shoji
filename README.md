@@ -22,7 +22,7 @@ The first time Shoji opens, setup asks for your Anthropic API key, picks a stack
 
 **Home.** Describe a task. Type @ to point at one of the project's files, and Plan reads it in full. Attach screenshots, PDFs or text files with the clip, or paste an image. Pick how much the task is worth: Draft moves Build and Review down one model, Max puts Build on the Plan model, and Balanced follows your stack. Once you've finished a few tasks, Home shows what a task usually costs at that setting.
 
-**Threads.** Scout reads the code, Plan writes the steps, Build makes the change and Review judges it. With Check the plan first on, the thread pauses after the plan so you can build it or ask for another. Each thread has three views:
+**Threads.** Scout reads the code, Plan writes the steps, Build makes the change and Review judges it. Plan, Build and Review follow the project's own `AGENTS.md` and `CLAUDE.md` when it has them, and Plan also reads the `SHOJI.md` notes that setup can write. With Check the plan first on, the thread pauses after the plan so you can build it or ask for another. Each thread has three views:
 
 - **Conversation:** each step with its model, its work and what it cost.
 - **Code:** every file the thread changed, with its diff.
@@ -42,6 +42,7 @@ A role can run the project's checks at any time. Any other command, such as inst
 - Your code goes only to the model provider, and only what a role reads or you attach.
 - **Private files** never go at all. By default those are env files and keys: `.env`, `.env.*` (but not `.env.example`), `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*` and `.npmrc`. No role can read, change, list or search them, and the reviewer's diff leaves them out. Edit the list in Settings, under Data, with patterns as in `.gitignore`.
 - Receipts and run logs stay on your computer. There is no Shoji server, and Shoji sends no usage data.
+- Once a day Shoji downloads the list of models and their prices from this repository, [`catalog/models.json`](catalog/models.json), so a new model or price needs no new release. The download carries nothing about you or your work. Turn it off in Settings, under Data.
 
 ## Threads and git
 

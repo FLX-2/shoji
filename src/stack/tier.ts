@@ -12,12 +12,10 @@ export const TIERS: Record<Tier, { label: string; does: string }> = {
   max: { label: "Max", does: "Build runs on the Plan model" },
 };
 
-/** The listed models from cheapest to dearest, by output price. */
-const LADDER = (Object.keys(MODELS) as ModelId[]).sort((a, b) => MODELS[a].output - MODELS[b].output);
-
-/** The next model down, or the same one when it's the cheapest. */
+/** The next model down by output price, or the same one when it's the cheapest. */
 function cheaper(model: ModelId): ModelId {
-  return LADDER[Math.max(0, LADDER.indexOf(model) - 1)];
+  const ladder = Object.keys(MODELS).sort((a, b) => MODELS[a].output - MODELS[b].output);
+  return ladder[Math.max(0, ladder.indexOf(model) - 1)];
 }
 
 /** The stack a task runs on at this tier. Plan and Scout never move, so the receipt's baseline stays put. */
@@ -58,4 +56,3 @@ export function estimateCost(threads: LedgerThread[], stack: Stack): number | nu
   const mid = costs.length >> 1;
   return costs.length % 2 ? costs[mid] : (costs[mid - 1] + costs[mid]) / 2;
 }
-
