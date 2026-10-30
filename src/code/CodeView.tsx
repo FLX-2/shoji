@@ -19,6 +19,10 @@ interface CodeViewProps {
   onComments?: (comments: LineComment[]) => void;
   /** Sends the comments to Build as one request for changes. */
   onSendComments: () => void;
+  /** Reads a changed file's text for editing. */
+  onRead: (path: string) => Promise<string>;
+  /** Set when the work can still be edited by hand; saves the person's edit to a file. */
+  onSave?: (path: string, text: string) => Promise<void>;
 }
 
 /** The thread's Code: every changed file, its diff, and accept or revert for each. */
@@ -33,6 +37,8 @@ export function CodeView({
   comments,
   onComments,
   onSendComments,
+  onRead,
+  onSave,
 }: CodeViewProps) {
   // chosen and onChoose come from the parent so the choice outlives this view.
   const files = changes?.files ?? [];
@@ -106,6 +112,8 @@ export function CodeView({
           onRevert={() => onRevert(file.path)}
           comments={comments}
           onComments={onComments}
+          onRead={() => onRead(file.path)}
+          {...(onSave && { onSave: (text: string) => onSave(file.path, text) })}
         />
       )}
       {comments.length > 0 && (
@@ -134,10 +142,32 @@ function FilePane(props: {
   onRevert: () => void;
   comments: LineComment[];
   onComments?: (comments: LineComment[]) => void;
+  onRead: () => Promise<string>;
+  onSave?: (text: string) => Promise<void>;
 }) {
-  const { file, accepted, running, comments, onComments } = props;
+  const { file, accepted, running, comments, onComments, onSave } = props;
   const [confirming, setConfirming] = useState(false);
   const busy = running ? "Wait for the run to finish" : undefined;
+  // The file's text while the person edits it by hand, and why it couldn't be opened or saved.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const canEdit = !!onSave && !file.binary && file.status !== "deleted";
+
+  const edit = () => {
+    setEditError(null);
+    props.onRead().then(setEditing, (e) => setEditError(String(e)));
+  };
+  const save = () => {
+    if (editing === null || !onSave) return;
+    setSaving(true);
+    onSave(editing)
+      .then(
+        () => setEditing(null),
+        (e) => setEditError(String(e)),
+      )
+      .finally(() => setSaving(false));
+  };
 
   return (
     <section className="diffpane" aria-label={file.path}>
@@ -145,7 +175,16 @@ function FilePane(props: {
         <span className="path">{file.path}</span>
         <span className="what">{STATUS[file.status]}</span>
         <span className="acts">
-          {confirming ? (
+          {editing !== null ? (
+            <>
+              <button type="button" className="btn sm ghost" onClick={() => setEditing(null)}>
+                Cancel
+              </button>
+              <button type="button" className="btn sm solid" disabled={saving || running} title={busy} onClick={save}>
+                Save
+              </button>
+            </>
+          ) : confirming ? (
             <>
               <span className="ask">
                 {file.status === "added" ? "Delete this new file?" : "Discard this file's changes?"}
@@ -166,6 +205,11 @@ function FilePane(props: {
             </>
           ) : (
             <>
+              {canEdit && (
+                <button type="button" className="btn sm ghost" disabled={running} title={busy} onClick={edit}>
+                  Edit
+                </button>
+              )}
               <button
                 type="button"
                 className="btn sm"
@@ -186,21 +230,38 @@ function FilePane(props: {
           )}
         </span>
       </header>
-      {props.error && <p className="derr">{props.error}</p>}
-      <div className="diff">
-        {file.binary ? (
-          <p className="note">This is a binary file, so there's no text to compare.</p>
-        ) : (
-          file.hunks.map((hunk, i) => (
-            <HunkView
-              key={i}
-              hunk={hunk}
-              gap={i > 0}
-              notes={{ path: file.path, comments, ...(onComments && { onComments }) }}
-            />
-          ))
-        )}
-      </div>
+      {(editError ?? props.error) && <p className="derr">{editError ?? props.error}</p>}
+      {editing !== null ? (
+        <textarea
+          className="editor"
+          aria-label={`Edit ${file.path}`}
+          spellCheck={false}
+          autoFocus
+          value={editing}
+          onChange={(e) => setEditing(e.target.value)}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+              e.preventDefault();
+              save();
+            } else if (e.key === "Escape") setEditing(null);
+          }}
+        />
+      ) : (
+        <div className="diff">
+          {file.binary ? (
+            <p className="note">This is a binary file, so there's no text to compare.</p>
+          ) : (
+            file.hunks.map((hunk, i) => (
+              <HunkView
+                key={i}
+                hunk={hunk}
+                gap={i > 0}
+                notes={{ path: file.path, comments, ...(onComments && { onComments }) }}
+              />
+            ))
+          )}
+        </div>
+      )}
     </section>
   );
 }

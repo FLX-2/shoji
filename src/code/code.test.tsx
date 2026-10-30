@@ -124,6 +124,34 @@ describe("the thread's Code", () => {
     expect(fake.calls.reverted).toEqual(["src/Badge.tsx"]);
   });
 
+  it("edits a changed file by hand and saves it with Ctrl+S", async () => {
+    const fake = await finishedThread();
+    fake.project.contents["src/Card.tsx"] = "export const price = plan.annual / 12;\nexport default price;\n";
+    const pane = screen.getByRole("region", { name: "src/Card.tsx" });
+    await act(async () => {
+      fireEvent.click(within(pane).getByRole("button", { name: "Edit" }));
+    });
+    const editor = within(pane).getByRole("textbox", { name: "Edit src/Card.tsx" }) as HTMLTextAreaElement;
+    expect(editor.value).toBe("export const price = plan.annual / 12;\nexport default price;\n");
+    fireEvent.change(editor, { target: { value: "export const price = Math.round(plan.annual / 12);\n" } });
+    await act(async () => {
+      fireEvent.keyDown(editor, { key: "s", ctrlKey: true });
+    });
+    expect(fake.calls.writes).toEqual([
+      { path: "src/Card.tsx", contents: "export const price = Math.round(plan.annual / 12);\n" },
+    ]);
+    // Back to the diff, read again with the edit in it.
+    expect(within(pane).queryByRole("textbox")).toBeNull();
+
+    // Escape leaves without saving.
+    await act(async () => {
+      fireEvent.click(within(pane).getByRole("button", { name: "Edit" }));
+    });
+    fireEvent.keyDown(within(pane).getByRole("textbox"), { key: "Escape" });
+    expect(within(pane).queryByRole("textbox")).toBeNull();
+    expect(fake.calls.writes).toHaveLength(1);
+  });
+
   it("holds accept and revert while a run is editing the project", async () => {
     const fake = fakeBridge();
     render(<App bridge={fake.bridge} />);
