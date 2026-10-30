@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { MAX_TOKENS, OUT_OF_TURNS, runAgent, textOf } from "./agent";
+import { type Attachments, withAttachments } from "./attachments";
 import { runChecks } from "./commands";
 import type { CheckResult, Emit, ThreadResult } from "./events";
 import { diffOf } from "./git";
@@ -37,6 +38,8 @@ export interface ThreadInput {
   failingBefore?: string[];
   /** The failures those checks named then. */
   failingTestsBefore?: string[];
+  /** Screenshots and files the person attached to the task. Every role sees them. */
+  attachments?: Attachments;
 }
 
 
@@ -68,7 +71,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
         step: name,
         seat,
         system,
-        prompt,
+        prompt: withAttachments(prompt, input.attachments),
         tools,
         onTool: (tool, input) =>
           emit({ type: "tool", step: name, tool, target: input.path ?? input.pattern ?? input.command ?? "" }),
@@ -158,7 +161,12 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
             model: stack.review.model,
             effort: stack.review.effort,
             system: prompts.REVIEW,
-            messages: [{ role: "user", content: reviewPrompt(task + asked, diffOf(workspace.root), state.checks) }],
+            messages: [
+              {
+                role: "user",
+                content: withAttachments(reviewPrompt(task + asked, diffOf(workspace.root), state.checks), input.attachments),
+              },
+            ],
             maxTokens: MAX_TOKENS,
           }),
         ),
@@ -216,7 +224,10 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
           messages: [
             {
               role: "user",
-              content: `Task: ${task}${projectNotes(workspace)}${replanNotes()}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief)}`,
+              content: withAttachments(
+                `Task: ${task}${projectNotes(workspace)}${replanNotes()}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief)}`,
+                input.attachments,
+              ),
             },
           ],
           maxTokens: MAX_TOKENS,

@@ -77,6 +77,40 @@
   border-color: rgba(255, 255, 255, 0.24);
 }
 
+/* An icon on its own, the same height as the chips beside it. */
+.chip.icon {
+  padding: 3px 6px;
+}
+
+.chip .x {
+  color: var(--z6);
+  margin-left: 2px;
+}
+
+.chip:hover .x {
+  color: var(--z10);
+}
+
+/* Files attached to a task, in the composer and on the task in the thread. */
+.attached {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.composer .attached {
+  margin-bottom: 10px;
+}
+
+.umsg .attached {
+  margin-top: 10px;
+  white-space: normal;
+}
+
+.umsg .attached .chip {
+  cursor: default;
+}
+
 /* A chip that is switched on lifts like a picked segment. */
 .chip[aria-pressed="true"] {
   background: var(--z3);
@@ -2268,4 +2302,9 @@ button.rrow:focus-visible {
 
 .app[data-density="compact"] .outcomes li {
   padding-block: 6px;
+}
+
+.umsg .attached .chip:hover {
+  color: var(--z8);
+  border-color: var(--hair);
 }

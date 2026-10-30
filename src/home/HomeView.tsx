@@ -1,4 +1,7 @@
+import { useState } from "react";
+import { ClipIcon } from "../shell/ClipIcon";
 import { Composer } from "../shell/Composer";
+import { fileName } from "../thread/useThread";
 import { TIERS, type Tier } from "../stack/tier";
 import { formatCost } from "../thread/fold";
 
@@ -19,8 +22,12 @@ interface HomeViewProps {
   estimate: number | null;
   /** Why the last task couldn't start in this folder, if it couldn't. */
   problem?: string | null;
-  /** Resolves to false when the task didn't start, so the composer keeps it. */
-  onStart: (task: string) => void | boolean | Promise<void | boolean>;
+  /** Asks for screenshots or files to attach, and resolves to their paths. */
+  onPickAttachments: () => Promise<string[]>;
+  /** Keeps a pasted image as a file, and resolves to its path. */
+  onSavePasted: (image: File) => Promise<string>;
+  /** Resolves to false when the task didn't start, so the composer keeps it and its files. */
+  onStart: (task: string, attachments: string[]) => void | boolean | Promise<void | boolean>;
 }
 
 /** Start: pick a project and describe a change. */
@@ -36,8 +43,23 @@ export function HomeView({
   onTier,
   estimate,
   problem,
+  onPickAttachments,
+  onSavePasted,
   onStart,
 }: HomeViewProps) {
+  const [attached, setAttached] = useState<string[]>([]);
+  const [attachProblem, setAttachProblem] = useState<string | null>(null);
+  const attach = async (paths: Promise<string[]>) => {
+    try {
+      const added = await paths;
+      setAttached((now) => [...now, ...added.filter((path) => !now.includes(path))]);
+      setAttachProblem(null);
+    } catch (error) {
+      setAttachProblem(String(error));
+    }
+  };
+  const shown = problem ?? attachProblem;
+
   return (
     <div className="home">
       <div className="hwrap">
@@ -47,8 +69,43 @@ export function HomeView({
           label="Task"
           placeholder="Describe a change…"
           blocked={!repo || !hasKey || busy}
-          onSend={onStart}
+          onSend={async (task) => {
+            const started = await onStart(task, attached);
+            if (started !== false) setAttached([]);
+            return started;
+          }}
+          onPasteImages={(images) => attach(Promise.all(images.map(onSavePasted)))}
+          above={
+            attached.length > 0 && (
+              <div className="attached">
+                {attached.map((path) => (
+                  <button
+                    key={path}
+                    type="button"
+                    className="chip"
+                    title={`Remove ${fileName(path)}`}
+                    onClick={() => setAttached((now) => now.filter((p) => p !== path))}
+                  >
+                    <ClipIcon />
+                    {fileName(path)}
+                    <span className="x" aria-hidden="true">
+                      ×
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )
+          }
         >
+          <button
+            type="button"
+            className="chip icon"
+            aria-label="Attach screenshots or files"
+            title="Attach screenshots or files. You can also paste a screenshot."
+            onClick={() => attach(onPickAttachments())}
+          >
+            <ClipIcon />
+          </button>
           <button type="button" className="chip" onClick={onPickProject} title={repo ?? undefined}>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M3 6h6l2 2h10v11H3z" />
@@ -87,9 +144,9 @@ export function HomeView({
             </span>
           )}
         </Composer>
-        {problem ? (
+        {shown ? (
           <p className="hint" role="alert">
-            {problem}
+            {shown}
           </p>
         ) : !hasKey ? (
           <p className="hint">

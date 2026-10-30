@@ -17,7 +17,7 @@ export interface AgentRun {
   step: string;
   seat: Seat;
   system: string;
-  prompt: string;
+  prompt: string | Anthropic.ContentBlockParam[];
   tools?: Anthropic.Tool[];
   maxTurns?: number;
   /** Called before each tool runs, so the app can show the work as it happens. */

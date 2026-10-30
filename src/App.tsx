@@ -170,7 +170,11 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 tier={tier}
                 onTier={setTier}
                 estimate={estimate}
-                onStart={async (task) => {
+                onPickAttachments={() => bridge.pickAttachments()}
+                onSavePasted={async (image) =>
+                  bridge.saveAttachment(image.name || "pasted.png", Array.from(new Uint8Array(await image.arrayBuffer())))
+                }
+                onStart={async (task, attachments) => {
                   const repo = prefs.repo;
                   if (!repo) return false;
                   // Checked here so the task stays in the composer while the person sorts the folder out.
@@ -179,7 +183,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                   if (problem) return false;
                   return withinDay("This thread", prefs.cap, () => {
                     setSection("threads");
-                    start(task, repo, tierStack(stack.stack, tier), prefs.cap, prefs.planFirst);
+                    start(task, repo, tierStack(stack.stack, tier), prefs.cap, prefs.planFirst, attachments);
                   });
                 }}
               />
