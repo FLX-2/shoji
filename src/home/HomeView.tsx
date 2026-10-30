@@ -28,6 +28,8 @@ interface HomeViewProps {
   onSavePasted: (image: File) => Promise<string>;
   /** Resolves to false when the task didn't start, so the composer keeps it and its files. */
   onStart: (task: string, attachments: string[]) => void | boolean | Promise<void | boolean>;
+  /** The project's files, which the task can mention with @. */
+  files: string[];
 }
 
 /** Start: pick a project and describe a change. */
@@ -46,6 +48,7 @@ export function HomeView({
   onPickAttachments,
   onSavePasted,
   onStart,
+  files,
 }: HomeViewProps) {
   const [attached, setAttached] = useState<string[]>([]);
   const [attachProblem, setAttachProblem] = useState<string | null>(null);
@@ -69,6 +72,7 @@ export function HomeView({
           label="Task"
           placeholder="Describe a change…"
           blocked={!repo || !hasKey || busy}
+          files={files}
           onSend={async (task) => {
             const started = await onStart(task, attached);
             if (started !== false) setAttached([]);

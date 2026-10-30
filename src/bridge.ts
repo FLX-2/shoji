@@ -149,6 +149,8 @@ export const bridge = {
   /** Answers the running thread's question about a command. */
   answerAsk: (allow: boolean) => invoke<void>("answer_ask", { allow }),
   changes: (repo: string) => invoke<ProjectChanges>("changes", { repo }),
+  /** The project's files, as git sees them, for mentioning with @ in the task. */
+  projectFiles: (repo: string) => invoke<string[]>("project_files", { repo }),
   /** Keeps a file's changes by staging it. */
   acceptFile: (repo: string, path: string) => invoke<void>("accept_file", { repo, path }),
   /** Puts a file back as it was at the last commit. */

@@ -20,7 +20,7 @@ The first time Shoji opens, setup asks for your Anthropic API key, picks a stack
 
 ## What it does
 
-**Home.** Describe a task. Attach screenshots, PDFs or text files with the clip, or paste an image. Pick how much the task is worth: Draft moves Build and Review down one model, Max puts Build on the Plan model, and Balanced follows your stack. Once you've finished a few tasks, Home shows what a task usually costs at that setting.
+**Home.** Describe a task. Type @ to point at one of the project's files, and Plan reads it in full. Attach screenshots, PDFs or text files with the clip, or paste an image. Pick how much the task is worth: Draft moves Build and Review down one model, Max puts Build on the Plan model, and Balanced follows your stack. Once you've finished a few tasks, Home shows what a task usually costs at that setting.
 
 **Threads.** Scout reads the code, Plan writes the steps, Build makes the change and Review judges it. With Check the plan first on, the thread pauses after the plan so you can build it or ask for another. Each thread has three views:
 

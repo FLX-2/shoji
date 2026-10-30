@@ -46,7 +46,6 @@ export interface ThreadInput {
   ask?: (command: string) => Promise<boolean>;
 }
 
-
 const MAX_FILES_CHARS = 60_000;
 
 /**
@@ -125,7 +124,9 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
             : ""
         }`
       : "";
-    const asked = changes ? `\n\nThe work so far is already in the project. The person asked for these changes:\n${changes.notes}` : "";
+    const asked = changes
+      ? `\n\nThe work so far is already in the project. The person asked for these changes:\n${changes.notes}`
+      : "";
     const buildPrompt = `Task: ${task}\n\nPlan:\n${state.plan}${commandsNote}${asked}`;
     const buildStep = changes ? "changes" : "build";
     await agent(buildStep, "build", stack.build, prompts.BUILD, buildPrompt, builderTools);
@@ -182,7 +183,14 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
             messages: [
               {
                 role: "user",
-                content: withAttachments(reviewPrompt(task + asked, diffOf(workspace.root, (file) => workspace.isPrivate(file)), state.checks), input.attachments),
+                content: withAttachments(
+                  reviewPrompt(
+                    task + asked,
+                    diffOf(workspace.root, (file) => workspace.isPrivate(file)),
+                    state.checks,
+                  ),
+                  input.attachments,
+                ),
               },
             ],
             maxTokens: MAX_TOKENS,
@@ -243,7 +251,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
             {
               role: "user",
               content: withAttachments(
-                `Task: ${task}${projectNotes(workspace)}${replanNotes()}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief)}`,
+                `Task: ${task}${projectNotes(workspace)}${replanNotes()}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief, mentionedFiles(`${task}${replan ? ` ${replan.notes}` : ""}`))}`,
                 input.attachments,
               ),
             },
@@ -293,15 +301,26 @@ function projectNotes(workspace: Workspace): string {
   return fs.existsSync(file) ? `\n\nProject notes (SHOJI.md):\n${fs.readFileSync(file, "utf8")}` : "";
 }
 
-/** The files the scout named on its FILES: line, read in full for the planner. */
-function filesFrom(workspace: Workspace, brief: string): string {
+/** Files the person named with @ in the task, such as @src/app.ts, that are in the project. */
+export function mentionedFiles(text: string): string[] {
+  const named = [...text.matchAll(/(?:^|[\s(])@([^\s@]+)/g)].map((m) => m[1].replace(/[.,;:!?)\]'"`]+$/, ""));
+  return [...new Set(named)].filter(Boolean);
+}
+
+/** The files the person mentioned and the ones the scout named on its FILES: line, read in full for the planner. */
+function filesFrom(workspace: Workspace, brief: string, mentioned: string[]): string {
   const line = brief.match(/FILES:\s*(.+)/)?.[1] ?? "";
+  const named = line
+    .split(",")
+    .map((p) => p.trim().replace(/`/g, ""))
+    .filter(Boolean)
+    .slice(0, 6);
   let out = "";
-  for (const name of line.split(",").map((p) => p.trim().replace(/`/g, "")).filter(Boolean).slice(0, 6)) {
+  for (const name of [...new Set([...mentioned.slice(0, 10), ...named])]) {
     try {
       out += `--- ${name}\n${workspace.read(name)}\n\n`;
     } catch {
-      // The scout named something that isn't a readable file; the plan can do without it.
+      // Not a readable file, or a private one; the plan can do without it.
     }
   }
   return out.slice(0, MAX_FILES_CHARS) || "(none)";
@@ -321,7 +340,7 @@ export function reviewPrompt(task: string, diff: string, checks: CheckResult[]):
                     ? `failed, and it failed before this change too, so it isn't this change's to fix\n${c.output}`
                     : c.newFailures
                       ? `failed. It failed before this change too, but these failures are new, so they are this change's to fix: ${c.newFailures.join(", ")}\n${c.output}`
-                    : `failed\n${c.output}`
+                      : `failed\n${c.output}`
             }`,
         )
         .join("\n")
