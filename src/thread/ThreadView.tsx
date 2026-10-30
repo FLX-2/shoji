@@ -3,6 +3,7 @@ import type { CheckResult } from "../../runtime/src/events";
 import { MODELS } from "../../runtime/src/models";
 import type { Bridge } from "../bridge";
 import { CodeView } from "../code/CodeView";
+import { commentsNote, type LineComment } from "../code/comments";
 import { useChanges } from "../code/useChanges";
 import { ClipIcon } from "../shell/ClipIcon";
 import { ROLE_NAMES } from "../stack/lock";
@@ -122,6 +123,9 @@ export function ThreadView({
   const ended = thread.turns.filter((t) => t.exit || t.error).length;
   const { changes, error, act } = useChanges(bridge, putAway ? null : place, `${ended}-${mode}-${thread.committed}`);
   const fileCount = changes?.files.length ?? 0;
+  // Comments on lines of the diff, kept across views until they go to Build.
+  const [comments, setComments] = useState<LineComment[]>([]);
+  useEffect(() => setComments([]), [thread.id]);
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
 
@@ -131,6 +135,8 @@ export function ThreadView({
   const planned = lastWork.result?.status === "planned";
   // The review sent it back. Fixing can't help a check whose program isn't on this computer.
   const fixable = lastWork.result?.status === "needs-work" && !lastWork.result.checks.some((c) => c.missing);
+  // The work can take changes: it has a plan, isn't committed, and has money left.
+  const canChange = !running && !thread.committed && runs.some((run) => run.result?.plan) && spent < thread.cap;
   const outcome = running
     ? undefined
     : lastWork.result
@@ -225,6 +231,13 @@ export function ThreadView({
           onChoose={setChosenFile}
           onAccept={(path) => act(bridge.acceptFile(place, path))}
           onRevert={(path) => act(bridge.revertFile(place, path))}
+          comments={comments}
+          {...(canChange && { onComments: setComments })}
+          onSendComments={() => {
+            onRequestChanges(commentsNote(comments));
+            setComments([]);
+            setMode("conversation");
+          }}
         />
       )}
 

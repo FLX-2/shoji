@@ -275,6 +275,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 )}
                 {thread ? (
                   <ThreadView
+                    key={thread.id ?? "new"}
                     bridge={bridge}
                     thread={thread}
                     onStop={stop}
