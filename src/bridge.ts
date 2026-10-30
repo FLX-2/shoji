@@ -42,7 +42,7 @@ export interface ChangesRequest {
   plan: string;
   branch: string;
   /** Changes to the work (the default), building an approved plan, or planning again from notes on it. */
-  kind?: "changes" | "build" | "replan";
+  kind?: "changes" | "build" | "replan" | "question";
   /** Checks that failed before the thread's first build, which these changes leave alone. */
   failingBefore?: string[];
   /** The failures those checks named then, so a new one inside them still counts. */
@@ -134,10 +134,10 @@ export interface LedgerThread {
 
 export interface LedgerRun {
   id: number;
-  kind: "task" | "changes" | "build" | "replan" | "trial" | "notes";
+  kind: "task" | "changes" | "build" | "replan" | "question" | "trial" | "notes";
   startedAt: number;
   /** How the run ended; null while it's going. */
-  status: "ready" | "needs-work" | "stopped" | "failed" | "planned" | null;
+  status: "ready" | "needs-work" | "stopped" | "failed" | "planned" | "answered" | null;
   /** What the person asked for in the run; missing for runs from before it was kept. */
   ask?: string | null;
   calls: LedgerCall[];

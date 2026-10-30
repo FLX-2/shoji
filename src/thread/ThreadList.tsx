@@ -2,7 +2,7 @@ import type { LedgerThread } from "../bridge";
 import { folderName } from "../home/HomeView";
 import { formatCost } from "./fold";
 
-const STATUS: Record<NonNullable<LedgerThread["runs"][number]["status"]>, string> = {
+const STATUS: Record<Exclude<LedgerThread["runs"][number]["status"], "answered" | null>, string> = {
   ready: "Ready to accept",
   "needs-work": "Needs work",
   planned: "Plan ready",
@@ -10,11 +10,12 @@ const STATUS: Record<NonNullable<LedgerThread["runs"][number]["status"]>, string
   failed: "Failed",
 };
 
-/** Where a thread got to: committed, or how its latest run ended. */
+/** Where a thread got to: committed, or how its latest run ended. A question leaves the work as it was. */
 export function threadStatus(thread: LedgerThread): string {
   if (thread.committed) return "Committed";
-  const last = thread.runs.at(-1)?.status;
-  return last ? STATUS[last] : "Running";
+  if (thread.runs.at(-1)?.status === null) return "Running";
+  const last = thread.runs.findLast((run) => run.kind !== "question")?.status;
+  return last && last !== "answered" ? STATUS[last] : "Running";
 }
 
 function when(at: number, now: Date): string {

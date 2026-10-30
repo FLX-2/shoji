@@ -7,7 +7,13 @@ import type { Thread, Turn } from "./useThread";
 export const workThreads = (ledger: LedgerThread[]) => ledger.filter((t) => !isTrial(t) && !isNotes(t));
 
 /** What each kind of run asked, for runs from before the ledger kept the person's words. */
-const ASKED: Record<Turn["kind"], string> = { task: "", changes: "Changes", build: "Build it", replan: "Plan again" };
+const ASKED: Record<Turn["kind"], string> = {
+  task: "",
+  changes: "Changes",
+  build: "Build it",
+  replan: "Plan again",
+  question: "Question",
+};
 
 function stackOf(saved: string): Stack {
   if (saved in STACKS) return STACKS[saved as StackName];

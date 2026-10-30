@@ -10,7 +10,7 @@ export interface Turn {
   ask: string;
   /** The names of files attached to the ask. */
   attached?: string[];
-  kind: "task" | "changes" | "build" | "replan";
+  kind: "task" | "changes" | "build" | "replan" | "question";
   events: RuntimeEvent[];
   /** Set once the run has ended. */
   exit?: RunExit;
@@ -151,7 +151,7 @@ export function useThread(bridge: Bridge, allowedIn: (repo: string) => string[] 
 
   /** Carries the thread on from its latest plan: changes to the work, building the plan, or a new plan. */
   const carryOn = useCallback(
-    (ask: string, notes: string, kind: "changes" | "build" | "replan", extra = 0) => {
+    (ask: string, notes: string, kind: "changes" | "build" | "replan" | "question", extra = 0) => {
       if (thread?.id === undefined) return;
       const results = thread.turns.map((t) => foldRun(t.events).result);
       const plan = results.map((r) => r?.plan).findLast(Boolean) ?? "";
@@ -200,6 +200,9 @@ export function useThread(bridge: Bridge, allowedIn: (repo: string) => string[] 
   /** Plans again from the person's notes on the plan, and pauses again. */
   const replan = useCallback((notes: string) => carryOn(notes, notes, "replan"), [carryOn]);
 
+  /** Asks about the work. The answer changes nothing, so the thread stays where it was. */
+  const question = useCallback((text: string) => carryOn(text, text, "question"), [carryOn]);
+
   const stop = useCallback(async () => {
     updateLast((turn) => ({ ...turn, stoppedByYou: true }));
     await bridge.stopRun();
@@ -218,7 +221,7 @@ export function useThread(bridge: Bridge, allowedIn: (repo: string) => string[] 
     setThread(past);
   }, []);
 
-  return { thread, start, requestChanges, keepGoing, fix, build, replan, stop, commit, open };
+  return { thread, start, requestChanges, keepGoing, fix, build, replan, question, stop, commit, open };
 }
 
 /** The last part of a path, on any system. */

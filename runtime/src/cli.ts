@@ -10,6 +10,7 @@ import { writeNotes, type NotesEvent } from "./notes";
 import { runThread } from "./pipeline";
 import { defaultChecks } from "./project";
 import { AnthropicProvider } from "./provider";
+import { answerQuestion } from "./question";
 import { describeStacks, parseStack, type Stack, STACKS, type StackName } from "./stack";
 import { describeBriefing, finished, runTrial, type TrialEvent, type TrialTask } from "./trial";
 import { DEFAULT_PRIVATE, Workspace } from "./workspace";
@@ -29,6 +30,8 @@ Options:
   --changes <notes>   Build the person's requested changes on top of finished work,
                       skipping scout and plan; needs --plan-file
   --plan-file <file>  The plan of the work being changed, built or planned again
+  --question <text>   Answer the person's question about the work in the project, changing
+                      nothing; needs --plan-file. The stack's scout answers
   --plan-only         Stop once the plan is written, for the person to build or change
   --build             Build the plan in --plan-file, which the person approved, skipping
                       scout and plan
@@ -179,6 +182,7 @@ async function main() {
       "plan-only": { type: "boolean", default: false },
       build: { type: "boolean", default: false },
       replan: { type: "string" },
+      question: { type: "string" },
       "plan-file": { type: "string" },
       "failing-before": { type: "string", multiple: true },
       "failing-test-before": { type: "string", multiple: true },
@@ -218,9 +222,14 @@ async function main() {
   const apiKey = process.env.SHOJI_API_KEY || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) fail("Set SHOJI_API_KEY or ANTHROPIC_API_KEY.");
 
-  const continuing = [values.changes !== undefined, values.build, values.replan !== undefined].filter(Boolean).length;
-  if (continuing > 1) fail("Use one of --changes, --build and --replan.");
-  if (continuing && !values["plan-file"]) fail("--changes, --build and --replan need --plan-file.");
+  const continuing = [
+    values.changes !== undefined,
+    values.build,
+    values.replan !== undefined,
+    values.question !== undefined,
+  ].filter(Boolean).length;
+  if (continuing > 1) fail("Use one of --changes, --build, --replan and --question.");
+  if (continuing && !values["plan-file"]) fail("--changes, --build, --replan and --question need --plan-file.");
   const plan = values["plan-file"] ? fs.readFileSync(values["plan-file"], "utf8") : "";
   const changes = values.changes !== undefined ? { notes: values.changes, plan } : undefined;
   const replan = values.replan !== undefined ? { notes: values.replan, plan } : undefined;
@@ -273,6 +282,21 @@ async function main() {
         ? "The project has uncommitted changes. Commit or stash them, then start the thread again."
         : "The project has uncommitted changes. Commit or stash them, or pass --allow-dirty.",
     );
+  }
+
+  if (values.question !== undefined) {
+    const result = await answerQuestion({
+      task: values.task,
+      plan,
+      question: values.question,
+      seat: stack.scout,
+      provider,
+      workspace: new Workspace(root, privateFiles),
+      cap,
+      emit: (event) => write(event, describe(event)),
+    });
+    process.exitCode = result.status === "answered" ? 0 : 1;
+    return;
   }
 
   const result = await runThread({

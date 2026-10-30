@@ -40,6 +40,8 @@ interface ThreadViewProps {
   onBuild: () => void;
   /** Plans again from the person's notes on the plan. */
   onReplan: (notes: string) => void;
+  /** Asks about the work; the answer changes nothing. */
+  onQuestion: (question: string) => void;
   onCommit: () => Promise<void>;
   /** The person's answer about a command the run wants; `always` allows it in this project from now on. */
   onAnswer: (command: string, allow: boolean, always: boolean) => Promise<void>;
@@ -61,6 +63,7 @@ const STATUS = {
   stopped: "Stopped",
   failed: "Failed",
   planned: "Plan ready",
+  answered: "Answered",
 };
 
 /** A thread: its Conversation, where each ask is followed by the steps that answered it,
@@ -76,6 +79,7 @@ export function ThreadView({
   onRetry,
   onBuild,
   onReplan,
+  onQuestion,
   onCommit,
   onAnswer,
   showCosts,
@@ -86,8 +90,13 @@ export function ThreadView({
   const running = isRunning(last);
   const runs = thread.turns.map((turn) => foldRun(turn.events));
   const lastRun = runs[runs.length - 1];
+  // A question changes nothing, so where the thread stands comes from the last run that did the work.
+  const workAt = thread.turns.findLastIndex((t) => t.kind !== "question");
+  const lastWork = workAt < 0 ? lastRun : runs[workAt];
+  const workTurn = workAt < 0 ? last : thread.turns[workAt];
   const spent = threadCost(thread);
-  const [asking, setAsking] = useState(false);
+  // The composer, open for changes to the work or for a question about it.
+  const [asking, setAsking] = useState<false | "changes" | "question">(false);
   // The project's files, for @ in the changes box, read each time it opens.
   const [files, setFiles] = useState<string[]>([]);
   useEffect(() => {
@@ -117,18 +126,18 @@ export function ThreadView({
   const [commitError, setCommitError] = useState<string | null>(null);
 
   // Stopped at its limit, so the way on is more to spend.
-  const stopped = lastRun.result?.status === "stopped";
+  const stopped = lastWork.result?.status === "stopped";
   // Paused after the plan, for the person to build it or ask for a different one.
-  const planned = lastRun.result?.status === "planned";
+  const planned = lastWork.result?.status === "planned";
   // The review sent it back. Fixing can't help a check whose program isn't on this computer.
-  const fixable = lastRun.result?.status === "needs-work" && !lastRun.result.checks.some((c) => c.missing);
+  const fixable = lastWork.result?.status === "needs-work" && !lastWork.result.checks.some((c) => c.missing);
   // The work can take changes: it has a plan, isn't committed, and has money left.
   const canChange = !running && !thread.committed && runs.some((run) => run.result?.plan) && spent < thread.cap;
   const outcome = running
     ? undefined
-    : lastRun.result
-      ? lastRun.result.status
-      : last.stoppedByYou
+    : lastWork.result
+      ? lastWork.result.status
+      : workTurn.stoppedByYou
         ? "stopped"
         : "failed";
 
@@ -154,9 +163,9 @@ export function ThreadView({
     ) : (
       "Starting"
     )
-  ) : lastRun.result ? (
-    STATUS[lastRun.result.status]
-  ) : last.stoppedByYou ? (
+  ) : lastWork.result ? (
+    STATUS[lastWork.result.status]
+  ) : workTurn.stoppedByYou ? (
     STATUS.stopped
   ) : (
     STATUS.failed
@@ -258,14 +267,21 @@ export function ThreadView({
         !running &&
         (asking ? (
           <Composer
-            label={planned ? "Plan changes" : "Changes"}
-            placeholder={planned ? "What should the plan do differently?" : "Describe the changes you want…"}
+            key={asking}
+            label={asking === "question" ? "Question" : planned ? "Plan changes" : "Changes"}
+            placeholder={
+              asking === "question"
+                ? "Ask about this work. Nothing will change."
+                : planned
+                  ? "What should the plan do differently?"
+                  : "Describe the changes you want…"
+            }
             autoFocus
             onCancel={() => setAsking(false)}
             blocked={spent >= thread.cap}
             onSend={(notes) => {
               setAsking(false);
-              (planned ? onReplan : onRequestChanges)(notes);
+              (asking === "question" ? onQuestion : planned ? onReplan : onRequestChanges)(notes);
             }}
             files={files}
           />
@@ -274,8 +290,16 @@ export function ThreadView({
             <button type="button" className="btn solid" onClick={onBuild}>
               Build it
             </button>
-            <button type="button" className="btn" onClick={() => setAsking(true)} disabled={spent >= thread.cap}>
+            <button type="button" className="btn" onClick={() => setAsking("changes")} disabled={spent >= thread.cap}>
               Change the plan
+            </button>
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => setAsking("question")}
+              disabled={spent >= thread.cap}
+            >
+              Ask a question
             </button>
             <span className="sum">
               {dotted([
@@ -311,9 +335,24 @@ export function ThreadView({
                   </button>
                 )}
                 {runs.some((run) => run.result?.plan) && (
-                  <button type="button" className="btn" onClick={() => setAsking(true)} disabled={spent >= thread.cap}>
-                    Request changes
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setAsking("changes")}
+                      disabled={spent >= thread.cap}
+                    >
+                      Request changes
+                    </button>
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => setAsking("question")}
+                      disabled={spent >= thread.cap}
+                    >
+                      Ask a question
+                    </button>
+                  </>
                 )}
                 {thread.branch && fileCount > 0 && (
                   <button
@@ -330,7 +369,7 @@ export function ThreadView({
             )}
             <span className="sum">
               {dotted([
-                !thread.committed && checksSummary(lastRun.result?.checks),
+                !thread.committed && checksSummary(lastWork.result?.checks),
                 showCosts && (
                   <>
                     <b>{formatCost(spent)}</b> in all
@@ -495,7 +534,7 @@ function Work({ step, showPlan }: { step: StepView; showPlan: boolean }) {
       </Item>
     ),
     step.checks && step.checks.length > 0 && <Checks key="checks" checks={step.checks} />,
-    output && step.role === "scout" && (
+    output && step.role === "scout" && step.name !== "answer" && (
       <Item key="out" icon={ICONS.note} summary="What the scout found">
         <Markdown className="text" text={output} />
       </Item>
@@ -518,7 +557,7 @@ function Work({ step, showPlan }: { step: StepView; showPlan: boolean }) {
       )),
   ].filter(Boolean);
 
-  const said = output && step.role === "build" ? output : null;
+  const said = output && (step.role === "build" || step.name === "answer") ? output : null;
   if (items.length === 0 && !said) return null;
   return (
     <div className="work">
@@ -571,7 +610,7 @@ function Item(props: { icon: string; summary: string; open?: boolean; children: 
 }
 
 function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean }) {
-  if (live) return null;
+  if (live || run.result?.status === "answered") return null;
   const result = run.result;
   let text: string;
   if (turn.error) text = turn.error;

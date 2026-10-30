@@ -61,7 +61,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const allowed = useRef(prefs.allowedCommands);
   allowed.current = prefs.allowedCommands;
   const allowedIn = useCallback((repo: string) => allowed.current[repo] ?? [], []);
-  const { thread, start, requestChanges, keepGoing, fix, build, replan, stop, commit, open } = useThread(
+  const { thread, start, requestChanges, keepGoing, fix, build, replan, question, stop, commit, open } = useThread(
     bridge,
     allowedIn,
   );
@@ -274,6 +274,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     }
                     onBuild={build}
                     onReplan={replan}
+                    onQuestion={question}
                     onCommit={commit}
                     onAnswer={(command, allow, always) => {
                       if (always) {
