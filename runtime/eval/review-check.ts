@@ -51,7 +51,7 @@ export function diffFor(c: ReviewCase): string {
 export async function reviewCheck(meter: Meter, seat: Seat, trials: number, cases = CASES): Promise<Verdict[]> {
   const verdicts: Verdict[] = [];
   for (const c of cases) {
-    const content = reviewPrompt(c.task, diffFor(c), [{ command: "pnpm test", ok: true, output: "" }]);
+    const content = reviewPrompt(c.task, diffFor(c), c.checks ?? [{ command: "pnpm test", ok: true, output: "" }]);
     for (let i = 0; i < trials; i++) {
       const review = textOf(
         await meter.send("review", "review", {

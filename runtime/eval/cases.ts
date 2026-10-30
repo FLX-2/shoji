@@ -1,3 +1,5 @@
+import type { CheckResult } from "../src/events";
+
 /** A small change for the reviewer to judge. The checks pass on every case, so only the
  *  review can catch a planted bug. Controls are correct and should be approved. */
 export interface ReviewCase {
@@ -7,6 +9,8 @@ export interface ReviewCase {
   after: Record<string, string>;
   /** What's wrong, and words a review that found it would use. Unset for a control. */
   bug?: { what: string; named: RegExp };
+  /** The checks as the reviewer sees them, when they don't all simply pass. */
+  checks?: CheckResult[];
 }
 
 const pricing = `export interface Plan {
@@ -154,5 +158,22 @@ export function searchCustomers(name: string) {
     task: "Add a paginate(items, page, size) helper. Pages are numbered from 1.",
     before: { "src/list.ts": list },
     after: { "src/list.ts": paginated("(page - 1) * size") },
+  },
+  {
+    // A correct change in a project whose tests were already broken: the review shouldn't
+    // ask for that failure to be fixed, as it did on Bob's Axon theme run.
+    name: "annual price, old failure",
+    task: "Add an annual price to each plan: twelve months paid up front, with 20% off.",
+    before: { "src/pricing.ts": pricing },
+    after: { "src/pricing.ts": annual("0.8") },
+    checks: [
+      {
+        command: "npm run test",
+        ok: false,
+        failedBefore: true,
+        output:
+          ' FAIL  src/settings.test.ts [ src/settings.test.ts ]\nError: Failed to resolve import "../store/useSettingsStore" from "src/settings.test.ts". Does the file exist?\n\n Test Files  1 failed | 4 passed (5)',
+      },
+    ],
   },
 ];
