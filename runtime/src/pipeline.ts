@@ -182,7 +182,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
             messages: [
               {
                 role: "user",
-                content: withAttachments(reviewPrompt(task + asked, diffOf(workspace.root), state.checks), input.attachments),
+                content: withAttachments(reviewPrompt(task + asked, diffOf(workspace.root, (file) => workspace.isPrivate(file)), state.checks), input.attachments),
               },
             ],
             maxTokens: MAX_TOKENS,

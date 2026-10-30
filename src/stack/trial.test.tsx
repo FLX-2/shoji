@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import { STACKS } from "../../runtime/src/stack";
 import type { Briefing } from "../../runtime/src/trial";
 import App from "../App";
@@ -103,6 +104,7 @@ describe("trials in Stack", () => {
           { task: "Add a toggle", commit: "c0ffee1", was: 0.1 },
           { task: "Fix the header", commit: "c0ffee2", was: 0.1 },
         ],
+        privateFiles: DEFAULT_PRIVATE,
       },
     ]);
     // Trying a stack doesn't save it.

@@ -843,7 +843,8 @@
 }
 
 .keyform input,
-.money input {
+.money input,
+.srow.private textarea {
   all: unset;
   box-sizing: border-box;
   border: 1px solid var(--hair);
@@ -865,8 +866,26 @@
   text-align: right;
 }
 
+.srow.private {
+  align-items: start;
+}
+
+.srow.private textarea {
+  width: 220px;
+  padding: 6px 10px;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+  resize: vertical;
+}
+
+.srow.private .btn {
+  margin: 8px 0 0 -10px;
+}
+
 .keyform input:focus-visible,
-.money input:focus-visible {
+.money input:focus-visible,
+.srow.private textarea:focus-visible {
   border-color: rgba(255, 255, 255, 0.3);
 }
 

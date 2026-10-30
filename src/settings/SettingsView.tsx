@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import type { Stack } from "../../runtime/src/stack";
 import type { KeyStatus } from "../bridge";
 import { AccentRow, BackgroundRow, DensityRow, FrostRow, MotionRow, OpaqueRow, SwitchRow } from "../look/LookRows";
@@ -67,6 +68,15 @@ export function SettingsView({
               onToggle={() => onChange({ planFirst: !prefs.planFirst })}
             />
             <AllowedRows prefs={prefs} onChange={onChange} />
+          </div>
+        </section>
+
+        <section className="sg" aria-labelledby="s-data">
+          <h2 id="s-data" className="k">
+            Data
+          </h2>
+          <div className="card">
+            <PrivateRow prefs={prefs} onChange={onChange} />
           </div>
         </section>
 
@@ -238,3 +248,46 @@ function AllowedRows({ prefs, onChange }: { prefs: Prefs; onChange: (change: Par
   );
 }
 
+const lines = (text: string) =>
+  text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+/** Files no role may read, change or list, as .gitignore patterns. */
+function PrivateRow({ prefs, onChange }: { prefs: Prefs; onChange: (change: Partial<Prefs>) => void }) {
+  const [typed, setTyped] = useState(prefs.privateFiles.join("\n"));
+  const defaults = prefs.privateFiles.join("\n") === DEFAULT_PRIVATE.join("\n");
+  const use = (patterns: string[]) => {
+    setTyped(patterns.join("\n"));
+    onChange({ privateFiles: patterns });
+  };
+  return (
+    <div className="srow private">
+      <label htmlFor="s-private">
+        <b>Private files</b>
+        <span className="d">
+          No role can read, change, list or search these, so they never reach a model, and the review's diff leaves
+          them out. One pattern a line, as in .gitignore. A line starting with ! keeps a file shared.
+        </span>
+        {!defaults && (
+          <button type="button" className="btn sm ghost" onClick={() => use(DEFAULT_PRIVATE)}>
+            Use the defaults
+          </button>
+        )}
+      </label>
+      <textarea
+        id="s-private"
+        rows={Math.max(4, typed.split("\n").length)}
+        spellCheck={false}
+        autoComplete="off"
+        value={typed}
+        onChange={(e) => {
+          setTyped(e.target.value);
+          onChange({ privateFiles: lines(e.target.value) });
+        }}
+        onBlur={() => setTyped(prefs.privateFiles.join("\n"))}
+      />
+    </div>
+  );
+}

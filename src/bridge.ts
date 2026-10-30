@@ -26,6 +26,8 @@ export interface RunRequest {
   attachments?: string[];
   /** Commands beyond the checks that may run without asking. */
   allowedCommands?: string[];
+  /** Patterns, as in .gitignore, for files no role may read, change or list. */
+  privateFiles?: string[];
 }
 
 export interface ChangesRequest {
@@ -51,6 +53,8 @@ export interface TrialRequest {
   /** Dollars the whole trial may spend. */
   cap: number;
   tasks: TrialTask[];
+  /** Patterns, as in .gitignore, for files no role may read, change or list. */
+  privateFiles?: string[];
 }
 
 export interface NotesRequest {
@@ -59,6 +63,18 @@ export interface NotesRequest {
   stack: Stack;
   /** Dollars the notes may cost. */
   cap: number;
+  /** Patterns, as in .gitignore, for files no role may read, change or list. */
+  privateFiles?: string[];
+}
+
+/** The bridge, with the person's private files added to everything that starts the runtime. */
+export function keepingPrivate(bridge: Bridge, privateFiles: () => string[]): Bridge {
+  return {
+    ...bridge,
+    startRun: (request) => bridge.startRun({ ...request, privateFiles: privateFiles() }),
+    startTrial: (request) => bridge.startTrial({ ...request, privateFiles: privateFiles() }),
+    startNotes: (request) => bridge.startNotes({ ...request, privateFiles: privateFiles() }),
+  };
 }
 
 export interface StartedRun {

@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import type { StackName } from "../../runtime/src/stack";
 import type { AccentId } from "../look/accent";
 import type { FieldId } from "../look/fields";
@@ -35,6 +36,8 @@ export interface Prefs {
   setupDone: boolean;
   /** Commands beyond the checks that the person always allows, by project folder. */
   allowedCommands: Record<string, string[]>;
+  /** Patterns, as in .gitignore, for files no role may read, change or list. */
+  privateFiles: string[];
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -54,6 +57,7 @@ export const DEFAULT_PREFS: Prefs = {
   showModels: true,
   setupDone: false,
   allowedCommands: {},
+  privateFiles: DEFAULT_PRIVATE,
 };
 
 const STORE = "shoji.prefs";

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import { STACKS } from "../../runtime/src/stack";
 import App from "../App";
 import { parseLock } from "../stack/lock";
@@ -122,7 +123,7 @@ describe("first-run setup", () => {
     expect(screen.getByText(/Haiku 5.5 reads the project once and writes SHOJI.md/)).toBeTruthy();
     expect(fake.calls.notes).toEqual([]);
     await click("Write notes");
-    expect(fake.calls.notes).toEqual([{ repo: "/work/pricing-page", stack: STACKS.balanced, cap: 0.05 }]);
+    expect(fake.calls.notes).toEqual([{ repo: "/work/pricing-page", stack: STACKS.balanced, cap: 0.05, privateFiles: DEFAULT_PRIVATE }]);
     expect(screen.getByText("Haiku 5.5 is reading pricing-page.")).toBeTruthy();
     expect(document.querySelector(".app")!.getAttribute("data-state")).toBe("running");
 

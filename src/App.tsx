@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LimitAsk, type Ask } from "./budget/LimitAsk";
 import { spentOn } from "./budget/daily";
-import { bridge as tauriBridge, type Bridge, type KeyStatus, type LedgerThread } from "./bridge";
+import { keepingPrivate, bridge as tauriBridge, type Bridge, type KeyStatus, type LedgerThread } from "./bridge";
 import { folderName, HomeView } from "./home/HomeView";
 import { Field } from "./look/Field";
 import { lookStyle } from "./look/LookRows";
@@ -36,9 +36,13 @@ async function folderProblem(bridge: Bridge, repo: string): Promise<string | nul
 
 const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent);
 
-function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
+function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const [section, setSection] = useState<SectionId>("home");
   const [prefs, setPrefs] = usePrefs();
+  // Every run, trial and notes run carries the private files as they are when it starts.
+  const privateFiles = useRef(prefs.privateFiles);
+  privateFiles.current = prefs.privateFiles;
+  const bridge = useMemo(() => keepingPrivate(given, () => privateFiles.current), [given]);
   const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
   const stack = useStack(bridge, prefs.stack);
   // Read through a ref, so a command allowed mid-thread counts for the thread's next run.

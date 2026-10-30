@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { CallRecord, RuntimeEvent, ThreadResult } from "../../runtime/src/events";
 import type { ModelId } from "../../runtime/src/models";
+import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import { STACKS, type Role } from "../../runtime/src/stack";
 import App from "../App";
 import { fakeBridge } from "../test/fakeBridge";
@@ -118,8 +119,7 @@ describe("a thread in the app", () => {
     localStorage.clear();
   });
 
-  async function startThread() {
-    const fake = fakeBridge();
+  async function startThread(fake = fakeBridge()) {
     render(<App bridge={fake.bridge} />);
     const task = await screen.findByRole("textbox", { name: "Task" });
     fireEvent.change(task, { target: { value: "Add an annual toggle to the pricing cards" } });
@@ -139,6 +139,7 @@ describe("a thread in the app", () => {
         stack: STACKS.balanced,
         cap: 0.5,
         planOnly: true,
+        privateFiles: DEFAULT_PRIVATE,
       },
     ]);
 
@@ -265,11 +266,12 @@ describe("a thread in the app", () => {
   });
 
   it("says why a commit failed and lets it be tried again", async () => {
-    const fake = await startThread();
-    fake.project.diff = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b\n";
-    fake.bridge.commitThread = async () => {
+    const failing = fakeBridge();
+    failing.bridge.commitThread = async () => {
       throw "Git doesn't know who you are yet.";
     };
+    const fake = await startThread(failing);
+    fake.project.diff = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b\n";
     fake.emit(result("ready", 0.01));
     await act(async () => fake.exit(0));
     await act(async () => {

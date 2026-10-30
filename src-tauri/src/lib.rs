@@ -173,6 +173,18 @@ struct RunRequest {
     /// Commands beyond the checks that the person allowed in this project.
     #[serde(default)]
     allowed_commands: Vec<String>,
+    /// Patterns for files no role may read, change or list. None keeps the runtime's own.
+    private_files: Option<Vec<String>>,
+}
+
+/// The runtime's --private flags. An empty list is passed as one empty pattern, which keeps
+/// nothing private, since no flag at all means the runtime's defaults.
+fn private_args(patterns: &Option<Vec<String>>) -> Vec<String> {
+    match patterns {
+        None => vec![],
+        Some(list) if list.is_empty() => vec!["--private=".into()],
+        Some(list) => list.iter().map(|pattern| format!("--private={pattern}")).collect(),
+    }
 }
 
 #[derive(Serialize)]
@@ -289,6 +301,7 @@ fn start_run(
     }
     args.extend(request.attachments.iter().map(|file| format!("--attach={file}")));
     args.extend(request.allowed_commands.iter().map(|command| format!("--allow={command}")));
+    args.extend(private_args(&request.private_files));
     if let Some(changes) = request.changes {
         let plan = runs.join(format!("{stamp}-plan.md"));
         fs::write(&plan, &changes.plan).map_err(|e| e.to_string())?;
@@ -392,6 +405,8 @@ struct TrialRequest {
     cap: f64,
     /// The accepted tasks to replay: {task, commit, was}, as the runtime's --trial-file takes them.
     tasks: Vec<serde_json::Value>,
+    /// Patterns for files no role may read, change or list. None keeps the runtime's own.
+    private_files: Option<Vec<String>>,
 }
 
 /// Replays accepted tasks on a candidate stack in scratch copies of the project. The project
@@ -426,7 +441,8 @@ fn start_trial(
     let entry = ledger
         .start_run(thread, "trial", &log.display().to_string(), stamp)
         .map_err(|e| e.to_string())?;
-    let args = vec![
+    let private = private_args(&request.private_files);
+    let mut args = vec![
         "--json".to_string(),
         "--repo".into(),
         request.repo,
@@ -439,6 +455,7 @@ fn start_trial(
         "--log".into(),
         log.display().to_string(),
     ];
+    args.extend(private);
     let command = app.shell().sidecar("shoji-runtime").map_err(|e| e.to_string())?;
     let (events, child) = command
         .args(args)
@@ -462,6 +479,8 @@ struct NotesRequest {
     stack: serde_json::Value,
     /// Dollars the notes may cost.
     cap: f64,
+    /// Patterns for files the scout may not read or list. None keeps the runtime's own.
+    private_files: Option<Vec<String>>,
 }
 
 /// Has the scout read the project and write SHOJI.md, the notes Plan reads before every task.
@@ -497,7 +516,8 @@ fn start_notes(
     let entry = ledger
         .start_run(thread, "notes", &log.display().to_string(), stamp)
         .map_err(|e| e.to_string())?;
-    let args = vec![
+    let private = private_args(&request.private_files);
+    let mut args = vec![
         "--json".to_string(),
         "--repo".into(),
         request.repo,
@@ -509,6 +529,7 @@ fn start_notes(
         "--log".into(),
         log.display().to_string(),
     ];
+    args.extend(private);
     let command = app.shell().sidecar("shoji-runtime").map_err(|e| e.to_string())?;
     let (events, child) = command
         .args(args)
@@ -846,6 +867,16 @@ mod tests {
         git(&root, &["add", "."]).unwrap();
         git(&root, &["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "start"]).unwrap();
         root
+    }
+
+    #[test]
+    fn passes_private_patterns_and_an_empty_list_as_keeping_nothing() {
+        assert!(private_args(&None).is_empty());
+        assert_eq!(private_args(&Some(vec![])), vec!["--private="]);
+        assert_eq!(
+            private_args(&Some(vec![".env".into(), "--help".into()])),
+            vec!["--private=.env", "--private=--help"]
+        );
     }
 
     #[test]
