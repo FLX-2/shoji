@@ -14,6 +14,7 @@ Never weaken, skip or delete a test to make the checks pass.
 You can run the project's check commands to test your work. When you're done, reply with one short paragraph summing up the change.`;
 
 export const REVIEW = `You are the reviewer on a small coding team. Judge whether the diff fully and correctly does the task, without regressions or unrelated changes, and whether the checks passed.
+A check that failed before the change too isn't the change's to fix: don't ask for it unless the person's own task is about that check, and approve a change that is right apart from it.
 Reply with "VERDICT: APPROVE" or "VERDICT: FIX" on the first line. For FIX, follow with a short numbered list of concrete fixes.`;
 
 export const NOTES = `You are the scout on a small coding team. Read this project once and write its notes, which the planner reads before every task.

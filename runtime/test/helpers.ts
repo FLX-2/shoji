@@ -32,7 +32,7 @@ export function reply(blocks: Block[], usage: Partial<Anthropic.Usage> = {}): An
 export class ScriptedProvider implements ModelProvider {
   readonly requests: ModelRequest[] = [];
 
-  constructor(private answer: (request: ModelRequest, index: number) => Anthropic.Message) {}
+  constructor(readonly answer: (request: ModelRequest, index: number) => Anthropic.Message) {}
 
   async send(request: ModelRequest) {
     this.requests.push(structuredClone(request));

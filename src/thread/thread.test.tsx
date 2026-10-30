@@ -342,6 +342,8 @@ describe("a thread in the app", () => {
 
     expect(fake.calls.starts[1]).toMatchObject({ changes: { thread: 1, plan: "1. Add a billing toggle." } });
     expect(fake.calls.starts[1].changes!.notes).toMatch(/^The last run stopped at its spending limit/);
+    // Asking for passing checks made the review chase a failure that was there before Shoji started.
+    expect(fake.calls.starts[1].changes!.notes).not.toMatch(/checks/);
     // What was left of the first limit, and the same again.
     expect(fake.calls.starts[1].cap).toBeCloseTo(0.55);
     expect(screen.getByText("Keep going").className).toBe("umsg");
@@ -356,7 +358,12 @@ describe("a thread in the app", () => {
     fake.emit(running("build", "build", SONNET), done("build", "build", SONNET), { type: "checks", step: "build", results: checks });
     fake.emit(running("review", "review", HAIKU), done("review", "review", HAIKU, "VERDICT: REVISE\n1. Fix the import."));
     fake.emit(
-      result("needs-work", 0.36, { review: "VERDICT: REVISE\n1. Fix the import.", failingBefore: ["pnpm lint"], checks }),
+      result("needs-work", 0.36, {
+        review: "VERDICT: REVISE\n1. Fix the import.",
+        failingBefore: ["pnpm lint"],
+        failingTestsBefore: ["src/a.ts TS2322"],
+        checks,
+      }),
     );
     fake.exit(1);
 
@@ -371,10 +378,23 @@ describe("a thread in the app", () => {
 
     const changes = fake.calls.starts[1].changes!;
     expect(changes.notes).toMatch(/^The last run ended with work left to do\./);
+    expect(changes.notes).not.toMatch(/checks passing/);
     expect(changes.notes).toContain("The review said:\n1. Fix the import.");
     expect(changes.failingBefore).toEqual(["pnpm lint"]);
+    expect(changes.failingTestsBefore).toEqual(["src/a.ts TS2322"]);
     expect(fake.calls.starts[1].cap).toBeCloseTo(0.64);
     expect(screen.getByText("Fix what the review found").className).toBe("umsg");
+  });
+
+  it("counts a check with new failures as failed, though it was failing before", async () => {
+    const fake = await startThread();
+    const checks = [{ command: "pnpm test", ok: false, output: " FAIL  b.test.ts", newFailures: ["FAIL b.test.ts"] }];
+    fake.emit(running("build", "build", SONNET), done("build", "build", SONNET), { type: "checks", step: "build", results: checks });
+    fake.emit(result("needs-work", 0.2, { failingBefore: ["pnpm test"], checks }));
+    fake.exit(1);
+
+    expect(screen.getAllByText("1 of 1 check failed").length).toBeGreaterThan(0);
+    expect(screen.getByText("· failed before the change too, with 1 new failure")).toBeTruthy();
   });
 
   it("draws the plan's markdown as text, not as marks", async () => {

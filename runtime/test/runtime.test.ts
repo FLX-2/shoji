@@ -15,7 +15,7 @@ import { AnthropicProvider, type ModelProvider } from "../src/provider";
 import { STACKS } from "../src/stack";
 import { runTool } from "../src/tools";
 import { Workspace } from "../src/workspace";
-import { CHECK, roleOf, team, tempRepo, UNBROKEN } from "./helpers";
+import { CHECK, reply, roleOf, ScriptedProvider, team, tempRepo, UNBROKEN } from "./helpers";
 
 const usage = (u: object) => ({ input_tokens: 0, output_tokens: 0, ...u }) as Parameters<typeof costOf>[1];
 
@@ -276,6 +276,37 @@ describe("thread pipeline", () => {
     expect(JSON.stringify(provider.requests.at(-1)!.messages)).toContain("it failed before this change too");
   });
 
+  it("stops when a fix the review asked for runs out of turns, instead of reviewing half-done work", async () => {
+    const scripted = team(() => true, "VERDICT: FIX\n1. Rename the export.");
+    // The fix keeps reading and never finishes.
+    const provider = new ScriptedProvider((request) =>
+      roleOf(request) === "builder" && String(request.messages[0].content).includes("Fix what's wrong")
+        ? reply([{ tool: "read_file", input: { path: "src/hello.js" } }])
+        : scripted.answer(request, 0),
+    );
+    const { result, events } = await run(provider, 1);
+
+    expect(result.status).toBe("needs-work");
+    expect(result.reason).toMatch(/^The fix ran out of turns before it finished, so Shoji stopped/);
+    expect(provider.requests.filter((r) => roleOf(r) === "reviewer")).toHaveLength(1);
+    expect(events.filter((e) => e.type === "step" && e.step === "review" && e.status === "done")).toHaveLength(1);
+  });
+
+  it("fixes a test the build broke inside a suite that was already failing", async () => {
+    // Fails before any change with one test, and names a second once the greeting breaks.
+    const SUITE = `node -e "console.log(' FAIL  old.test.js'); if (require('fs').readFileSync('src/hello.js','utf8').includes('broken')) console.log(' FAIL  greeting.test.js'); process.exit(1)"`;
+    const provider = team((r) => String(r.messages[0].content).includes("Fix what's wrong"));
+    const { result, events } = await run(provider, 1, undefined, [SUITE]);
+
+    const built = events.find((e) => e.type === "checks" && e.step === "build");
+    expect(built?.type === "checks" && built.results[0]).toMatchObject({ newFailures: ["FAIL greeting.test.js"] });
+    const fix = provider.requests.find((r) => String(r.messages[0].content).includes("Fix what's wrong"))!;
+    expect(fix.messages[0].content).toContain("but these failures are new:\nFAIL greeting.test.js");
+    expect(result.status).toBe("ready");
+    expect(result.checks[0]).toMatchObject({ failedBefore: true, failing: ["FAIL old.test.js"] });
+    expect(result.failingTestsBefore).toEqual(["FAIL old.test.js"]);
+  });
+
   it("still fixes a check the build broke, and keeps leaving the old failure to later runs", async () => {
     const ALWAYS_FAILS = `node -e "process.exit(1)"`;
     const provider = team(() => false);
@@ -303,6 +334,10 @@ describe("thread pipeline", () => {
     const fix = fixes[fixes.length - 1];
     expect(fix.messages[0].content).toContain(`${UNBROKEN} failed`);
     expect(fix.messages[0].content).not.toContain(`${ALWAYS_FAILS} failed`);
+    // The review asked for fixes too, and the round it started is still told to leave the old failure.
+    expect(fix.messages[0].content).toContain(`Leave the failures ${ALWAYS_FAILS} already had before any change`);
+    const review = provider.requests.filter((r) => roleOf(r) === "reviewer").at(-1)!;
+    expect(review.system).toContain("isn't the change's to fix");
   });
 
   it("shortens a call near the cap instead of stopping, while it still has room to work", async () => {

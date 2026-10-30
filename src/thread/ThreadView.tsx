@@ -416,6 +416,9 @@ function Checks({ checks }: { checks: CheckResult[] }) {
             <b>
               <i className={c.ok ? "good" : "bad"}>{c.ok ? "✓" : "✗"}</i> {c.command}
               {c.failedBefore && <span className="was"> · failed before the change too</span>}
+              {c.newFailures && (
+                <span className="was"> · failed before the change too, with {count(c.newFailures.length, "new failure")}</span>
+              )}
             </b>
             {"\n"}
             {c.ok ? "" : `${c.output.trim()}\n`}

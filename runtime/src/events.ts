@@ -24,6 +24,10 @@ export interface CheckResult {
   missing?: boolean;
   /** The check failed before Shoji changed anything too, so it isn't the thread's to fix. */
   failedBefore?: boolean;
+  /** The tests or errors its output names as failing, when Shoji can read them. */
+  failing?: string[];
+  /** In a check that failed before Shoji started, the failures that are new since then. */
+  newFailures?: string[];
 }
 
 export type RuntimeEvent =
@@ -48,6 +52,8 @@ export interface ThreadResult {
   checks: CheckResult[];
   /** Checks that failed before the thread's first build, which later runs leave alone too. */
   failingBefore?: string[];
+  /** The failures those checks named then, so a later run can still tell a new one apart. */
+  failingTestsBefore?: string[];
   escalated: boolean;
   cost: number;
   costByRole: Record<Role, number>;
