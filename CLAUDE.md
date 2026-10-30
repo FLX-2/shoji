@@ -15,6 +15,7 @@ A Tauri 2 desktop app: a React and TypeScript front end in `src/`, the Rust shel
 
 - The visual reference is the Shoji prototype. The Zone tokens in `src/styles/tokens.css` come from it. Use those variables and don't add new colours.
 - Red (`--safe`) only means running or spending. Inside the app the mark is drawn without its red seal.
+- Green (`--good`) and a softer red (`--bad`) only mark how something came out: passed or failed, added or removed. Use them on small marks and short words, never on surfaces. The Windows Close button's hover red is the system's own.
 - Motion uses the duration and easing tokens. Every effect must be able to be turned off in Settings.
 - Every element must earn its place. Don't add stray numbers, placeholders or controls that do nothing yet.
 - Keep corners small and rounding light.

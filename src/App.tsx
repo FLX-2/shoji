@@ -40,7 +40,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
   const [prefs, setPrefs] = usePrefs();
   const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
   const stack = useStack(bridge, prefs.stack);
-  const { thread, start, requestChanges, keepGoing, build, replan, stop, commit } = useThread(bridge);
+  const { thread, start, requestChanges, keepGoing, fix, build, replan, stop, commit } = useThread(bridge);
   const trials = useTrial(bridge);
   const trialRunning = !!trials.trial && trialProgress(trials.trial).running;
   const notes = useNotes(bridge);
@@ -193,6 +193,7 @@ function App({ bridge = tauriBridge }: { bridge?: Bridge }) {
                 onStop={stop}
                 onRequestChanges={requestChanges}
                 onKeepGoing={() => withinDay("Keeping this thread going", prefs.cap, () => keepGoing(prefs.cap))}
+                onFix={() => withinDay("Fixing what the review found", prefs.cap, () => fix(prefs.cap))}
                 more={prefs.cap}
                 onRetry={() =>
                   withinDay("This thread", thread.cap, () =>

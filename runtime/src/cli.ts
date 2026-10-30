@@ -32,6 +32,9 @@ Options:
                       scout and plan
   --replan <notes>    Scout and plan again from the plan in --plan-file and the person's
                       notes on it
+  --failing-before <command>
+                      A check that failed before the thread's first build, for a --changes
+                      run to leave alone; repeat for more
   --trial-file <file> Replay accepted tasks on the stack instead of running one, each in a
                       scratch copy of the project at the parent of its accepted commit. The
                       file holds {"tasks":[{"task":…,"commit":<accepted>,"was":<dollars>},…]};
@@ -63,7 +66,9 @@ function describe(event: RuntimeEvent): string | null {
     case "call":
       return `  $${event.call.cost.toFixed(4)}  ${event.call.inputTokens} in, ${event.call.outputTokens} out, ${event.call.cacheReadTokens} cached`;
     case "checks":
-      return event.results.map((c) => `  ${c.ok ? "passed" : "failed"}: ${c.command}`).join("\n");
+      return event.results
+        .map((c) => `  ${c.ok ? "passed" : c.failedBefore ? "failed, as it did before" : "failed"}: ${c.command}`)
+        .join("\n");
     case "escalate":
       return `  moving up to ${MODELS[event.to].label}: ${event.reason}`;
     case "result": {
@@ -125,6 +130,7 @@ async function main() {
       build: { type: "boolean", default: false },
       replan: { type: "string" },
       "plan-file": { type: "string" },
+      "failing-before": { type: "string", multiple: true },
       "trial-file": { type: "string" },
       notes: { type: "boolean", default: false },
       log: { type: "string" },
@@ -214,6 +220,7 @@ async function main() {
     planOnly: values["plan-only"],
     approved: values.build ? plan : undefined,
     replan,
+    failingBefore: values["failing-before"],
     emit: (event) => write(event, describe(event)),
   });
   process.exitCode = result.status === "ready" || result.status === "planned" ? 0 : 1;

@@ -32,6 +32,8 @@ export interface ChangesRequest {
   branch: string;
   /** Changes to the work (the default), building an approved plan, or planning again from notes on it. */
   kind?: "changes" | "build" | "replan";
+  /** Checks that failed before the thread's first build, which these changes leave alone. */
+  failingBefore?: string[];
 }
 
 export interface TrialRequest {

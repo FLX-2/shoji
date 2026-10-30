@@ -1,5 +1,7 @@
 /* Zone design tokens, taken from the Shoji prototype (design round 15).
-   Red (--safe) only ever means running or spending. */
+   Red (--safe) only ever means running or spending. Green (--good) and a softer red (--bad) mark
+   how something came out: passed or failed, lines added or removed. They colour small marks and
+   short words, never surfaces. */
 :root {
   /* Greys, darkest to lightest */
   --z0: #060505;
@@ -17,6 +19,10 @@
   --matte: #0b0a0a;
   --safe: #ff5b3a;
   --safe-rgb: 255, 91, 58;
+  --good: #5fbf8a;
+  --good-rgb: 95, 191, 138;
+  --bad: #ec6b6f;
+  --bad-rgb: 236, 107, 111;
   --hair: rgba(255, 255, 255, 0.1);
   --hair2: rgba(255, 255, 255, 0.06);
 

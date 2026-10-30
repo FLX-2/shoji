@@ -165,7 +165,9 @@ describe("a thread in the app", () => {
 
     const steps = Array.from(document.querySelectorAll(".st"));
     expect(steps.map((s) => s.className)).toEqual(["st done", "st"]);
-    expect(steps[1].querySelector(".c")?.textContent).toBe("2");
+    // A finished step gets a check; one the run ended in the middle of gets no mark of its own.
+    expect(steps[0].querySelector(".c svg")).toBeTruthy();
+    expect(steps[1].querySelector(".c")?.childElementCount).toBe(0);
     expect(steps[1].textContent).toContain("Planning the change");
   });
 
@@ -343,6 +345,54 @@ describe("a thread in the app", () => {
     // What was left of the first limit, and the same again.
     expect(fake.calls.starts[1].cap).toBeCloseTo(0.55);
     expect(screen.getByText("Keep going").className).toBe("umsg");
+  });
+
+  it("offers to fix what the review found, leaving checks that failed before alone", async () => {
+    const fake = await startThread();
+    const checks = [
+      { command: "pnpm test", ok: true, output: "" },
+      { command: "pnpm lint", ok: false, output: "2 errors", failedBefore: true },
+    ];
+    fake.emit(running("build", "build", SONNET), done("build", "build", SONNET), { type: "checks", step: "build", results: checks });
+    fake.emit(running("review", "review", HAIKU), done("review", "review", HAIKU, "VERDICT: REVISE\n1. Fix the import."));
+    fake.emit(
+      result("needs-work", 0.36, { review: "VERDICT: REVISE\n1. Fix the import.", failingBefore: ["pnpm lint"], checks }),
+    );
+    fake.exit(1);
+
+    expect(document.querySelector(".review .sum")?.textContent).toContain("1 check passed, 1 failing as before");
+    expect(screen.getByText(/^The review found problems/)).toBeTruthy();
+    expect(screen.getByText("· failed before the change too")).toBeTruthy();
+    const fix = screen.getByRole("button", { name: "Fix it, up to $0.50 more" });
+    expect(fix.className).toBe("btn solid");
+    await act(async () => {
+      fireEvent.click(fix);
+    });
+
+    const changes = fake.calls.starts[1].changes!;
+    expect(changes.notes).toMatch(/^The last run ended with work left to do\./);
+    expect(changes.notes).toContain("The review said:\n1. Fix the import.");
+    expect(changes.failingBefore).toEqual(["pnpm lint"]);
+    expect(fake.calls.starts[1].cap).toBeCloseTo(0.64);
+    expect(screen.getByText("Fix what the review found").className).toBe("umsg");
+  });
+
+  it("draws the plan's markdown as text, not as marks", async () => {
+    const fake = await startThread();
+    fake.emit(
+      running("plan", "plan", OPUS),
+      done("plan", "plan", OPUS, "## Steps\n1. Add **the toggle** in `Card.tsx`\n   - keep it small\n2. Test it"),
+    );
+    fake.emit(result("planned", 0.04));
+    fake.exit(0);
+
+    const plan = screen.getByText("The plan").closest("details")!;
+    expect(plan.querySelector("h3")?.textContent).toBe("Steps");
+    expect(plan.textContent).not.toContain("#");
+    expect(plan.querySelectorAll("ol > li")).toHaveLength(2);
+    expect(plan.querySelector("ol li ul li")?.textContent).toBe("keep it small");
+    expect(plan.querySelector("strong")?.textContent).toBe("the toggle");
+    expect(plan.querySelector("code")?.textContent).toBe("Card.tsx");
   });
 
   it("says why the work needs more, in the runtime's words", async () => {

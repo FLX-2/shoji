@@ -79,7 +79,7 @@ export function team(goodBuild: (request: ModelRequest) => boolean, verdict = "V
                 tool: "write_file",
                 input: {
                   path: "src/hello.js",
-                  content: goodBuild(request) ? "export default 'hello, shoji';\n" : "export default 'hello';\n",
+                  content: goodBuild(request) ? "export default 'hello, shoji';\n" : "export default 'hello, broken';\n",
                 },
               },
             ]);
@@ -89,4 +89,8 @@ export function team(goodBuild: (request: ModelRequest) => boolean, verdict = "V
   });
 }
 
+/** Passes once the greeting names Shoji, so it fails before the task is done. */
 export const CHECK = `node -e "process.exit(require('fs').readFileSync('src/hello.js','utf8').includes('shoji') ? 0 : 1)"`;
+
+/** Passes until a bad build breaks the greeting, as a project's own tests would. */
+export const UNBROKEN = `node -e "process.exit(require('fs').readFileSync('src/hello.js','utf8').includes('broken') ? 1 : 0)"`;
