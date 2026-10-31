@@ -262,8 +262,28 @@ describe("a thread in the app", () => {
         thread: 1,
       },
     ]);
-    expect(document.querySelector(".review")?.textContent).toBe("Committed a1b2c3d on shoji/thread$0.12 in all");
+    expect(document.querySelector(".review")?.textContent).toBe(
+      "Push and open PRCommitted a1b2c3d on shoji/thread$0.12 in all",
+    );
     expect(screen.queryByRole("button", { name: "Request changes" })).toBeNull();
+    // Nothing is pushed until the person presses the button.
+    expect(fake.calls.pushes).toEqual([]);
+
+    fake.project.pushError = "fatal: could not read Username for 'https://github.com': terminal prompts disabled";
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Push and open PR" }));
+    });
+    expect(screen.getByText(/terminal prompts disabled/)).toBeTruthy();
+    fake.project.pushError = null;
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Push and open PR" }));
+    });
+    expect(fake.calls.pushes).toEqual([
+      { repo: "/work/pricing-page", branch: "shoji/thread" },
+      { repo: "/work/pricing-page", branch: "shoji/thread" },
+    ]);
+    expect(screen.getByText("Pushed shoji/thread to origin")).toBeTruthy();
+    expect(screen.queryByText(/terminal prompts disabled/)).toBeNull();
   });
 
   it("says why a commit failed and lets it be tried again", async () => {

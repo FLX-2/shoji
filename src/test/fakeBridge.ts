@@ -12,6 +12,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     diff: "",
     accepted: [] as string[],
     files: [] as string[],
+    /** What a push fails with, as git says it. */
+    pushError: null as string | null,
     commands: [] as SlashCommand[],
     git: true,
     /** Changed files' text, for the editor. */
@@ -41,6 +43,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     accepted: [] as string[],
     reverted: [] as string[],
     commits: [] as { repo: string; branch: string; message: string; thread: number }[],
+    pushes: [] as { repo: string; branch: string }[],
     exports: [] as { name: string; contents: string }[],
     lockWrites: [] as string[],
     pasted: [] as { name: string; bytes: number[] }[],
@@ -134,6 +137,11 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       project.diff = "";
       project.accepted = [];
       return "a1b2c3d";
+    },
+    pushThread: async (repo, branch) => {
+      calls.pushes.push({ repo, branch });
+      if (project.pushError) throw project.pushError;
+      return { remote: "origin", url: `https://github.com/bob/app/compare/${branch}?expand=1` };
     },
     onEvent: async (handler) => {
       onEvent.push(handler);

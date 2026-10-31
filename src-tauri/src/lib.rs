@@ -1,5 +1,6 @@
 mod ledger;
 #[cfg(unix)]
+mod push;
 mod shell_path;
 mod slash;
 mod server;
@@ -710,6 +711,18 @@ async fn commit_thread(
     Ok(sha)
 }
 
+/// Pushes a committed thread's branch to the project's remote, when the person presses Push and open PR,
+/// and opens the page where they open a pull request for it. Shoji never pushes on its own.
+#[tauri::command]
+async fn push_thread(app: AppHandle, repo: String, branch: String) -> Result<push::Pushed, String> {
+    let pushed = push::push(&repo, &branch)?;
+    if let Some(url) = pushed.url.as_deref() {
+        #[allow(deprecated)]
+        let _ = tauri_plugin_shell::ShellExt::shell(&app).open(url, None);
+    }
+    Ok(pushed)
+}
+
 /// Starts the project's dev server in a thread's copy, with the person's command. Returns its
 /// number; its output arrives as `server-output` and its end as `server-exit`.
 #[tauri::command]
@@ -986,6 +999,7 @@ pub fn run() {
             changes,
             project_files,
             slash::project_commands,
+            push_thread,
             accept_file,
             revert_file,
             commit_thread,

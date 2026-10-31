@@ -313,6 +313,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     onReplan={replan}
                     onQuestion={question}
                     onCommit={commit}
+                    onPush={() => bridge.pushThread(thread.repo, thread.branch!)}
                     onAnswer={(command, allow, always) => {
                       if (always) {
                         const now = prefs.allowedCommands[thread.repo] ?? [];

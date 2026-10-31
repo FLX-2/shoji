@@ -1,7 +1,7 @@
 import { Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CheckResult } from "../../runtime/src/events";
 import { MODELS } from "../../runtime/src/models";
-import type { Bridge } from "../bridge";
+import type { Bridge, Pushed } from "../bridge";
 import { CodeView } from "../code/CodeView";
 import { commentsNote, type LineComment } from "../code/comments";
 import { useChanges } from "../code/useChanges";
@@ -51,6 +51,8 @@ interface ThreadViewProps {
   /** Asks about the work; the answer changes nothing. */
   onQuestion: (question: string) => void;
   onCommit: () => Promise<void>;
+  /** Pushes the committed branch and opens the page for a pull request. Only the person's button does. */
+  onPush: () => Promise<Pushed>;
   /** The person's answer about a command the run wants; `always` allows it in this project from now on. */
   onAnswer: (command: string, allow: boolean, always: boolean) => Promise<void>;
   /** What the thread has cost, on the review bar. Off in Settings hides it. */
@@ -99,6 +101,7 @@ export function ThreadView({
   onReplan,
   onQuestion,
   onCommit,
+  onPush,
   onAnswer,
   showCosts,
   previewUrl,
@@ -162,6 +165,7 @@ export function ThreadView({
   const [comments, setComments] = useState<LineComment[]>([]);
   useEffect(() => setComments([]), [thread.id]);
   const [committing, setCommitting] = useState(false);
+  const [push, setPush] = useState<{ pushing: true } | { done: Pushed } | { error: string } | null>(null);
   const [commitError, setCommitError] = useState<string | null>(null);
 
   // Stopped at its limit, so the way on is more to spend.
@@ -186,6 +190,14 @@ export function ThreadView({
     onCommit()
       .catch((e) => setCommitError(String(e)))
       .finally(() => setCommitting(false));
+  };
+
+  const pushBranch = () => {
+    setPush({ pushing: true });
+    onPush().then(
+      (done) => setPush({ done }),
+      (e) => setPush({ error: String(e) }),
+    );
   };
 
   const now = lastRun.steps.findLast((s) => s.running);
@@ -391,9 +403,31 @@ export function ThreadView({
         ) : (
           <div className="review">
             {thread.committed ? (
-              <span className="done">
-                Committed <b>{thread.committed}</b> on {thread.branch}
-              </span>
+              <>
+                {thread.branch && (
+                  <button
+                    type="button"
+                    className={push && "done" in push ? "btn" : "btn solid"}
+                    onClick={pushBranch}
+                    disabled={!!push && "pushing" in push}
+                  >
+                    {push && "pushing" in push ? "Pushing…" : "Push and open PR"}
+                  </button>
+                )}
+                <span className="done">
+                  {push && "done" in push ? (
+                    <>
+                      Pushed {thread.branch} to {push.done.remote}
+                      {!push.done.url && ". Open a pull request for it on your git host"}
+                    </>
+                  ) : (
+                    <>
+                      Committed <b>{thread.committed}</b> on {thread.branch}
+                    </>
+                  )}
+                </span>
+                {push && "error" in push && <span className="err">{push.error}</span>}
+              </>
             ) : (
               <>
                 {thread.id === undefined && last.error && (
