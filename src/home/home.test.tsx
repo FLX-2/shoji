@@ -86,4 +86,13 @@ describe("Home", () => {
     });
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Add a FAQ");
   });
+
+  it("says how Shoji works until the first thread, then makes room for the work", async () => {
+    await home([]);
+    const help = screen.getByRole("region", { name: "How Shoji works" });
+    expect(help.textContent).toContain("Nothing is committed or pushed until you say so.");
+    cleanup();
+    await home([thread(1, "Add a FAQ", "/work/pricing-page", "ready", true)]);
+    expect(screen.queryByRole("region", { name: "How Shoji works" })).toBeNull();
+  });
 });

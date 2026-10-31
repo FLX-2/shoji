@@ -8,6 +8,9 @@ import { listedDay } from "../stack/catalog";
 import { describeStack } from "../stack/lock";
 import { fileName } from "../thread/useThread";
 import { MoneyRow } from "./MoneyRow";
+import { keyLabel, SHORTCUTS } from "./shortcuts";
+
+const MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent);
 import type { Prefs } from "./prefs";
 
 interface SettingsViewProps {
@@ -27,6 +30,7 @@ interface SettingsViewProps {
 export const SETTINGS_PAGES = [
   { id: "look", group: "App", label: "Look", note: "Changes apply at once" },
   { id: "interface", group: "App", label: "Interface" },
+  { id: "shortcuts", group: "App", label: "Shortcuts" },
   { id: "models", group: "Models", label: "Models and keys", note: "Changes apply to the next thread" },
   { id: "spending", group: "Models", label: "Spending" },
   { id: "tools", group: "Workspace", label: "Tools and commands" },
@@ -95,106 +99,132 @@ export function SettingsView({
         </div>
         <div className="settings">
           <div className="swrap">
-            <div className="card">
-              {shown.id === "look" && (
-                <>
-                  <BackgroundRow prefs={prefs} onChange={onChange} />
-                  <FrostRow prefs={prefs} onChange={onChange} />
-                  <OpaqueRow prefs={prefs} onChange={onChange} />
-                  <MotionRow prefs={prefs} onChange={onChange} />
-                  <AccentRow prefs={prefs} onChange={onChange} />
-                  <DensityRow prefs={prefs} onChange={onChange} />
-                </>
-              )}
-              {shown.id === "interface" && (
-                <>
-                  <SwitchRow
-                    label="Costs"
-                    description="What a thread or trial has spent, while it runs and on the review bar. Receipts always shows them."
-                    on={prefs.showCosts}
-                    onToggle={() => onChange({ showCosts: !prefs.showCosts })}
-                  />
-                  <SwitchRow
-                    label="Model names"
-                    description="Which model takes each step of a thread, beside the step."
-                    on={prefs.showModels}
-                    onToggle={() => onChange({ showModels: !prefs.showModels })}
-                  />
-                  <SwitchRow
-                    label="Status bar"
-                    description="The project, branch, running cost and today's spend along the bottom of the window."
-                    on={prefs.statusBar}
-                    onToggle={() => onChange({ statusBar: !prefs.statusBar })}
-                  />
-                </>
-              )}
-              {shown.id === "models" && (
-                <>
-                  <KeyRow status={keyStatus} onSave={onSaveKey} onForget={onForgetKey} />
-                  <div className="srow">
-                    <div>
-                      <b>Stack</b>
-                      <span className="d">{describeStack(stack)}</span>
+            {shown.id === "shortcuts" ? (
+              <Shortcuts />
+            ) : (
+              <div className="card">
+                {shown.id === "look" && (
+                  <>
+                    <BackgroundRow prefs={prefs} onChange={onChange} />
+                    <FrostRow prefs={prefs} onChange={onChange} />
+                    <OpaqueRow prefs={prefs} onChange={onChange} />
+                    <MotionRow prefs={prefs} onChange={onChange} />
+                    <AccentRow prefs={prefs} onChange={onChange} />
+                    <DensityRow prefs={prefs} onChange={onChange} />
+                  </>
+                )}
+                {shown.id === "interface" && (
+                  <>
+                    <SwitchRow
+                      label="Costs"
+                      description="What a thread or trial has spent, while it runs and on the review bar. Receipts always shows them."
+                      on={prefs.showCosts}
+                      onToggle={() => onChange({ showCosts: !prefs.showCosts })}
+                    />
+                    <SwitchRow
+                      label="Model names"
+                      description="Which model takes each step of a thread, beside the step."
+                      on={prefs.showModels}
+                      onToggle={() => onChange({ showModels: !prefs.showModels })}
+                    />
+                    <SwitchRow
+                      label="Status bar"
+                      description="The project, branch, running cost and today's spend along the bottom of the window."
+                      on={prefs.statusBar}
+                      onToggle={() => onChange({ statusBar: !prefs.statusBar })}
+                    />
+                  </>
+                )}
+                {shown.id === "models" && (
+                  <>
+                    <KeyRow status={keyStatus} onSave={onSaveKey} onForget={onForgetKey} />
+                    <div className="srow">
+                      <div>
+                        <b>Stack</b>
+                        <span className="d">{describeStack(stack)}</span>
+                      </div>
+                      <button type="button" className="btn sm" onClick={onOpenStack}>
+                        Change in Stack
+                      </button>
                     </div>
-                    <button type="button" className="btn sm" onClick={onOpenStack}>
-                      Change in Stack
-                    </button>
-                  </div>
-                  <SwitchRow
-                    label="Check the plan first"
-                    description="Each thread pauses once its plan is written, so you can build it or change it first."
-                    on={prefs.planFirst}
-                    onToggle={() => onChange({ planFirst: !prefs.planFirst })}
-                  />
-                </>
-              )}
-              {shown.id === "spending" && (
-                <>
-                  <MoneyRow
-                    id="s-cap"
-                    label="Limit per thread"
-                    description="Shoji stops a thread before any call that could take it past this."
-                    value={prefs.cap}
-                    onChange={(cap) => onChange({ cap })}
-                  />
-                  <MoneyRow
-                    id="s-daily"
-                    label="Daily limit"
-                    description="Shoji asks before a thread or trial could take the day's spend past this. Scheduled tasks that would go past it are skipped."
-                    value={prefs.dailyLimit}
-                    onChange={(dailyLimit) => onChange({ dailyLimit })}
-                  />
-                </>
-              )}
-              {shown.id === "tools" && (
-                <>
-                  <McpRow prefs={prefs} onChange={onChange} />
-                  <SwitchRow
-                    label="Let Build look at pages"
-                    description="Build can start the project's dev server in its copy and open a page in a headless browser, to see a change it made. It needs Chrome, Edge, Chromium or Brave on this computer. Each look adds a screenshot to the call's cost."
-                    on={prefs.lookAtPages}
-                    onToggle={() => onChange({ lookAtPages: !prefs.lookAtPages })}
-                  />
-                  <AllowedRows prefs={prefs} onChange={onChange} />
-                </>
-              )}
-              {shown.id === "data" && (
-                <>
-                  <PrivateRow prefs={prefs} onChange={onChange} />
-                  <SwitchRow
-                    label="Keep models current"
-                    description={`Once a day Shoji downloads the list of models and their prices from its GitHub repository, so a new model or price needs no update. It sends nothing about you or your work. Prices as listed on ${listedDay()}.`}
-                    on={prefs.updateModels}
-                    onToggle={() => onChange({ updateModels: !prefs.updateModels })}
-                  />
-                </>
-              )}
-            </div>
+                    <SwitchRow
+                      label="Check the plan first"
+                      description="Each thread pauses once its plan is written, so you can build it or change it first."
+                      on={prefs.planFirst}
+                      onToggle={() => onChange({ planFirst: !prefs.planFirst })}
+                    />
+                  </>
+                )}
+                {shown.id === "spending" && (
+                  <>
+                    <MoneyRow
+                      id="s-cap"
+                      label="Limit per thread"
+                      description="Shoji stops a thread before any call that could take it past this."
+                      value={prefs.cap}
+                      onChange={(cap) => onChange({ cap })}
+                    />
+                    <MoneyRow
+                      id="s-daily"
+                      label="Daily limit"
+                      description="Shoji asks before a thread or trial could take the day's spend past this. Scheduled tasks that would go past it are skipped."
+                      value={prefs.dailyLimit}
+                      onChange={(dailyLimit) => onChange({ dailyLimit })}
+                    />
+                  </>
+                )}
+                {shown.id === "tools" && (
+                  <>
+                    <McpRow prefs={prefs} onChange={onChange} />
+                    <SwitchRow
+                      label="Let Build look at pages"
+                      description="Build can start the project's dev server in its copy and open a page in a headless browser, to see a change it made. It needs Chrome, Edge, Chromium or Brave on this computer. Each look adds a screenshot to the call's cost."
+                      on={prefs.lookAtPages}
+                      onToggle={() => onChange({ lookAtPages: !prefs.lookAtPages })}
+                    />
+                    <AllowedRows prefs={prefs} onChange={onChange} />
+                  </>
+                )}
+                {shown.id === "data" && (
+                  <>
+                    <PrivateRow prefs={prefs} onChange={onChange} />
+                    <SwitchRow
+                      label="Keep models current"
+                      description={`Once a day Shoji downloads the list of models and their prices from its GitHub repository, so a new model or price needs no update. It sends nothing about you or your work. Prices as listed on ${listedDay()}.`}
+                      on={prefs.updateModels}
+                      onToggle={() => onChange({ updateModels: !prefs.updateModels })}
+                    />
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+/** Every shortcut, in cards by where it works. */
+function Shortcuts() {
+  const groups = [...new Set(SHORTCUTS.map((s) => s.group))];
+  return groups.map((group) => (
+    <section key={group} className="keys" aria-label={group}>
+      <h2 className="k">{group}</h2>
+      <div className="card">
+        {SHORTCUTS.filter((s) => s.group === group).map((s) => (
+          <div className="srow" key={s.what}>
+            <b>{s.what}</b>
+            <span className="kbds">
+              {s.keys.map((key) => (
+                <kbd key={key}>{keyLabel(key, MAC)}</kbd>
+              ))}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  ));
 }
 
 function KeyRow({
