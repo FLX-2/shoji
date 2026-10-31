@@ -50,9 +50,9 @@ function when(at: number): string {
   return new Date(at).toLocaleString("en", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-/** What each month cost, what routing saved against one model, and a receipt for every thread. */
-/** `onNew` opens the box for a new task, from the empty state. */
-export function ReceiptsView({ bridge, onNew }: { bridge: Bridge; onNew?: () => void }) {
+/** What each month cost, what routing saved against one model, and a receipt for every thread. `onNew` opens the
+ *  box for a new task, from the empty state. `open` is a thread whose receipt to show first. */
+export function ReceiptsView({ bridge, onNew, open: first }: { bridge: Bridge; onNew?: () => void; open?: number }) {
   const [threads, setThreads] = useState<LedgerThread[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [month, setMonth] = useState<string | null>(null);
@@ -64,7 +64,14 @@ export function ReceiptsView({ bridge, onNew }: { bridge: Bridge; onNew?: () => 
   useEffect(() => {
     bridge
       .ledgerThreads()
-      .then(setThreads)
+      .then((all) => {
+        setThreads(all);
+        const asked = all.find((t) => t.id === first);
+        if (asked) {
+          setMonth(monthOf(asked.startedAt));
+          setChosen(asked.id);
+        }
+      })
       .catch((e) => setError(String(e)));
   }, [bridge]);
 

@@ -12,6 +12,7 @@ import {
 } from "./bridge";
 import { folderName, type HomeDraft, HomeView } from "./home/HomeView";
 import { startersIn } from "./home/starters";
+import { baselineModel, modelLabel, oneModelCost, routingLine, threadSpend } from "./receipts/receipts";
 import { Field } from "./look/Field";
 import { lookStyle } from "./look/LookRows";
 import { ReceiptsView } from "./receipts/ReceiptsView";
@@ -293,6 +294,16 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     open(await reopen(bridge, record, prefs.cap));
   };
 
+  // Receipts opened on one thread's receipt, from the thread.
+  const [receiptFor, setReceiptFor] = useState<number | null>(null);
+  const viewReceipt = (id: number) => {
+    setReceiptFor(id);
+    setSection("receipts");
+  };
+  useEffect(() => {
+    if (section !== "receipts") setReceiptFor(null);
+  }, [section]);
+
   // The box for a new task, in Threads with no thread on show.
   const newTask = () => {
     close();
@@ -355,6 +366,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const [renaming, setRenaming] = useState<number | null>(null);
   const actions: ThreadActions = {
     rename: (t) => setRenaming(t.id),
+    receipt: (t) => viewReceipt(t.id),
     pin: (t, pinned) => bridge.pinThread(t.id, pinned).then(reread, failed),
     archive: (t, archived) =>
       bridge.archiveThread(t.id, archived).then(() => {
@@ -720,7 +732,12 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 />
               </div>
             ) : section === "receipts" ? (
-              <ReceiptsView bridge={bridge} onNew={newTask} />
+              <ReceiptsView
+                key={receiptFor ?? "all"}
+                bridge={bridge}
+                onNew={newTask}
+                {...(receiptFor !== null && { open: receiptFor })}
+              />
             ) : section === "stack" ? (
               <StackView
                 bridge={bridge}
@@ -819,6 +836,15 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     }
                     onBuild={build}
                     tier={tierOf(thread.stack, stack.stack)}
+                    {...(shownRecord && {
+                      routing: {
+                        line: routingLine(shownRecord),
+                        spent: threadSpend(shownRecord),
+                        oneModel: oneModelCost(shownRecord),
+                        baseline: modelLabel(baselineModel(shownRecord)).split(" ")[0],
+                      },
+                      onViewReceipt: () => viewReceipt(shownRecord.id),
+                    })}
                     onTier={(t) => thread.id !== undefined && patch(thread.id, { stack: tierStack(stack.stack, t) })}
                     onReplan={replan}
                     onQuestion={question}

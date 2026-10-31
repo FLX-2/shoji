@@ -1152,9 +1152,22 @@
 
 /* The review bar and the composer sit under the reading column, not across the window. */
 .convo > .review,
+.convo > .routed,
 .convo > .composer {
   width: min(720px, 100% - 64px);
   margin-inline: auto;
+}
+
+/* What routing did, over the review bar: the model behind each role, and what it saved. */
+.routed {
+  margin-block: 10px -6px;
+  font-size: 13px;
+  color: var(--z7);
+}
+
+.routed .link {
+  margin-left: 10px;
+  font-size: 13px;
 }
 
 .review .sum {

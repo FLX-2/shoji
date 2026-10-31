@@ -232,3 +232,18 @@ export function toCsv(threads: LedgerThread[]): string {
   ]);
   return [header, ...rows].map((row) => row.map(field).join(",")).join("\n") + "\n";
 }
+
+const DID: Record<string, string> = { scout: "read", plan: "planned", build: "built", review: "reviewed" };
+
+/** Which model did what in a thread, as one line: "Haiku read, Opus planned, Sonnet built, Haiku reviewed". A
+ *  role that moved up a model names both: "Sonnet and Opus built". */
+export function routingLine(thread: LedgerThread): string {
+  const byRole = new Map<string, string[]>();
+  for (const call of callsOf(thread)) {
+    if (!(call.role in DID)) continue;
+    const model = modelLabel(call.model).split(" ")[0];
+    const models = byRole.get(call.role) ?? [];
+    if (!models.includes(model)) byRole.set(call.role, [...models, model]);
+  }
+  return [...byRole].map(([role, models]) => `${models.join(" and ")} ${DID[role]}`).join(", ");
+}
