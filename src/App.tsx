@@ -15,7 +15,7 @@ import { lookStyle } from "./look/LookRows";
 import { ReceiptsView } from "./receipts/ReceiptsView";
 import { useSchedules } from "./schedule/useSchedules";
 import { usePrefs } from "./settings/prefs";
-import { readMcpServers, type SettingsPage, SettingsView } from "./settings/SettingsView";
+import { readMcpServers, SETTINGS_PAGES, type SettingsPage, SettingsView } from "./settings/SettingsView";
 import { SetupView } from "./setup/SetupView";
 import { notesProgress, useNotes } from "./setup/useNotes";
 import { useModelCatalog } from "./stack/catalog";
@@ -27,6 +27,7 @@ import { Mark } from "./shell/Mark";
 import type { SlashCommand } from "./shell/mention";
 import { Rail } from "./shell/Rail";
 import { WindowControls } from "./shell/WindowControls";
+import { Search, type SearchItem } from "./shell/Search";
 import { SECTIONS, type SectionId } from "./shell/sections";
 import { formatCost } from "./thread/fold";
 import { DEFAULT_PREVIEW } from "./thread/PreviewView";
@@ -205,6 +206,54 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     [pastThreads, liveIdsKey, prefs.repo],
   );
 
+  // Search, from the title bar or Ctrl+K (⌘K on a Mac), anywhere in the app.
+  const [searching, setSearching] = useState(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "k" || !(isMac ? e.metaKey : e.ctrlKey) || e.altKey || e.shiftKey) return;
+      e.preventDefault();
+      setSearching((open) => !open);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const searchItems = (): SearchItem[] => [
+    ...pastThreads.map((t) => ({
+      id: `thread-${t.id}`,
+      group: "Threads",
+      label: t.task.split("\n")[0],
+      detail: `${threadState(t, liveIds).status} · ${folderName(t.repo)}`,
+      run: () => openRecord(t),
+    })),
+    ...projects.map((p) => ({
+      id: `project-${p.repo}`,
+      group: "Projects",
+      label: folderName(p.repo),
+      detail: p.repo,
+      run: () => {
+        setPrefs({ repo: p.repo });
+        setStartProblem(null);
+        setSection("home");
+      },
+    })),
+    ...(Object.keys(SECTIONS) as SectionId[]).map((id) => ({
+      id: `section-${id}`,
+      group: "Go to",
+      label: SECTIONS[id].label,
+      run: () => setSection(id),
+    })),
+    ...SETTINGS_PAGES.map((page) => ({
+      id: `settings-${page.id}`,
+      group: "Settings",
+      label: page.label,
+      detail: `Settings · ${page.group}`,
+      run: () => {
+        setSettingsPage(page.id);
+        setSection("settings");
+      },
+    })),
+  ];
+
   const pickProject = async () => {
     const repo = await bridge.pickProject();
     if (repo) {
@@ -237,6 +286,21 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
           </span>
         </div>
         <div className="right" data-tauri-drag-region>
+          {!inSetup && (
+            <button
+              type="button"
+              className="find"
+              title={`Search (${isMac ? "⌘K" : "Ctrl+K"})`}
+              onClick={() => setSearching(true)}
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="7" cy="7" r="4.25" />
+                <path d="m10.25 10.25 3 3" />
+              </svg>
+              Search
+              <kbd>{isMac ? "⌘K" : "Ctrl K"}</kbd>
+            </button>
+          )}
           <span className="runlight" role="status">
             <span className="dot live" aria-hidden="true" />
             {running ? "running" : "idle"}
@@ -447,6 +511,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       )}
 
       {ask && <LimitAsk ask={ask} limit={prefs.dailyLimit} onClose={() => setAsk(null)} />}
+      {searching && !inSetup && <Search items={searchItems()} onClose={() => setSearching(false)} />}
 
       {prefs.statusBar && (
         <footer className="status solid">

@@ -32,7 +32,9 @@ describe("app shell", () => {
   it("draws its own window buttons where the system's title bar is off", () => {
     render(<App bridge={fakeBridge().bridge} />);
     const titlebar = document.querySelector(".titlebar")!;
-    const buttons = Array.from(titlebar.querySelectorAll("button")).map((b) => b.getAttribute("aria-label"));
-    expect(buttons).toEqual(["Minimize", "Maximize", "Close"]);
+    const buttons = Array.from(titlebar.querySelectorAll("button")).map(
+      (b) => b.getAttribute("aria-label") ?? b.textContent,
+    );
+    expect(buttons).toEqual(["SearchCtrl K", "Minimize", "Maximize", "Close"]);
   });
 });
