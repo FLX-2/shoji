@@ -122,7 +122,7 @@ export function SettingsView({
                   />
                   <SwitchRow
                     label="Status bar"
-                    description="The project, branch and running cost along the bottom of the window."
+                    description="The project, branch, running cost and today's spend along the bottom of the window."
                     on={prefs.statusBar}
                     onToggle={() => onChange({ statusBar: !prefs.statusBar })}
                   />
