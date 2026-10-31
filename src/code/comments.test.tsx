@@ -95,18 +95,15 @@ describe("commenting on a thread's diff", () => {
     const note =
       "Comments on the code:\n- src/Card.tsx, line 1 (`export const price = plan.annual / 12;`): Round it to whole dollars.\n- src/Card.tsx, line 2 (`export default price;`): Export it by name too.";
     expect(fake.calls.starts[1].changes?.notes).toBe(note);
-    expect(screen.getByRole("button", { name: "Conversation" }).getAttribute("aria-current")).toBe("page");
+    // The request shows up in the conversation, beside the code it's about.
+    expect(screen.getByRole("complementary", { name: "Code" })).toBeTruthy();
   });
 
   it("takes no comments once the thread is committed", async () => {
     const fake = await finishedThread();
     fake.bridge.commitThread = async () => "abc1234";
-    fireEvent.click(screen.getByRole("button", { name: "Conversation" }));
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Accept and commit" }));
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /^Code/ }));
     });
     expect(screen.queryByRole("button", { name: /^Comment on/ })).toBeNull();
   });
