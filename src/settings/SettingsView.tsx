@@ -54,7 +54,7 @@ export function SettingsView({
     <div className="split">
       <nav className="side" aria-label="Settings pages">
         <div className="mh">
-          <h1>Settings</h1>
+          <h2 className="title">Settings</h2>
         </div>
         <div className="groups">
           {GROUPS.map((group) => (

@@ -304,7 +304,8 @@ button {
   border-bottom: 1px solid var(--hair);
 }
 
-.mh h1 {
+.mh h1,
+.mh .title {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
