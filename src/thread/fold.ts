@@ -1,3 +1,4 @@
+import type { ComparedPage } from "../../runtime/src/compare";
 import type { CheckResult, RuntimeEvent, ThreadResult } from "../../runtime/src/events";
 import { MODELS, type ModelId } from "../../runtime/src/models";
 import type { Role } from "../../runtime/src/stack";
@@ -34,6 +35,8 @@ export interface RunView {
   askingTool?: boolean;
   /** MCP servers the run couldn't reach, and why. */
   unreached?: { server: string; error: string }[];
+  /** The pages Build looked at, before the work and after it, once the run has changed them. */
+  compare?: { running: boolean; pages: ComparedPage[]; problem?: string };
 }
 
 /** Folds one run's events into its steps, in order. */
@@ -46,6 +49,7 @@ export function foldRun(events: RuntimeEvent[]): RunView {
   let asking: string | undefined;
   let askingTool = false;
   const unreached: { server: string; error: string }[] = [];
+  let compare: RunView["compare"];
 
   for (const event of events) {
     switch (event.type) {
@@ -86,6 +90,12 @@ export function foldRun(events: RuntimeEvent[]): RunView {
       case "answer":
         asking = undefined;
         break;
+      case "compare":
+        compare =
+          event.status === "running"
+            ? { running: true, pages: [] }
+            : { running: false, pages: event.pages, ...(event.problem && { problem: event.problem }) };
+        break;
       case "call": {
         cost += event.call.cost;
         const step = last(event.call.step);
@@ -110,6 +120,7 @@ export function foldRun(events: RuntimeEvent[]): RunView {
     cost,
     ...(asking !== undefined && { asking, ...(askingTool && { askingTool }) }),
     ...(unreached.length && { unreached }),
+    ...(compare && { compare }),
   };
 }
 

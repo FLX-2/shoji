@@ -1572,8 +1572,14 @@
   border-color: rgba(255, 255, 255, 0.3);
 }
 
-.pvbar .seg {
+.pvbar .seg:last-child {
   margin-left: auto;
+}
+
+.pvbar .pvpath {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--z8);
 }
 
 .pvstage {
@@ -1583,6 +1589,134 @@
   justify-content: center;
   padding: 18px 18px 0;
   overflow: hidden;
+}
+
+/* Before and after: the page as it was over the page as it is, cut at a handle the person drags. */
+.bawrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ba {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--hair);
+  background: var(--z1);
+}
+
+.ba img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top left;
+  user-select: none;
+  pointer-events: none;
+}
+
+.ba .before {
+  clip-path: inset(0 calc(100% - var(--split)) 0 0);
+}
+
+.ba .handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--split);
+  width: 1px;
+  margin-left: -0.5px;
+  background: var(--z10);
+  /* A dark edge keeps the line seen on a light page. */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.ba .handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 10px;
+  height: 28px;
+  margin: -14px 0 0 -5px;
+  border: 1px solid var(--z10);
+  border-radius: 3px;
+  background: var(--z3);
+}
+
+.ba .lbl {
+  position: absolute;
+  top: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  background: var(--z2);
+  font-size: 11.5px;
+  color: var(--z8);
+  pointer-events: none;
+}
+
+.ba .lbl.b {
+  left: 8px;
+}
+
+.ba .lbl.a {
+  right: 8px;
+}
+
+.ba input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: ew-resize;
+}
+
+.ba:has(input:focus-visible) {
+  outline: 2px solid var(--z10);
+  outline-offset: 2px;
+}
+
+.banote {
+  margin: 0;
+  max-width: 60ch;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--z7);
+}
+
+.wk.wkbtn {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) 12px;
+  gap: 12px;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 5px;
+  font-size: 13.5px;
+  color: var(--z7);
+  transition:
+    background-color var(--d-quick) var(--e-out),
+    color var(--d-quick) var(--e-out);
+}
+
+.wk.wkbtn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--z9);
+}
+
+.wk.wkbtn:focus-visible {
+  outline: 2px solid var(--z10);
+  outline-offset: 0;
 }
 
 .pvstage > .note {

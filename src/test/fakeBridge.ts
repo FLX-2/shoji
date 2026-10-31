@@ -56,6 +56,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     typed: [] as { terminal: number; data: string }[],
     closedTerminals: [] as number[],
     stoppedServers: [] as number[],
+    shots: [] as string[],
   };
   /** What the attach dialog answers with; tests fill it. */
   const picked: string[] = [];
@@ -116,6 +117,10 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     projectCommands: async () => [...project.commands],
     ledgerThreads: async () => [...ledger],
     runEvents: async (run) => logs[run] ?? [],
+    readShot: async (path) => {
+      calls.shots.push(path);
+      return `data:image/png;base64,${btoa(path)}`;
+    },
     readStackLock: async () => files.stackLock,
     writeStackLock: async (contents) => {
       calls.lockWrites.push(contents);
