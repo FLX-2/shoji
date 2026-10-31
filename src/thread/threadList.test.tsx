@@ -134,7 +134,8 @@ describe("the thread list", () => {
       .map((row) => row.textContent);
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatch(/^Fix the footerNeeds work\$0\.020\d\d:\d\d$/);
-    expect(rows[1]).toMatch(/^Add a FAQCommitted\$0\.030\d+ \w{3}$/);
+    // Earlier this week shows the weekday.
+    expect(rows[1]).toMatch(/^Add a FAQCommitted\$0\.030(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/);
     // With nothing on show, the pane beside the list takes a new task.
     expect(screen.getByRole("heading", { name: "New thread" })).toBeTruthy();
     expect(screen.getByRole("textbox", { name: "Task" })).toBeTruthy();

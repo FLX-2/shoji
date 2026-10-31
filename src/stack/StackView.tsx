@@ -18,6 +18,7 @@ import { familyOf, ModelPick, modelGroups, priceLine } from "./ModelPick";
 import { TrialSection } from "./TrialSection";
 import type { Trial } from "./useTrial";
 import { watch } from "./watch";
+import { locale } from "../shell/locale";
 
 interface StackViewProps {
   bridge: Bridge;
@@ -40,7 +41,7 @@ interface StackViewProps {
 }
 
 function when(at: number): string {
-  return new Date(at).toLocaleString("en", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return new Date(at).toLocaleString(locale(), { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 }
 
 /** Which model and effort takes each step, saved to stack.lock with its history. */

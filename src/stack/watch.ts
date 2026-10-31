@@ -3,6 +3,7 @@ import { ROLES, type Role, type Stack } from "../../runtime/src/stack";
 import type { LedgerThread } from "../bridge";
 import { firstTry, isNotes, isTrial } from "../receipts/receipts";
 import { ROLE_NAMES } from "./lock";
+import { locale } from "../shell/locale";
 
 const DAY = 24 * 60 * 60 * 1000;
 /** This week is compared with the four weeks before it. */
@@ -49,7 +50,7 @@ function median(values: number[]): number {
 }
 
 function day(at: number): string {
-  return new Date(at).toLocaleString("en-GB", {
+  return new Date(at).toLocaleString(locale(), {
     day: "numeric",
     month: "short",
   });

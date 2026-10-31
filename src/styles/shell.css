@@ -15,7 +15,7 @@ body {
   background: var(--matte);
   color: var(--z9);
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: var(--t-md);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
@@ -163,7 +163,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 12.5px;
+  font-size: var(--t-sm);
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--z9);
@@ -188,7 +188,7 @@ button {
   padding: 0 6px 0 9px;
   border: 1px solid var(--hair);
   border-radius: 5px;
-  font-size: 12px;
+  font-size: var(--t-sm);
   color: var(--z7);
   transition: border-color var(--d-quick) var(--e-out);
 }
@@ -215,17 +215,17 @@ button {
 .find kbd {
   margin-left: 6px;
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: var(--t-micro);
   color: var(--z6);
 }
 
 .runlight {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--s-2);
   min-width: 62px;
   padding: 4px 2px 4px 6px;
-  font-size: 12.5px;
+  font-size: var(--t-sm);
   color: var(--z7);
 }
 
@@ -303,7 +303,7 @@ button {
 }
 
 .rail button span {
-  font-size: 9.5px;
+  font-size: calc(var(--t-micro) - 1px);
   line-height: 1;
   letter-spacing: 0.01em;
 }
@@ -350,7 +350,7 @@ button {
 .mh h1,
 .mh .title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--t-lg);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
@@ -373,7 +373,7 @@ button {
 
 .empty h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--t-2xl);
   font-weight: 500;
   letter-spacing: -0.02em;
   color: var(--z10);
@@ -392,7 +392,7 @@ button {
   gap: 18px;
   padding: 0 14px;
   border-top: 1px solid var(--hair);
-  font-size: 12px;
+  font-size: var(--t-sm);
   color: var(--z6);
 }
 

@@ -16,3 +16,6 @@ if (typeof window !== "undefined") {
 
 // Commands and skills from the person's own ~/.claude stay out of tests, which name their own.
 process.env.SHOJI_CLAUDE_HOME = "/nonexistent/shoji-test-claude-home";
+
+// Dates and times read the same on every computer the tests run on.
+(globalThis as { shojiLocale?: string }).shojiLocale = "en-GB";
