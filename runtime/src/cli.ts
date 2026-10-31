@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 import { readAttachments } from "./attachments";
 import type { RuntimeEvent } from "./events";
 import { hasChanges, isGitRepo } from "./git";
+import { connectMcp, type Mcp, parseMcpServers, transportFor } from "./mcp";
 import { applyCatalog, MODELS, parseCatalog } from "./models";
 import { writeNotes, type NotesEvent } from "./notes";
 import { runThread } from "./pipeline";
@@ -61,6 +62,9 @@ Options:
   --models-json <json>
                       The downloaded model list, as {"version":1,"updated":…,"models":{…}};
                       adds models and updates prices over the built-in list
+  --mcp-json <json>   MCP servers whose tools the roles may use, as {"mcpServers":{"name":
+                      {"command":…,"args":[…],"env":{…}} or {"url":…}}}. Tools that say they
+                      only read run at once; any other asks first, as a command does
   --log <file>        Append every event to a JSON lines file
   --json              Print events as JSON lines, for the app
   --allow-dirty       Run even if the project has uncommitted changes
@@ -123,6 +127,10 @@ function describe(event: RuntimeEvent): string | null {
       return null; // The question itself is asked on stderr.
     case "answer":
       return `  ${event.allowed ? "allowed" : "not allowed"}: ${event.command}`;
+    case "mcp":
+      return "error" in event
+        ? `  couldn't reach the ${event.server} MCP server: ${event.error}`
+        : `  ${event.server} MCP server: ${event.tools} tools`;
     case "result": {
       const r = event.result;
       const roles = Object.entries(r.costByRole)
@@ -176,6 +184,7 @@ async function main() {
       stack: { type: "string", default: "balanced" },
       "stack-json": { type: "string" },
       "models-json": { type: "string" },
+      "mcp-json": { type: "string" },
       cap: { type: "string", default: "0.50" },
       check: { type: "string", multiple: true },
       changes: { type: "string" },
@@ -206,6 +215,14 @@ async function main() {
       applyCatalog(parseCatalog(JSON.parse(values["models-json"])));
     } catch (e) {
       fail(`Couldn't use the model list: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  let servers: ReturnType<typeof parseMcpServers> = [];
+  if (values["mcp-json"] !== undefined) {
+    try {
+      servers = parseMcpServers(JSON.parse(values["mcp-json"]));
+    } catch (e) {
+      fail(`Couldn't use the MCP servers: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
   let stack: Stack;
@@ -284,40 +301,49 @@ async function main() {
     );
   }
 
-  if (values.question !== undefined) {
-    const result = await answerQuestion({
+  // Connected only for a task or a question, after every check that could stop the run first.
+  const emit = (event: RuntimeEvent) => write(event, describe(event));
+  const mcp: Mcp = await connectMcp(servers, emit, (server) => transportFor(server, root));
+  try {
+    if (values.question !== undefined) {
+      const result = await answerQuestion({
+        task: values.task,
+        plan,
+        question: values.question,
+        seat: stack.scout,
+        provider,
+        workspace: new Workspace(root, privateFiles),
+        cap,
+        emit,
+        mcp,
+      });
+      process.exitCode = result.status === "answered" ? 0 : 1;
+      return;
+    }
+
+    const result = await runThread({
       task: values.task,
-      plan,
-      question: values.question,
-      seat: stack.scout,
+      stack,
       provider,
       workspace: new Workspace(root, privateFiles),
+      checks: values.check ?? defaultChecks(root),
       cap,
-      emit: (event) => write(event, describe(event)),
+      changes,
+      planOnly: values["plan-only"],
+      approved: values.build ? plan : undefined,
+      replan,
+      failingBefore: values["failing-before"],
+      failingTestsBefore: values["failing-test-before"],
+      ...(values.attach?.length && { attachments: attached(values.attach) }),
+      allowed: values.allow,
+      ask: (command) => askPerson(command, values.json),
+      emit,
+      mcp,
     });
-    process.exitCode = result.status === "answered" ? 0 : 1;
-    return;
+    process.exitCode = result.status === "ready" || result.status === "planned" ? 0 : 1;
+  } finally {
+    await mcp.close();
   }
-
-  const result = await runThread({
-    task: values.task,
-    stack,
-    provider,
-    workspace: new Workspace(root, privateFiles),
-    checks: values.check ?? defaultChecks(root),
-    cap,
-    changes,
-    planOnly: values["plan-only"],
-    approved: values.build ? plan : undefined,
-    replan,
-    failingBefore: values["failing-before"],
-    failingTestsBefore: values["failing-test-before"],
-    ...(values.attach?.length && { attachments: attached(values.attach) }),
-    allowed: values.allow,
-    ask: (command) => askPerson(command, values.json),
-    emit: (event) => write(event, describe(event)),
-  });
-  process.exitCode = result.status === "ready" || result.status === "planned" ? 0 : 1;
 }
 
 main();

@@ -30,6 +30,10 @@ export interface RunView {
   cost: number;
   /** A command the run is waiting for the person to allow or turn down. */
   asking?: string;
+  /** Set when what it's asking about is an MCP tool, named as "server: tool", rather than a command. */
+  askingTool?: boolean;
+  /** MCP servers the run couldn't reach, and why. */
+  unreached?: { server: string; error: string }[];
 }
 
 /** Folds one run's events into its steps, in order. */
@@ -40,6 +44,8 @@ export function foldRun(events: RuntimeEvent[]): RunView {
   let result: ThreadResult | undefined;
   let cost = 0;
   let asking: string | undefined;
+  let askingTool = false;
+  const unreached: { server: string; error: string }[] = [];
 
   for (const event of events) {
     switch (event.type) {
@@ -72,6 +78,10 @@ export function foldRun(events: RuntimeEvent[]): RunView {
         break;
       case "ask":
         asking = event.command;
+        askingTool = !!event.tool;
+        break;
+      case "mcp":
+        if ("error" in event) unreached.push({ server: event.server, error: event.error });
         break;
       case "answer":
         asking = undefined;
@@ -94,7 +104,13 @@ export function foldRun(events: RuntimeEvent[]): RunView {
         break;
     }
   }
-  return { steps, result, cost, ...(asking !== undefined && { asking }) };
+  return {
+    steps,
+    result,
+    cost,
+    ...(asking !== undefined && { asking, ...(askingTool && { askingTool }) }),
+    ...(unreached.length && { unreached }),
+  };
 }
 
 /** What a step is doing, or did, in a few words. */

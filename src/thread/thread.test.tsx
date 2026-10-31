@@ -411,6 +411,25 @@ describe("a thread in the app", () => {
     expect(screen.getByText("· failed before the change too, with 1 new failure")).toBeTruthy();
   });
 
+  it("asks before an MCP tool that could change something", async () => {
+    const fake = await startThread();
+    fake.emit(running("build", "build", SONNET), {
+      type: "ask",
+      step: "build",
+      command: "github: create_issue",
+      tool: true,
+    });
+    const ask = screen.getByRole("alertdialog", { name: "Allow this tool?" });
+    expect(ask.textContent).toContain("Build wants to use github: create_issue from an MCP server.");
+    fake.emit({ type: "answer", step: "build", command: "github: create_issue", allowed: true });
+    fake.emit({ type: "tool", step: "build", tool: "mcp__github__create_issue", target: "github: create_issue" });
+    fake.emit({ type: "mcp", server: "postgres", error: "spawn psql-mcp ENOENT" });
+    expect(screen.getByText("Used github: create_issue")).toBeTruthy();
+    expect(
+      screen.getByText("Couldn't reach the postgres MCP server, so this run went on without it. spawn psql-mcp ENOENT"),
+    ).toBeTruthy();
+  });
+
   it("waits for the person before a command beyond the checks, and remembers one always allowed", async () => {
     const fake = await startThread();
     fake.emit(running("build", "build", SONNET), { type: "ask", step: "build", command: "npm install" });

@@ -6,6 +6,7 @@ import { diffOf } from "./git";
 import { projectInstructions, projectNotes } from "./instructions";
 import { BudgetExceeded, Meter, RefusedError } from "./meter";
 import * as prompts from "./prompts";
+import { type Mcp, NO_MCP } from "./mcp";
 import type { ModelProvider } from "./provider";
 import { ROLES, type Role, type Seat, type Stack } from "./stack";
 import { COMMAND_TOOLS, READ_TOOLS, WRITE_TOOLS } from "./tools";
@@ -41,8 +42,11 @@ export interface ThreadInput {
   attachments?: Attachments;
   /** Commands beyond the checks that the person already allowed in this project. */
   allowed?: string[];
-  /** Asks the person whether a command may run. Without it, only checks and `allowed` commands run. */
+  /** Asks the person whether a command, or an MCP tool that changes things, may run. Without it, only checks and
+   *  `allowed` commands run. */
   ask?: (command: string) => Promise<boolean>;
+  /** The person's MCP servers' tools. Scout and Plan get the ones that only look; Build gets them all. */
+  mcp?: Mcp;
 }
 
 const MAX_FILES_CHARS = 60_000;
@@ -58,6 +62,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   const state = { plan: "", review: "", checks: [] as CheckResult[], escalated: false };
   // The project's AGENTS.md and CLAUDE.md, which Plan, Build and Review all follow.
   const guide = projectInstructions(workspace);
+  const mcp = input.mcp ?? NO_MCP;
 
   const step = async (name: string, role: Role, seat: Seat, work: () => Promise<string>) => {
     emit({ type: "step", step: name, role, model: seat.model, status: "running" });
@@ -69,10 +74,10 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   const answers = new Map((input.allowed ?? []).map((command) => [command, true]));
   const askAbout = (name: string) =>
     input.ask &&
-    (async (command: string) => {
+    (async (command: string, tool?: boolean) => {
       const known = answers.get(command);
       if (known !== undefined) return known;
-      emit({ type: "ask", step: name, command });
+      emit({ type: "ask", step: name, command, ...(tool && { tool }) });
       const allowed = await input.ask!(command);
       emit({ type: "answer", step: name, command, allowed });
       answers.set(command, allowed);
@@ -91,8 +96,14 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
         system,
         prompt: withAttachments(prompt, input.attachments),
         tools,
+        mcp: input.mcp,
         onTool: (tool, input) =>
-          emit({ type: "tool", step: name, tool, target: input.path ?? input.pattern ?? input.command ?? "" }),
+          emit({
+            type: "tool",
+            step: name,
+            tool,
+            target: mcp.owns(tool) ? mcp.label(tool) : (input.path ?? input.pattern ?? input.command ?? ""),
+          }),
       }),
     );
   // Checks that already fail before Shoji changes anything aren't this thread's to fix, unless
@@ -108,7 +119,8 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     emit({ type: "checks", step: name, results: state.checks });
     return state.checks.every((c) => c.ok || c.failedBefore);
   };
-  const builderTools = [...READ_TOOLS, ...WRITE_TOOLS, ...(checks.length ? COMMAND_TOOLS : [])];
+  const builderTools = [...READ_TOOLS, ...WRITE_TOOLS, ...(checks.length ? COMMAND_TOOLS : []), ...mcp.tools];
+  const lookingTools = [...READ_TOOLS, ...mcp.readOnly];
 
   try {
     state.plan = changes ? changes.plan : (approved ?? (await planFor()));
@@ -241,7 +253,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
 
   async function planFor(): Promise<string> {
     const asked = replan ? `\n\nThe person also asked: ${replan.notes}` : "";
-    const brief = await agent("scout", "scout", stack.scout, prompts.SCOUT, `Task: ${task}${asked}`, READ_TOOLS);
+    const brief = await agent("scout", "scout", stack.scout, prompts.SCOUT, `Task: ${task}${asked}`, lookingTools);
     return step("plan", "plan", stack.plan, async () =>
       textOf(
         await meter.send("plan", "plan", {

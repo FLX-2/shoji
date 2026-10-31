@@ -14,7 +14,7 @@ import { Field } from "./look/Field";
 import { lookStyle } from "./look/LookRows";
 import { ReceiptsView } from "./receipts/ReceiptsView";
 import { usePrefs } from "./settings/prefs";
-import { SettingsView } from "./settings/SettingsView";
+import { readMcpServers, SettingsView } from "./settings/SettingsView";
 import { SetupView } from "./setup/SetupView";
 import { notesProgress, useNotes } from "./setup/useNotes";
 import { useModelCatalog } from "./stack/catalog";
@@ -54,7 +54,11 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const catalog = useModelCatalog(prefs.updateModels);
   // Every run, trial and notes run carries the private files and the model list as they are when it starts.
   const carried = useRef<Carried>({ privateFiles: prefs.privateFiles });
-  carried.current = { privateFiles: prefs.privateFiles, models: catalog ?? undefined };
+  carried.current = {
+    privateFiles: prefs.privateFiles,
+    models: catalog ?? undefined,
+    mcpServers: readMcpServers(prefs.mcpServers).servers,
+  };
   const bridge = useMemo(() => carrying(given, () => carried.current), [given]);
   const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
   const stack = useStack(bridge, prefs.stack);

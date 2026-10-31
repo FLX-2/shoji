@@ -2,6 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { CallRecord, RuntimeEvent } from "../runtime/src/events";
+import type { McpServer } from "../runtime/src/mcpConfig";
 import type { Catalog } from "../runtime/src/models";
 import type { NotesEvent } from "../runtime/src/notes";
 import type { Stack } from "../runtime/src/stack";
@@ -31,6 +32,8 @@ export interface RunRequest {
   privateFiles?: string[];
   /** The downloaded model list, when there is one, with version 1 as the runtime reads it. */
   models?: Catalog & { version: 1 };
+  /** The person's MCP servers, as the runtime's --mcp-json reads them. */
+  mcpServers?: { mcpServers: Record<string, Omit<McpServer, "name">> };
   /** What the person asked for, as the thread shows it, kept so a reopened thread shows it again. */
   ask?: string;
 }
@@ -80,6 +83,13 @@ export interface NotesRequest {
 export interface Carried {
   privateFiles: string[];
   models?: Catalog;
+  /** The person's MCP servers, for a thread's runs only. */
+  mcpServers?: McpServer[];
+}
+
+/** Servers in the shape the runtime's --mcp-json reads. */
+function serversJson(servers: McpServer[]) {
+  return { mcpServers: Object.fromEntries(servers.map(({ name, ...server }) => [name, server])) };
 }
 
 /** The bridge, with the person's private files and the model list added to everything that starts the runtime. */
@@ -90,7 +100,10 @@ export function carrying(bridge: Bridge, carried: () => Carried): Bridge {
   };
   return {
     ...bridge,
-    startRun: (request) => bridge.startRun(add(request)),
+    startRun: (request) => {
+      const { mcpServers } = carried();
+      return bridge.startRun({ ...add(request), ...(mcpServers?.length && { mcpServers: serversJson(mcpServers) }) });
+    },
     startTrial: (request) => bridge.startTrial(add(request)),
     startNotes: (request) => bridge.startNotes(add(request)),
   };

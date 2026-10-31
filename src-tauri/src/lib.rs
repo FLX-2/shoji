@@ -192,6 +192,8 @@ struct RunRequest {
     models: Option<serde_json::Value>,
     /// What the person asked for, as the thread shows it, kept so a reopened thread can show it again.
     ask: Option<String>,
+    /// The person's MCP servers, as the runtime's --mcp-json takes them.
+    mcp_servers: Option<serde_json::Value>,
 }
 
 /// The runtime's --private flags. An empty list is passed as one empty pattern, which keeps
@@ -207,6 +209,11 @@ fn private_args(patterns: &Option<Vec<String>>) -> Vec<String> {
 /// The runtime's --models-json flag, joined with = so the list can't be read as a flag of its own.
 fn models_args(models: &Option<serde_json::Value>) -> Vec<String> {
     models.iter().map(|list| format!("--models-json={list}")).collect()
+}
+
+/// The runtime's --mcp-json flag, joined with = in the same way.
+fn mcp_args(servers: &Option<serde_json::Value>) -> Vec<String> {
+    servers.iter().map(|list| format!("--mcp-json={list}")).collect()
 }
 
 #[derive(Serialize)]
@@ -340,6 +347,7 @@ fn start_run(
     args.extend(request.allowed_commands.iter().map(|command| format!("--allow={command}")));
     args.extend(private_args(&request.private_files));
     args.extend(models_args(&request.models));
+    args.extend(mcp_args(&request.mcp_servers));
     if let Some(changes) = request.changes {
         let plan = runs.join(format!("{stamp}-plan.md"));
         fs::write(&plan, &changes.plan).map_err(|e| e.to_string())?;
@@ -1045,6 +1053,8 @@ mod tests {
         assert!(models_args(&None).is_empty());
         let list = serde_json::json!({ "version": 1, "models": {} });
         assert_eq!(models_args(&Some(list)), vec![r#"--models-json={"models":{},"version":1}"#]);
+        let servers = serde_json::json!({ "mcpServers": { "docs": { "url": "https://x.example/mcp" } } });
+        assert_eq!(mcp_args(&Some(servers)), vec![r#"--mcp-json={"mcpServers":{"docs":{"url":"https://x.example/mcp"}}}"#]);
     }
 
     #[test]

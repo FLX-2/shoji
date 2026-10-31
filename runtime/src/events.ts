@@ -1,3 +1,4 @@
+import type { McpEvent } from "./mcp";
 import type { Effort, ModelId } from "./models";
 import type { Role } from "./stack";
 
@@ -38,11 +39,14 @@ export type RuntimeEvent =
   | { type: "tool"; step: string; tool: string; target: string }
   | { type: "call"; call: CallRecord }
   | { type: "checks"; step: string; results: CheckResult[] }
-  /** A step wants a command that isn't a check and that the person hasn't allowed. It waits for an answer. */
-  | { type: "ask"; step: string; command: string }
+  /** A step wants a command that isn't a check and that the person hasn't allowed, or with `tool`, an MCP tool
+   *  that may change something, named as "server: tool". It waits for an answer. */
+  | { type: "ask"; step: string; command: string; tool?: true }
   | { type: "answer"; step: string; command: string; allowed: boolean }
   | { type: "escalate"; step: string; from: ModelId; to: ModelId; reason: string }
-  | { type: "result"; result: ThreadResult };
+  | { type: "result"; result: ThreadResult }
+  /** An MCP server the person added: how many tools it gave, or why it couldn't be reached. */
+  | McpEvent;
 
 export interface ThreadResult {
   /** planned: the run stopped after the plan, for the person to build or change it. answered: the
