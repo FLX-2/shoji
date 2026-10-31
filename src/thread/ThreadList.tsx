@@ -1,5 +1,6 @@
 import type { LedgerThread } from "../bridge";
 import { folderName } from "../home/HomeView";
+import { describeRepeat, describeWhen, nextDue, type Schedule } from "../schedule/schedule";
 import { formatCost } from "./fold";
 
 const STATUS: Record<Exclude<LedgerThread["runs"][number]["status"], "answered" | null>, string> = {
@@ -32,12 +33,25 @@ interface ThreadListProps {
   showCosts: boolean;
   onOpen: (thread: LedgerThread) => void;
   onNew: () => void;
+  /** Tasks Shoji starts by itself, which their own runs list below once they've run. */
+  schedules?: Schedule[];
+  onPause?: (id: string) => void;
+  onRemove?: (id: string) => void;
 }
 
 /** Every thread the person has started, newest first, to read again or carry on. */
-export function ThreadList({ threads, current, showCosts, onOpen, onNew }: ThreadListProps) {
+export function ThreadList({
+  threads,
+  current,
+  showCosts,
+  onOpen,
+  onNew,
+  schedules = [],
+  onPause,
+  onRemove,
+}: ThreadListProps) {
   const now = new Date();
-  const projects = new Set(threads.map((t) => t.repo)).size;
+  const projects = new Set([...threads, ...schedules].map((t) => t.repo)).size;
   return (
     <nav className="tlist" aria-label="Threads">
       <div className="thead">
@@ -45,6 +59,48 @@ export function ThreadList({ threads, current, showCosts, onOpen, onNew }: Threa
           New task
         </button>
       </div>
+      {schedules.length > 0 && (
+        <section className="sched" aria-labelledby="sched-h">
+          <h3 id="sched-h" className="k">
+            Scheduled
+          </h3>
+          <ul>
+            {schedules.map((s) => {
+              const name = s.task.split("\n")[0];
+              return (
+                <li key={s.id}>
+                  <div>
+                    <b title={s.task}>{name}</b>
+                    <span className="meta">
+                      {projects > 1 && <span>{folderName(s.repo)}</span>}
+                      <span>{describeRepeat(s)}</span>
+                      <span>{s.paused ? "Paused" : `next ${describeWhen(nextDue(s, now), now)}`}</span>
+                    </span>
+                    {s.skipped && <span className="meta">Skipped last time: {s.skipped}</span>}
+                  </div>
+                  <button
+                    type="button"
+                    className="sw"
+                    role="switch"
+                    aria-checked={!s.paused}
+                    aria-label={`Run "${name}" on schedule`}
+                    onClick={() => onPause?.(s.id)}
+                  />
+                  <button
+                    type="button"
+                    className="x"
+                    aria-label={`Remove "${name}"`}
+                    title="Remove"
+                    onClick={() => onRemove?.(s.id)}
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
       <ul>
         {threads.map((t) => {
           const status = threadStatus(t);

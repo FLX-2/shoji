@@ -39,6 +39,8 @@ A role can run the project's checks at any time. Any other command, such as inst
 
 **Commands and skills.** Shoji reads the same files Claude Code does. Type / at the start of a task or a request to pick one of the project's commands (`.claude/commands/*.md`) or your own (`~/.claude/commands`). The command's text becomes the task, with what you type after it in place of `$ARGUMENTS`, or `$1`, `$2` and on. Skills (`.claude/skills/<name>/SKILL.md`, and your own in `~/.claude/skills`) are listed for Scout and Build by name and description, and a role reads one in full when the task calls for it. Commands and skills you keep out of git still reach a thread's copy of the project. Shoji doesn't run the `!` shell lines some commands hold.
 
+**Scheduled tasks.** Turn on Repeat under the task box to run a task by itself every day, on weekdays or once a week at a set time, in the open project. Threads lists your scheduled tasks above your threads, where you can pause or remove one. A scheduled task runs while Shoji is open; a time missed while it was closed runs once when it next opens. It never pauses after the plan, and it's skipped, and says why, when it could take the day past your daily limit, since nobody may be there to say yes.
+
 **Receipts.** What each thread cost, step by step, against running everything on one strong model. You can export a month as CSV.
 
 **Stack.** Which model and effort takes each role, saved to `stack.lock` with its history. A trial replays your latest accepted tasks on another stack, in scratch copies of your project, and reports what changed. Watching compares this week with the four weeks before, and names a model that got slower, more expensive or worse at its role.
