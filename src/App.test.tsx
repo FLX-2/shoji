@@ -10,7 +10,7 @@ describe("app shell", () => {
     render(<App bridge={fakeBridge().bridge} />);
     const rail = screen.getByRole("navigation", { name: "App sections" });
     const labels = Array.from(rail.querySelectorAll("button")).map((b) => b.textContent);
-    expect(labels).toEqual(["Home", "Threads", "Receipts", "Stack", "Settings"]);
+    expect(labels).toEqual(["Home", "Threads", "Agents", "Receipts", "Stack", "Settings"]);
     expect(screen.getByRole("button", { name: "Home" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("heading", { level: 1, name: "The right model for every step." })).toBeTruthy();
   });

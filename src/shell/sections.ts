@@ -1,4 +1,4 @@
-export type SectionId = "home" | "threads" | "receipts" | "stack" | "settings";
+export type SectionId = "home" | "threads" | "agents" | "receipts" | "stack" | "settings";
 
 export interface Section {
   label: string;
@@ -20,6 +20,12 @@ export const SECTIONS: Record<SectionId, Section> = {
     icon: "M4 6h16M4 12h10M4 18h13",
     title: "No threads yet",
     body: "Every task becomes a thread: the plan, the code it changed, and a review before anything is committed.",
+  },
+  agents: {
+    label: "Agents",
+    icon: "M5 5h5v5H5zM14 5h5v5h-5zM5 14h5v5H5zM14 14h5v5h-5z",
+    title: "Nothing running",
+    body: "Threads that are running or need you sit here side by side, so you can follow several at once.",
   },
   receipts: {
     label: "Receipts",
@@ -45,6 +51,7 @@ export const SECTIONS: Record<SectionId, Section> = {
 export const RAIL: (SectionId | null | "spacer")[] = [
   "home",
   "threads",
+  "agents",
   null,
   "receipts",
   "stack",
