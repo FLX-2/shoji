@@ -1,4 +1,5 @@
 import type { Tier } from "../stack/tier";
+import { locale } from "../shell/locale";
 
 /** How often a scheduled task runs. */
 export type Repeat = "day" | "weekdays" | "week";
@@ -81,7 +82,7 @@ export function describeRepeat(schedule: Pick<Schedule, "repeat" | "time" | "day
 
 /** A coming time, as "today 09:00", "tomorrow 09:00" or "Mon 09:00". */
 export function describeWhen(time: Date, now: Date): string {
-  const clock = time.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const clock = time.toLocaleTimeString(locale(), { timeStyle: "short" });
   const days = Math.round(
     (new Date(time.getFullYear(), time.getMonth(), time.getDate()).getTime() -
       new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) /

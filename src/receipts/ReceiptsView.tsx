@@ -19,6 +19,7 @@ import {
   toCsv,
 } from "./receipts";
 import { threadTitle } from "../thread/title";
+import { locale } from "../shell/locale";
 
 const STEPS: Record<string, string> = {
   scout: "Scout",
@@ -47,7 +48,7 @@ function dollars(amount: number, places: 2 | 3): string {
 }
 
 function when(at: number): string {
-  return new Date(at).toLocaleString("en", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return new Date(at).toLocaleString(locale(), { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 }
 
 /** What each month cost, what routing saved against one model, and a receipt for every thread. `onNew` opens the
@@ -292,7 +293,7 @@ function DailyChart({ days, month }: { days: number[]; month: string }) {
   const today = monthOf(now.getTime()) === month ? now.getDate() - 1 : -1;
   const [year, m] = month.split("-").map(Number);
   const dayName = (i: number) =>
-    new Date(year, m - 1, i + 1).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    new Date(year, m - 1, i + 1).toLocaleDateString(locale(), { day: "numeric", month: "short" });
   if (most <= 0) return null;
   return (
     <figure className="daily" onMouseLeave={() => setPointed(null)}>

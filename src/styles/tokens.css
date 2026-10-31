@@ -10,7 +10,8 @@
   --z3: #222120;
   --z4: #33312f;
   --z5: #4d4b48;
-  --z6: #6f6c68;
+  /* Lifted from #6f6c68 so small quiet text reads at 4.5:1 on the panes (WCAG AA). */
+  --z6: #84817c;
   --z7: #96938e;
   --z8: #bebab4;
   --z9: #e3e0da;
@@ -30,6 +31,25 @@
   --solid: #0f0e0d;
   --solid2: #121110;
   --pane: rgba(14, 13, 12, 0.78);
+
+  /* Type: nine sizes, smallest to largest. Marks and keys, labels, meta, body, reading, headings, display. */
+  --t-micro: 10.5px;
+  --t-xs: 11.5px;
+  --t-sm: 12.5px;
+  --t-md: 13.5px;
+  --t-lg: 15px;
+  --t-xl: 16px;
+  --t-2xl: 21px;
+  --t-3xl: 28px;
+  --t-hero: 36px;
+
+  /* Space: gaps and padding step on a 4px grid. */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
 
   --sans: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
   --mono: "DM Mono", ui-monospace, Menlo, monospace;

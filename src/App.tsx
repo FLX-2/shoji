@@ -277,9 +277,17 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     setHomeDraft((now) => ({ ...draft, n: (now?.n ?? 0) + 1 }));
     setSection("home");
   };
+  // A past thread being read back from the ledger, shown at once by its title while its runs load.
+  const [opening, setOpening] = useState<LedgerThread | null>(null);
   const openRecord = async (record: LedgerThread, stay = false) => {
-    if (!showId(record.id)) open(await reopen(bridge, record, prefs.cap));
     if (!stay) setSection("threads");
+    if (showId(record.id)) return;
+    setOpening(record);
+    try {
+      open(await reopen(bridge, record, prefs.cap));
+    } finally {
+      setOpening((now) => (now?.id === record.id ? null : now));
+    }
   };
   // Builds a plan from Agents. A thread from before Shoji opened is read back first, then built.
   const [toBuild, setToBuild] = useState<number | null>(null);
@@ -784,7 +792,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     threads={pastThreads}
                     running={liveIds}
                     unread={unread}
-                    current={thread?.id}
+                    current={opening?.id ?? thread?.id}
                     showCosts={prefs.showCosts}
                     onOpen={openRecord}
                     onNew={newTask}
@@ -804,7 +812,20 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     }
                   />
                 )}
-                {thread ? (
+                {opening ? (
+                  <section className="thread" aria-busy="true">
+                    <div className="convo">
+                      <div className="tbar solid">
+                        <h1>{threadTitle(opening)}</h1>
+                      </div>
+                      <div className="skel" aria-label="Reading the thread back">
+                        <i />
+                        <i />
+                        <i />
+                      </div>
+                    </div>
+                  </section>
+                ) : thread ? (
                   <ThreadView
                     key={thread.id ?? "new"}
                     bridge={bridge}

@@ -5,6 +5,7 @@ import { describeRepeat, describeWhen, nextDue, type Schedule } from "../schedul
 import { Menu, SEPARATOR, under, type MenuEntry } from "../shell/Menu";
 import { formatCost } from "./fold";
 import { threadTitle } from "./title";
+import { locale } from "../shell/locale";
 
 const STATUS: Record<Exclude<LedgerThread["runs"][number]["status"], "answered" | null>, string> = {
   ready: "Ready to accept",
@@ -23,11 +24,14 @@ export function threadStatus(thread: LedgerThread): string {
   return last && last !== "answered" ? STATUS[last] : "Running";
 }
 
+/** When something happened, briefly, in the person's locale: the time today, the weekday this week, else the date. */
 export function when(at: number, now: Date): string {
   const day = new Date(at);
-  return day.toDateString() === now.toDateString()
-    ? day.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
-    : day.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  if (day.toDateString() === now.toDateString())
+    return day.toLocaleTimeString(locale(), { timeStyle: "short" });
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  if (at < now.getTime() && at >= midnight - 6 * 86_400_000) return day.toLocaleDateString(locale(), { weekday: "short" });
+  return day.toLocaleDateString(locale(), { day: "numeric", month: "short" });
 }
 
 /** Where a thread stands: what's working, what's waiting for the person, and the rest. */

@@ -20,6 +20,7 @@ import { ClipIcon } from "../shell/ClipIcon";
 import { ROLE_NAMES } from "../stack/lock";
 import { TIERS, type Tier } from "../stack/tier";
 import { Composer } from "../shell/Composer";
+import { Copy } from "../shell/Copy";
 import { Menu, under, type MenuEntry } from "../shell/Menu";
 import { Working } from "../shell/Mark";
 import type { SlashCommand } from "../shell/mention";
@@ -406,7 +407,7 @@ export function ThreadView({
             {stage}
           </span>
         </div>
-        <div className="scroll" ref={scroller}>
+        <div className="scroll" ref={scroller.ref}>
           <div className="tcol">
             {thread.turns.map((turn, i) => (
               <TurnView
@@ -421,6 +422,14 @@ export function ThreadView({
             ))}
           </div>
         </div>
+        {running && scroller.away && (
+          <button type="button" className="latest" onClick={scroller.toEnd}>
+            Latest
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M8 3.5v9M4.5 9 8 12.5 11.5 9" />
+            </svg>
+          </button>
+        )}
 
         {running && lastRun.asking && (
           <CommandAsk
@@ -490,7 +499,9 @@ export function ThreadView({
                       </>
                     ) : (
                       <>
-                        Committed <b>{thread.committed}</b> on {thread.branch}
+                        Committed <b>{thread.committed}</b>
+                        <Copy text={thread.committed} what="the commit id" /> on {thread.branch}
+                        {thread.branch && <Copy text={thread.branch} what="the branch name" />}
                       </>
                     )}
                   </span>
@@ -1015,6 +1026,7 @@ function Work({
     ),
     output && step.role === "plan" && step.name === "plan" && (
       <Item key="out" icon={ICONS.note} summary="The plan" open={showPlan}>
+        <Copy text={output} what="the plan" />
         <Markdown className="text" text={output} />
       </Item>
     ),
@@ -1057,6 +1069,7 @@ function Checks({ checks }: { checks: CheckResult[] }) {
                 </span>
               )}
             </b>
+            {!c.ok && c.output.trim() && <Copy text={c.output.trim()} what={`what ${c.command} printed`} />}
             {"\n"}
             {c.ok ? "" : `${c.output.trim()}\n`}
           </span>
@@ -1139,11 +1152,14 @@ function useOnRise(value: number, onRise: () => void) {
 function useFollow(thread: Thread) {
   const ref = useRef<HTMLDivElement>(null);
   const atEnd = useRef(true);
+  // The person scrolled up, away from the end, so Latest can bring them back.
+  const [away, setAway] = useState(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const onScroll = () => {
       atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      setAway(!atEnd.current);
     };
     el.addEventListener("scroll", onScroll);
     return () => el.removeEventListener("scroll", onScroll);
@@ -1152,7 +1168,14 @@ function useFollow(thread: Thread) {
     const el = ref.current;
     if (el && atEnd.current) el.scrollTop = el.scrollHeight;
   }, [thread]);
-  return ref;
+  const toEnd = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    atEnd.current = true;
+    setAway(false);
+    el.scrollTo?.({ top: el.scrollHeight, behavior: "smooth" });
+  }, []);
+  return { ref, away, toEnd };
 }
 
 /** The parts that are set, with a dot between each. */

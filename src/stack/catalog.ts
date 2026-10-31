@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { applyCatalog, type Catalog, parseCatalog, pricesListed } from "../../runtime/src/models";
+import { locale } from "../shell/locale";
 
 /** The list lives in Shoji's own repository, so a new model or price ships without a release. */
 export const CATALOG_URL = "https://raw.githubusercontent.com/FLX-2/shoji/main/catalog/models.json";
@@ -12,7 +13,7 @@ const MOST_BYTES = 64 * 1024;
 
 /** The day the prices in use were listed, such as 28 Oct 2026. */
 export const listedDay = () =>
-  new Date(`${pricesListed()}T00:00:00Z`).toLocaleDateString("en-GB", {
+  new Date(`${pricesListed()}T00:00:00Z`).toLocaleDateString(locale(), {
     day: "numeric",
     month: "short",
     year: "numeric",
