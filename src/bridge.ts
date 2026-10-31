@@ -119,6 +119,13 @@ export function carrying(bridge: Bridge, carried: () => Carried): Bridge {
   };
 }
 
+export interface Pushed {
+  /** The remote the branch went to, such as "origin". */
+  remote: string;
+  /** The page that opens a pull request for it, which Shoji opened; null when the host isn't one Shoji knows. */
+  url: string | null;
+}
+
 export interface StartedRun {
   run: number;
   /** The thread's id in the ledger, which keeps its runs and calls for Receipts. */
@@ -209,6 +216,9 @@ export const bridge = {
   /** Commits all of the thread's work on its branch and returns the commit's short hash. */
   commitThread: (repo: string, branch: string, message: string, thread: number) =>
     invoke<string>("commit_thread", { repo, branch, message, thread }),
+  /** Pushes a committed thread's branch to the project's remote and opens the page for a pull request. Only the
+   *  person's button calls it. */
+  pushThread: (repo: string, branch: string) => invoke<Pushed>("push_thread", { repo, branch }),
   /** Every thread in the ledger with its runs and calls, newest first. */
   /** A run's events as the runtime wrote them, for reopening a past thread. */
   runEvents: (run: number) => invoke<RuntimeEvent[]>("run_events", { run }),

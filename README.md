@@ -62,7 +62,7 @@ Code lists every file the thread changed, with its diff. Accept keeps a file's c
 
 Revert anything you don't want. Accept and commit then commits the rest as one commit on the thread's branch, using your own git name and email, so `user.name` and `user.email` must be set. The message is the task, followed by `Shoji-Models:` and `Shoji-Cost:` lines. The thread's copy is then put away, so you can check the branch out in your project.
 
-Shoji never pushes. The commit and the branch stay on your machine. Merging or pushing is up to you.
+Shoji never pushes on its own. Once a thread is committed, Push and open PR pushes its branch to the project's `origin` (or its only remote) with your own git sign-in, then opens the page for a pull request on GitHub, GitLab or Bitbucket. If git would need to ask for a password, the push stops and says so; sign in to your git host in a terminal once, then press it again. Merging is up to you.
 
 ## Build it yourself
 
