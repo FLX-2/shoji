@@ -4153,10 +4153,15 @@ button.rrow:focus-visible {
   margin: 4px 6px;
 }
 
+/* Not the dialog's box: the question sits in the menu itself. */
 .menu .ask {
+  width: auto;
   display: grid;
   gap: 10px;
   padding: 8px 10px;
+  border: 0;
+  border-radius: 0;
+  background: none;
 }
 
 .menu .ask p {
