@@ -173,10 +173,14 @@ describe("trials in Stack", () => {
     fireEvent.click(first);
     expect(first.getAttribute("aria-expanded")).toBe("true");
     expect(
-      within(screen.getByRole("region", { name: "This trial" })).getByText("export const on = true;"),
+      within(screen.getByRole("region", { name: "This trial" })).getByText(
+        (_, el) => el?.className === "tx" && el.textContent === "export const on = true;",
+      ),
     ).toBeTruthy();
     expect(
-      within(screen.getByRole("region", { name: "What you accepted" })).getByText("export const on = false;"),
+      within(screen.getByRole("region", { name: "What you accepted" })).getByText(
+        (_, el) => el?.className === "tx" && el.textContent === "export const on = false;",
+      ),
     ).toBeTruthy();
     fireEvent.click(second);
     expect(first.getAttribute("aria-expanded")).toBe("false");

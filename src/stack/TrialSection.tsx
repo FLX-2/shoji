@@ -3,6 +3,7 @@ import type { Stack } from "../../runtime/src/stack";
 import type { TrialOutcome } from "../../runtime/src/trial";
 import type { Bridge, LedgerThread, TrialRequest } from "../bridge";
 import { HunkView } from "../code/CodeView";
+import { languageOf } from "../code/syntax";
 import { parseDiff } from "../code/diff";
 import { folderName } from "../home/HomeView";
 import { formatCost } from "../thread/fold";
@@ -276,7 +277,7 @@ function DiffFiles({ label, diff, empty }: { label: string; diff: string; empty:
               <span className="meta">{file.binary ? "binary" : `+${file.additions} −${file.deletions}`}</span>
             </p>
             {file.hunks.map((hunk, i) => (
-              <HunkView key={i} hunk={hunk} gap={i > 0} />
+              <HunkView key={i} hunk={hunk} gap={i > 0} language={languageOf(file.path)} />
             ))}
           </div>
         ))}
