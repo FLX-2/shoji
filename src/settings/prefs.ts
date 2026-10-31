@@ -3,6 +3,7 @@ import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import type { StackName } from "../../runtime/src/stack";
 import type { AccentId } from "../look/accent";
 import type { FieldId } from "../look/fields";
+import type { ThemeId } from "../look/theme";
 import type { Queued, Schedule } from "../schedule/schedule";
 import type { SectionId } from "../shell/sections";
 
@@ -17,6 +18,8 @@ export interface Prefs {
   dailyLimit: number;
   /** Threads pause after the plan, for the person to build it or change it. */
   planFirst: boolean;
+  /** Darkroom, paper, or whichever the system uses. */
+  theme: ThemeId;
   /** Interface motion. Off removes every transition and holds the background still. */
   motion: boolean;
   /** The background behind the main stage. */
@@ -91,6 +94,7 @@ export const DEFAULT_PREFS: Prefs = {
   cap: 0.5,
   dailyLimit: 25,
   planFirst: true,
+  theme: "dark",
   motion: true,
   field: "code",
   frost: 23,

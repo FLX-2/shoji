@@ -27,6 +27,23 @@
   --hair: rgba(255, 255, 255, 0.1);
   --hair2: rgba(255, 255, 255, 0.06);
 
+  /* Channels for tints. Ink is what lines and faint fills are drawn in: white on the darkroom, warm black on
+     paper. The others let a surface keep its colour under its own alpha. */
+  --ink-rgb: 255, 255, 255;
+  --z0-rgb: 6, 5, 5;
+  --z1-rgb: 14, 13, 12;
+  --z2-rgb: 20, 19, 18;
+  --z3-rgb: 40, 38, 36;
+  --matte-rgb: 11, 10, 10;
+  /* The background field's glyphs and dots. */
+  --field-rgb: 236, 234, 228;
+  /* Only a menu or a toast casts a shadow. A scrim dims the app behind a dialog. */
+  --lift: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --scrim: rgba(6, 5, 5, 0.6);
+  /* The pick in a tray, a switch that is on, a chip pressed in: a lighter tile on the darkroom. */
+  --lifted: var(--z3);
+  --lifted-edge: 0 0 #0000;
+
   /* Materials: solid chrome, frosted secondary panes, clear main stage */
   --solid: #0f0e0d;
   --solid2: #121110;
@@ -64,4 +81,48 @@
   --e-move: cubic-bezier(0.4, 0, 0.2, 1);
 
   color-scheme: dark;
+}
+
+/* Paper: the light theme, as in the screens the app is named for. The greys run the other way, so z0 is the
+   lightest ground and z10 the darkest ink, and every rule that reads a token turns over with it. Green and the
+   softer red are darker here to keep their small words at 4.5:1. */
+:root[data-theme="light"] {
+  --z0: #fdfcfa;
+  --z1: #f7f5f1;
+  --z2: #f0ede8;
+  --z3: #e7e3dd;
+  --z4: #d9d4cd;
+  --z5: #b9b3aa;
+  --z6: #6b6761;
+  --z7: #5a5650;
+  --z8: #3d3a36;
+  --z9: #23211e;
+  --z10: #12110f;
+
+  --matte: #efece6;
+  --good: #1e7a49;
+  --good-rgb: 30, 122, 73;
+  --bad: #c23b40;
+  --bad-rgb: 194, 59, 64;
+  --hair: rgba(20, 18, 16, 0.12);
+  --hair2: rgba(20, 18, 16, 0.07);
+
+  --solid: #f8f6f2;
+  --solid2: #f3f1ec;
+  --pane: rgba(248, 246, 242, 0.8);
+
+  --ink-rgb: 20, 18, 16;
+  --z0-rgb: 253, 252, 250;
+  --z1-rgb: 247, 245, 241;
+  --z2-rgb: 250, 248, 245;
+  --z3-rgb: 231, 227, 221;
+  --matte-rgb: 239, 236, 230;
+  --field-rgb: 120, 112, 104;
+  --lift: 0 10px 30px rgba(40, 32, 24, 0.16);
+  --scrim: rgba(40, 36, 32, 0.3);
+  /* On paper a pick rises as the whitest tile, held by a hairline edge. */
+  --lifted: var(--z0);
+  --lifted-edge: 0 1px 2px rgba(40, 32, 24, 0.12), 0 0 0 1px rgba(20, 18, 16, 0.07);
+
+  color-scheme: light;
 }

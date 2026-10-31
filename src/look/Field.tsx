@@ -25,12 +25,25 @@ export function Field({ id, running, still }: FieldProps) {
     let last = 0;
     let frame = 0;
 
-    const accent = () => {
-      const rgb = getComputedStyle(el).getPropertyValue("--safe-rgb").split(",").map(Number);
-      return (rgb.length === 3 ? rgb : [255, 91, 58]) as [number, number, number];
+    const read = (name: string, fallback: [number, number, number]) => {
+      const rgb = getComputedStyle(el).getPropertyValue(name).split(",").map(Number);
+      return (rgb.length === 3 && rgb.every((n) => !Number.isNaN(n)) ? rgb : fallback) as [number, number, number];
     };
     const draw = (moving: boolean) =>
-      drawField(id, c, w, h, { t, running: live.current.running, accent: accent(), live: moving }, state);
+      drawField(
+        id,
+        c,
+        w,
+        h,
+        {
+          t,
+          running: live.current.running,
+          accent: read("--safe-rgb", [255, 91, 58]),
+          ink: read("--field-rgb", [236, 234, 228]),
+          live: moving,
+        },
+        state,
+      );
     const size = () => {
       const box = el.getBoundingClientRect();
       const ratio = Math.min(devicePixelRatio || 1, 2);

@@ -15,6 +15,7 @@ A Tauri 2 desktop app: a React and TypeScript front end in `src/`, the Rust shel
 
 - The visual reference is the [Shoji board](https://claude.ai/artifact/QmS9N3LtJjXorvwgz7LE6D), drawn with the [Zone design system](https://claude.ai/artifact/SLqCMkNxsJ3gPiBLvZ2rSx). The old prototype is retired. A UI change starts on the board, or updates it in the same PR. A change to the tokens or a shared component updates Zone too.
 - The Zone tokens live in `src/styles/tokens.css`. Use those variables and don't add new colours.
+- Zone has two themes, Dark (the darkroom) and Light (paper), set on `<html data-theme>`. Every colour must come from a token so both turn over: draw faint lines and fills in `rgba(var(--ink-rgb), a)`, never in literal white or black.
 - Red (`--safe`) only means running or spending. Inside the app the mark is drawn without its red seal.
 - Green (`--good`) and a softer red (`--bad`) only mark how something came out: passed or failed, added or removed. Use them on small marks and short words, never on surfaces. The Windows Close button's hover red is the system's own.
 - Motion uses the duration and easing tokens. Every effect must be able to be turned off in Settings.

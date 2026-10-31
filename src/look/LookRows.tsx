@@ -2,10 +2,35 @@ import type { CSSProperties } from "react";
 import { TEXT_SIZES, type Prefs } from "../settings/prefs";
 import { ACCENTS, type AccentId } from "./accent";
 import { FIELD_NAMES, type FieldId } from "./fields";
+import { THEME_NAMES, type ThemeId } from "./theme";
 
 interface RowProps {
   prefs: Prefs;
   onChange: (change: Partial<Prefs>) => void;
+}
+
+export function ThemeRow({ prefs, onChange }: RowProps) {
+  return (
+    <div className="srow">
+      <div>
+        <b>Theme</b>
+        <span className="d">Dark is the darkroom. Light is paper, like the screens Shoji is named for.</span>
+      </div>
+      <div className="seg" role="radiogroup" aria-label="Theme">
+        {(Object.keys(THEME_NAMES) as ThemeId[]).map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={prefs.theme === id}
+            onClick={() => onChange({ theme: id })}
+          >
+            {THEME_NAMES[id]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function BackgroundRow({ prefs, onChange }: RowProps) {
@@ -112,7 +137,10 @@ export function AccentRow({ prefs, onChange }: RowProps) {
             aria-checked={prefs.accent === id}
             onClick={() => onChange({ accent: id })}
           >
-            <i style={{ background: `rgb(${ACCENTS[id].rgb.join(",")})` }} aria-hidden="true" />
+            <i
+              style={{ background: id === "mono" ? "var(--z10)" : `rgb(${ACCENTS[id].rgb.join(",")})` }}
+              aria-hidden="true"
+            />
             {ACCENTS[id].name}
           </button>
         ))}
@@ -192,10 +220,14 @@ export function SwitchRow({
   );
 }
 
+/** Mono on paper: the darkest ink, z10 there. */
+const MONO_ON_PAPER = [18, 17, 15] as const;
+
 /** The frost setting as the CSS the main stage reads: how much blur, and how much of the matte shows. */
-export function lookStyle(prefs: Prefs) {
+export function lookStyle(prefs: Prefs, theme: "dark" | "light" = "dark") {
   const f = prefs.frost / 100;
-  const rgb = ACCENTS[prefs.accent].rgb.join(",");
+  // Mono is the lightest ink on the darkroom, so on paper it takes the darkest.
+  const rgb = (prefs.accent === "mono" && theme === "light" ? MONO_ON_PAPER : ACCENTS[prefs.accent].rgb).join(",");
   return {
     "--bm": `${(1 + f * 14).toFixed(1)}px`,
     "--tm": (0.12 + f * 0.7).toFixed(3),

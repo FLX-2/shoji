@@ -27,7 +27,7 @@ function theme() {
     foreground: token("--z9", "#e3e0da"),
     cursor: token("--z9", "#e3e0da"),
     cursorAccent: token("--solid", "#0f0e0d"),
-    selectionBackground: "rgba(255, 255, 255, 0.18)",
+    selectionBackground: `rgba(${token("--ink-rgb", "255, 255, 255")}, 0.18)`,
   };
 }
 
@@ -60,6 +60,14 @@ export function TerminalView({ session, history, follow, onOpen, onInput, onResi
     term.current = terminal;
     fit.current = fitter;
     const typed = terminal.onData((data) => handlers.current.onInput(data));
+    // The theme can turn over while the terminal is open.
+    const turned =
+      typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(() => {
+            terminal.options.theme = theme();
+          });
+    turned?.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     const stop = follow((data) => terminal.write(data));
     let size = `${terminal.cols}x${terminal.rows}`;
     const observer =
@@ -76,6 +84,7 @@ export function TerminalView({ session, history, follow, onOpen, onInput, onResi
     terminal.focus();
     return () => {
       observer?.disconnect();
+      turned?.disconnect();
       stop();
       typed.dispose();
       terminal.dispose();

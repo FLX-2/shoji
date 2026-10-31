@@ -12,11 +12,12 @@ export interface Frame {
   running: boolean;
   /** The accent, as red, green and blue. */
   accent: Rgb;
+  /** The glyphs' and dots' own colour: light on the darkroom, a soft warm grey on paper. */
+  ink: Rgb;
   /** Glyphs may change from frame to frame. */
   live: boolean;
 }
 
-const WHITE: Rgb = [236, 234, 228];
 const GAIN = 1;
 const GLYPHS = "{}()[]<>=+-*/;:._|&!?#01λ→".split("");
 
@@ -66,7 +67,7 @@ function drawCode(c: CanvasRenderingContext2D, w: number, h: number, f: Frame, s
       const k = r * cols + i;
       if (f.live && Math.random() < change) st.glyphs[k] = (Math.random() * GLYPHS.length) | 0;
       const hot = f.running && strength > 0.82;
-      c.fillStyle = rgba(hot ? f.accent : WHITE, hot ? a * 1.5 : a);
+      c.fillStyle = rgba(hot ? f.accent : f.ink, hot ? a * 1.5 : a);
       c.fillText(GLYPHS[st.glyphs[k]], i * cw + cw / 2, r * ch + ch / 2);
     }
   }
@@ -88,7 +89,7 @@ function drawDots(c: CanvasRenderingContext2D, w: number, h: number, f: Frame) {
       const sy = h * (0.1 + 0.86 * z) - swell * h * 0.11 * scale;
       const a = GAIN * (0.28 + 0.7 * z) * (0.45 + 0.55 * swell);
       const hot = f.running && swell > 0.55;
-      c.fillStyle = rgba(hot ? f.accent : WHITE, hot ? Math.min(0.95, a * 1.8) : a);
+      c.fillStyle = rgba(hot ? f.accent : f.ink, hot ? Math.min(0.95, a * 1.8) : a);
       c.beginPath();
       c.arc(sx, sy, (0.9 + 2.9 * scale) * (hot ? 1.2 : 1), 0, Math.PI * 2);
       c.fill();
