@@ -80,6 +80,7 @@ describe("the daily limit", () => {
     const { fake, task } = await home([spent(Date.now(), 0.7)]);
     const ask = screen.getByRole("alertdialog", { name: "Past today's limit?" });
     expect(ask.textContent).toContain("Today has cost $0.70 of your $1.00 daily limit.");
+    expect(document.querySelector("footer.status")!.textContent).toContain("today $0.70 of $1.00");
     expect(ask.textContent).toContain("This thread may spend up to $0.50");
     expect(fake.calls.starts).toHaveLength(0);
 
@@ -97,9 +98,23 @@ describe("the daily limit", () => {
     expect(fake.calls.starts.map((s) => s.task)).toEqual(["Add a toggle"]);
   });
 
+  it("shows today's spend in the status bar, keeping up with a running thread", async () => {
+    const { fake } = await home([spent(Date.now(), 0.2)]);
+    const status = () => document.querySelector("footer.status")!.textContent;
+    expect(status()).toContain("today $0.20 of $1.00");
+    // The runtime's call is in the ledger by the time the app hears of it.
+    fake.ledger.push(spent(Date.now(), 0.05));
+    await act(async () => {
+      const { at: _, ...call } = spent(0, 0.05).runs[0].calls[0];
+      fake.emit({ type: "call", call });
+    });
+    expect(status()).toContain("today $0.25 of $1.00");
+  });
+
   it("is set in Settings", async () => {
     render(<App bridge={fakeBridge().bridge} />);
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Spending" }));
     fireEvent.change(screen.getByRole("spinbutton", { name: /Daily limit/ }), { target: { value: "40" } });
     expect(JSON.parse(localStorage.getItem("shoji.prefs")!).dailyLimit).toBe(40);
   });

@@ -247,7 +247,7 @@ describe("a thread in the app", () => {
     fake.emit(running("review", "review", HAIKU), done("review", "review", HAIKU, "VERDICT: APPROVE"));
     fake.emit(result("ready", 0.12));
     await act(async () => fake.exit(0));
-    expect(document.querySelector(".status .r")?.textContent).toBe("shoji/thread");
+    expect(document.querySelector(".status .branch")?.textContent).toBe("shoji/thread");
 
     await act(async () => {
       fireEvent.click(await screen.findByRole("button", { name: "Accept and commit" }));
@@ -616,6 +616,7 @@ describe("settings", () => {
   it("lets the limit be typed a character at a time and keeps only a positive amount", async () => {
     render(<App bridge={fakeBridge().bridge} />);
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Spending" }));
     const limit = screen.getByRole("spinbutton", { name: /Limit per thread/ }) as HTMLInputElement;
     for (const typed of ["", "0", "0.0", "0.03"]) fireEvent.change(limit, { target: { value: typed } });
     expect(limit.value).toBe("0.03");
