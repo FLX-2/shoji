@@ -4341,3 +4341,15 @@ input.rename {
 .tlist .groups .k .fold:hover {
   color: var(--z9);
 }
+
+/* An action's keys in Search, after its detail. */
+.search [role="option"] span + .kbds {
+  margin-left: 0;
+}
+
+.search [role="option"] .kbds kbd {
+  min-width: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  color: var(--z7);
+}

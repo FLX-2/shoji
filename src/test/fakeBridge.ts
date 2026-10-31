@@ -61,6 +61,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     discarded: [] as number[],
     notified: [] as { title: string; body: string }[],
     waiting: [] as number[],
+    zoom: [] as number[],
   };
   /** What the attach dialog answers with; tests fill it. */
   const picked: string[] = [];
@@ -149,6 +150,9 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     },
     showWaiting: async (count) => {
       calls.waiting.push(count);
+    },
+    setZoom: async (scale) => {
+      calls.zoom.push(scale);
     },
     runEvents: async (run) => logs[run] ?? [],
     readShot: async (path) => {

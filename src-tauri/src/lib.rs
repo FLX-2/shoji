@@ -867,6 +867,12 @@ fn waiting_dot() -> tauri::image::Image<'static> {
     tauri::image::Image::new_owned(rgba, SIZE, SIZE)
 }
 
+/// Scales the whole interface, for the person's text size.
+#[tauri::command]
+fn set_zoom(window: tauri::WebviewWindow, scale: f64) -> Result<(), String> {
+    window.set_zoom(scale.clamp(0.75, 1.5)).map_err(|e| e.to_string())
+}
+
 /// Shows a folder in the system's file manager.
 #[tauri::command]
 fn reveal_folder(path: String) -> Result<(), String> {
@@ -1199,6 +1205,7 @@ pub fn run() {
             reveal_folder,
             notify,
             show_waiting,
+            set_zoom,
             ledger_threads,
             run_events,
             read_shot,

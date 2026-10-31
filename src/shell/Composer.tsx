@@ -114,7 +114,13 @@ export function Composer({
   };
   const send = async () => {
     if (!ready) return;
-    if ((await onSend(text.trim())) !== false) {
+    const sent = text.trim();
+    if ((await onSend(sent)) !== false) {
+      // Cleared here too, since sending can take the composer off screen before its text empties.
+      if (draft) {
+        keepDraft(draft, "");
+        keepDraft(`last:${draft}`, sent);
+      }
       setText("");
       setDismissed(null);
     }
@@ -168,7 +174,11 @@ export function Composer({
               return;
             }
           }
-          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+          if (e.key === "ArrowUp" && text === "" && draft && draftFor(`last:${draft}`)) {
+            // An empty box brings back what was last sent from it.
+            e.preventDefault();
+            setText(draftFor(`last:${draft}`));
+          } else if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
             send();
           } else if (e.key === "Escape" && onCancel && !e.nativeEvent.isComposing) {

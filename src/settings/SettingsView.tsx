@@ -3,7 +3,7 @@ import { type McpServer, parseMcpServers } from "../../runtime/src/mcpConfig";
 import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import type { Stack } from "../../runtime/src/stack";
 import type { KeyStatus } from "../bridge";
-import { AccentRow, BackgroundRow, DensityRow, FrostRow, MotionRow, OpaqueRow, SwitchRow } from "../look/LookRows";
+import { AccentRow, BackgroundRow, DensityRow, FrostRow, MotionRow, OpaqueRow, SwitchRow, TextSizeRow } from "../look/LookRows";
 import { listedDay } from "../stack/catalog";
 import { describeStack } from "../stack/lock";
 import { fileName } from "../thread/useThread";
@@ -111,6 +111,7 @@ export function SettingsView({
                     <MotionRow prefs={prefs} onChange={onChange} />
                     <AccentRow prefs={prefs} onChange={onChange} />
                     <DensityRow prefs={prefs} onChange={onChange} />
+                    <TextSizeRow prefs={prefs} onChange={onChange} />
                   </>
                 )}
                 {shown.id === "interface" && (

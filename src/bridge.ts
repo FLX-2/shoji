@@ -241,6 +241,8 @@ export const bridge = {
   notify: (title: string, body: string) => invoke<void>("notify", { title, body }),
   /** How many threads wait for the person, shown on the app's icon. Rising from `before` asks for attention. */
   showWaiting: (count: number, before: number) => invoke<void>("show_waiting", { count, before }),
+  /** Scales the whole interface, 1 being as designed. */
+  setZoom: (scale: number) => invoke<void>("set_zoom", { scale }),
   /** A run's events as the runtime wrote them, for reopening a past thread. */
   runEvents: (run: number) => invoke<RuntimeEvent[]>("run_events", { run }),
   /** A screenshot a run saved of a page before or after its work, as a data URL the page may show. */

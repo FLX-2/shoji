@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { Prefs } from "../settings/prefs";
+import { TEXT_SIZES, type Prefs } from "../settings/prefs";
 import { ACCENTS, type AccentId } from "./accent";
 import { FIELD_NAMES, type FieldId } from "./fields";
 
@@ -138,6 +138,30 @@ export function DensityRow({ prefs, onChange }: RowProps) {
             onClick={() => onChange({ density })}
           >
             {density === "comfortable" ? "Comfortable" : "Compact"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function TextSizeRow({ prefs, onChange }: RowProps) {
+  return (
+    <div className="srow">
+      <div>
+        <b>Text size</b>
+        <span className="d">Draws all of Shoji larger or smaller. Ctrl or ⌘ with + and − does the same, and 0 sets it back.</span>
+      </div>
+      <div className="seg" role="radiogroup" aria-label="Text size">
+        {TEXT_SIZES.map((size) => (
+          <button
+            key={size}
+            type="button"
+            role="radio"
+            aria-checked={prefs.textSize === size}
+            onClick={() => onChange({ textSize: size })}
+          >
+            {Math.round(size * 100)}%
           </button>
         ))}
       </div>

@@ -72,7 +72,12 @@ export interface Prefs {
   listProject?: string | null;
   /** The thread list's groups the person folded away. */
   foldedGroups: string[];
+  /** How large the whole interface is drawn, 1 being as designed: one of TEXT_SIZES. */
+  textSize: number;
 }
+
+/** The text sizes Look offers, and Ctrl or ⌘ with + and − steps through. */
+export const TEXT_SIZES = [0.9, 1, 1.1, 1.25];
 
 export const DEFAULT_PREFS: Prefs = {
   repo: null,
@@ -103,6 +108,7 @@ export const DEFAULT_PREFS: Prefs = {
   notify: true,
   listHidden: false,
   foldedGroups: [],
+  textSize: 1,
 };
 
 const STORE = "shoji.prefs";
