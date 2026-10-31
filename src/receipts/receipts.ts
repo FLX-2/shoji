@@ -59,6 +59,25 @@ export function monthOf(at: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+/** What each day of a month cost, by when each call was made, from the 1st. */
+export function dailySpend(threads: LedgerThread[], month: string): number[] {
+  const [year, m] = month.split("-").map(Number);
+  const days = new Array<number>(new Date(year, m, 0).getDate()).fill(0);
+  for (const call of threads.flatMap(callsOf)) {
+    if (monthOf(call.at) === month) days[new Date(call.at).getDate() - 1] += call.cost;
+  }
+  return days;
+}
+
+/** What each project's threads cost in a month, the dearest first. */
+export function projectSpend(threads: LedgerThread[], month: string): { repo: string; spent: number }[] {
+  const spent = new Map<string, number>();
+  for (const t of threads) {
+    if (monthOf(t.startedAt) === month) spent.set(t.repo, (spent.get(t.repo) ?? 0) + threadSpend(t));
+  }
+  return [...spent].map(([repo, cost]) => ({ repo, spent: cost })).sort((a, b) => b.spent - a.spent);
+}
+
 export function monthName(month: string): string {
   const [year, m] = month.split("-").map(Number);
   return new Date(year, m - 1, 1).toLocaleString("en", { month: "long", year: "numeric" });
