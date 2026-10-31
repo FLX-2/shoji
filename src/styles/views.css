@@ -939,14 +939,25 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 6px;
+  padding: 14px 6px;
   display: grid;
   align-content: start;
-  gap: 16px;
 }
 
-.side .k {
+/* A group's name is a quiet heading over its pages: smaller and dimmer than the pages it names,
+   and each group after the first starts below a hairline. */
+.side .k,
+.tlist .groups .k {
   padding: 0 10px 6px;
+  font-size: 11.5px;
+  color: var(--z6);
+}
+
+.side .groups > section + section,
+.tlist .groups > section + section {
+  margin-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hair2);
 }
 
 .side ul {
@@ -965,7 +976,7 @@
   padding: 7px 10px;
   border-radius: 3px;
   font-size: 13.5px;
-  color: var(--z8);
+  color: var(--z9);
 }
 
 .side li button:hover {
@@ -3209,14 +3220,9 @@ button.rrow:focus-visible {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 6px;
+  padding: 14px 6px;
   display: grid;
   align-content: start;
-  gap: 16px;
-}
-
-.tlist .groups .k {
-  padding: 0 10px 4px;
 }
 
 .tlist ul {
