@@ -27,6 +27,7 @@ The first time Shoji opens, setup asks for your Anthropic API key, picks a stack
 - **Conversation:** each step with its model, its work and what it cost.
 - **Code:** every file the thread changed, with its diff. Click a line's number to comment on it, then send your comments to Build as one request for changes. Edit opens a changed file to fix something small by hand; Ctrl+S (Cmd+S) saves and Escape cancels.
 - **Preview:** your project's dev server at 360, 768 or 1280 px. Start dev server runs the project's dev command (guessed from its package manager, such as `pnpm dev`, and remembered per project) in the thread's own copy, so the preview shows that thread's work, and Preview uses the address the server prints. Each server gets a free `PORT`, so several threads can preview at once. Stop server, or quitting Shoji, stops it and everything it started. You can also point Preview at a server you run yourself; that address is remembered per project and starts at `http://localhost:5173`.
+- **Terminal:** your own shell (your login shell on macOS and Linux, PowerShell on Windows) in the thread's copy of the project. It keeps running while you look at the other views, and ends when the thread is committed or Shoji quits.
 
 Ask a question about a thread's work at any point. The Scout model reads the code and answers in the conversation, and nothing in the project changes.
 

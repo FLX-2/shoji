@@ -33,6 +33,7 @@ import { ThreadList } from "./thread/ThreadList";
 import { ThreadView } from "./thread/ThreadView";
 import { isRunning, threadCost, useThreads } from "./thread/useThread";
 import { guessCommand, useServers } from "./thread/useServers";
+import { useTerminals } from "./thread/useTerminals";
 
 /** Why a thread can't start in this folder yet, or null when it can. Each thread works in its own copy of the
  *  project, so changes the person hasn't committed are no reason to wait. */
@@ -78,6 +79,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     showId,
   } = useThreads(bridge, allowedIn);
   const servers = useServers(bridge);
+  const terminals = useTerminals(bridge);
   const trials = useTrial(bridge);
   const trialRunning = !!trials.trial && trialProgress(trials.trial).running;
   const notes = useNotes(bridge);
@@ -313,6 +315,8 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                       servers.start(dir, command);
                     }}
                     onStopServer={servers.stop}
+                    terminals={terminals}
+                    still={!prefs.motion}
                   />
                 ) : (
                   <div className="empty">

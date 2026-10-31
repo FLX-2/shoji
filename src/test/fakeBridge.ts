@@ -25,6 +25,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   const onTrialEvent: ((run: number, event: TrialEvent) => void)[] = [];
   const onNotesEvent: ((run: number, event: NotesEvent) => void)[] = [];
   const onExit: ((exit: RunExit) => void)[] = [];
+  const onTerminalOutput: ((terminal: number, data: string) => void)[] = [];
+  const onTerminalExit: ((terminal: number) => void)[] = [];
   const onServerOutput: ((server: number, line: string) => void)[] = [];
   const onServerExit: ((server: number, code: number | null) => void)[] = [];
   const calls = {
@@ -45,6 +47,9 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     stoppedRuns: [] as number[],
     servers: [] as { dir: string; command: string }[],
     writes: [] as { path: string; contents: string }[],
+    terminals: [] as { dir: string; cols: number; rows: number }[],
+    typed: [] as { terminal: number; data: string }[],
+    closedTerminals: [] as number[],
     stoppedServers: [] as number[],
   };
   /** What the attach dialog answers with; tests fill it. */
@@ -151,6 +156,25 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       calls.writes.push({ path, contents });
       project.contents[path] = contents;
     },
+    openTerminal: async (dir, cols, rows) => {
+      calls.terminals.push({ dir, cols, rows });
+      return calls.terminals.length;
+    },
+    writeTerminal: async (terminal, data) => {
+      calls.typed.push({ terminal, data });
+    },
+    resizeTerminal: async () => {},
+    closeTerminal: async (terminal) => {
+      calls.closedTerminals.push(terminal);
+    },
+    onTerminalOutput: async (handler) => {
+      onTerminalOutput.push(handler);
+      return () => onTerminalOutput.splice(onTerminalOutput.indexOf(handler), 1);
+    },
+    onTerminalExit: async (handler) => {
+      onTerminalExit.push(handler);
+      return () => onTerminalExit.splice(onTerminalExit.indexOf(handler), 1);
+    },
     startServer: async (dir, command) => {
       calls.servers.push({ dir, command });
       return calls.servers.length;
@@ -188,6 +212,10 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     /** Sends events from one run, when several are going. */
     emitTo: (run: number, ...events: RuntimeEvent[]) =>
       act(() => events.forEach((event) => onEvent.forEach((h) => h(run, event)))),
+    /** Sends what a terminal's shell printed. */
+    terminalSays: (terminal: number, data: string) => act(() => onTerminalOutput.forEach((h) => h(terminal, data))),
+    /** Ends a terminal's shell. */
+    terminalEnds: (terminal: number) => act(() => onTerminalExit.forEach((h) => h(terminal))),
     /** Sends lines a dev server printed. */
     serverSays: (server: number, ...lines: string[]) =>
       act(() => lines.forEach((line) => onServerOutput.forEach((h) => h(server, line)))),

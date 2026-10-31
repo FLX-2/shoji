@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { CheckResult } from "../../runtime/src/events";
 import { MODELS } from "../../runtime/src/models";
 import type { Bridge } from "../bridge";
@@ -21,8 +21,14 @@ import {
 } from "./fold";
 import { Markdown } from "./Markdown";
 import { PreviewView } from "./PreviewView";
+import type { useTerminals } from "./useTerminals";
 import type { Server } from "./useServers";
 import { fileName, isRunning, threadCost, type Thread, type Turn } from "./useThread";
+
+type Terminals = ReturnType<typeof useTerminals>;
+
+// The terminal brings xterm with it, so it loads the first time a terminal opens.
+const TerminalView = lazy(() => import("./TerminalView").then((m) => ({ default: m.TerminalView })));
 
 interface ThreadViewProps {
   bridge: Bridge;
@@ -56,10 +62,14 @@ interface ThreadViewProps {
   devCommand: string;
   onStartServer: (dir: string, command: string) => void;
   onStopServer: (dir: string) => void;
+  /** The terminals Shoji opened, one for each thread's copy. */
+  terminals: Terminals;
+  /** Motion is off. */
+  still: boolean;
   onPreviewUrl: (url: string) => void;
 }
 
-type Mode = "conversation" | "code" | "preview";
+type Mode = "conversation" | "code" | "preview" | "terminal";
 
 const MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 const SHORTCUT = MAC ? "⌘" : "Ctrl+";
@@ -96,6 +106,8 @@ export function ThreadView({
   devCommand,
   onStartServer,
   onStopServer,
+  terminals,
+  still,
 }: ThreadViewProps) {
   const last = thread.turns[thread.turns.length - 1];
   const running = isRunning(last);
@@ -110,6 +122,12 @@ export function ThreadView({
   // the work is committed the copy is put away, and its branch holds the work.
   const place = thread.workdir ?? thread.repo;
   const putAway = !!thread.workdir && !!thread.committed;
+  // Where Preview's dev server and the terminal run: the thread's copy, or the project once the copy is put away.
+  const here = putAway ? thread.repo : place;
+  // Kept the same between draws, since the terminal is made again when they change.
+  const { history: historyIn, follow: followIn } = terminals;
+  const termHistory = useCallback(() => historyIn(here), [historyIn, here]);
+  const termFollow = useCallback((listen: (data: string) => void) => followIn(here, listen), [followIn, here]);
   // The composer, open for changes to the work or for a question about it.
   const [asking, setAsking] = useState<false | "changes" | "question">(false);
   // The project's files, for @ in the changes box, read each time it opens.
@@ -219,6 +237,15 @@ export function ThreadView({
           >
             Preview
           </button>
+          <button
+            type="button"
+            className="mode"
+            aria-current={mode === "terminal" ? "page" : undefined}
+            title={`Terminal (${SHORTCUT}4)`}
+            onClick={() => setMode("terminal")}
+          >
+            Terminal
+          </button>
         </nav>
         <div className="tend">
           <span className="stage" data-outcome={outcome}>
@@ -256,6 +283,19 @@ export function ThreadView({
         />
       )}
 
+      {mode === "terminal" && (
+        <Suspense fallback={<div className="terminal" />}>
+          <TerminalView
+            session={terminals.sessions[here]}
+            history={termHistory}
+            follow={termFollow}
+            onOpen={(cols, rows) => terminals.open(here, cols, rows)}
+            onInput={(data) => terminals.write(here, data)}
+            onResize={(cols, rows) => terminals.resize(here, cols, rows)}
+            still={still}
+          />
+        </Suspense>
+      )}
       {mode === "preview" && (
         <PreviewView
           url={previewUrl}
@@ -263,8 +303,8 @@ export function ThreadView({
           freshness={String(ended)}
           server={server}
           command={devCommand}
-          onStartServer={(command) => onStartServer(putAway ? thread.repo : place, command)}
-          onStopServer={() => onStopServer(putAway ? thread.repo : place)}
+          onStartServer={(command) => onStartServer(here, command)}
+          onStopServer={() => onStopServer(here)}
         />
       )}
 
@@ -672,6 +712,7 @@ function useModeKeys(setMode: (mode: Mode) => void) {
       if (e.key === "1") setMode("conversation");
       else if (e.key === "2") setMode("code");
       else if (e.key === "3") setMode("preview");
+      else if (e.key === "4") setMode("terminal");
       else return;
       e.preventDefault();
     };
