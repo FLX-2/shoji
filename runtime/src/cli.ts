@@ -361,4 +361,6 @@ async function main() {
   }
 }
 
-main();
+// Shoji counts a run as running until this process exits. Reading stdin for a command's answer, a
+// dev server or an MCP server can keep it alive after the result, so exit once the output is out.
+main().then(() => process.stdout.write("", () => process.exit()));
