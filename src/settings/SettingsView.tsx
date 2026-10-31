@@ -134,6 +134,12 @@ export function SettingsView({
                       onToggle={() => onChange({ autoPanel: !prefs.autoPanel })}
                     />
                     <SwitchRow
+                      label="Tell me when a thread needs me"
+                      description="A notification when a thread asks to run a command or ends while you're looking elsewhere, and a count on Shoji's icon of the threads waiting for you."
+                      on={prefs.notify}
+                      onToggle={() => onChange({ notify: !prefs.notify })}
+                    />
+                    <SwitchRow
                       label="Status bar"
                       description="The project, branch, running cost and today's spend along the bottom of the window."
                       on={prefs.statusBar}

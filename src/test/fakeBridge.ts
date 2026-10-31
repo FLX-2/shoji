@@ -59,6 +59,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     shots: [] as string[],
     revealed: [] as string[],
     discarded: [] as number[],
+    notified: [] as { title: string; body: string }[],
+    waiting: [] as number[],
   };
   /** What the attach dialog answers with; tests fill it. */
   const picked: string[] = [];
@@ -141,6 +143,12 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     },
     revealFolder: async (path) => {
       calls.revealed.push(path);
+    },
+    notify: async (title, body) => {
+      calls.notified.push({ title, body });
+    },
+    showWaiting: async (count) => {
+      calls.waiting.push(count);
     },
     runEvents: async (run) => logs[run] ?? [],
     readShot: async (path) => {

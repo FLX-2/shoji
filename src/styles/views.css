@@ -4271,3 +4271,18 @@ input.rename {
   outline: 2px solid var(--z10);
   outline-offset: 1px;
 }
+
+/* A thread with news since the person last looked: a small light dot at the row's edge, and a brighter name. */
+.tlist .groups li .unread {
+  position: absolute;
+  top: 15px;
+  left: 1px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--z10);
+}
+
+.tlist .groups li[data-unread] b {
+  color: var(--z10);
+}

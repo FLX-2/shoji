@@ -59,6 +59,8 @@ interface ThreadListProps {
   running?: Set<number>;
   /** The ledger id of the thread on show. */
   current?: number;
+  /** The ledger ids of threads that moved on since the person last looked at them. */
+  unread?: Set<number>;
   showCosts: boolean;
   onOpen: (thread: LedgerThread) => void;
   onNew: () => void;
@@ -107,6 +109,7 @@ export function ThreadList({
   threads,
   running,
   current,
+  unread,
   showCosts,
   onOpen,
   onNew,
@@ -134,6 +137,7 @@ export function ThreadList({
       <li
         key={t.id}
         data-menu={menu?.id === t.id || undefined}
+        data-unread={unread?.has(t.id) || undefined}
         onContextMenu={(e) => {
           if (!menuFor || renaming === t.id) return;
           e.preventDefault();
@@ -166,6 +170,7 @@ export function ThreadList({
               {showCosts && cost > 0 && <span>{formatCost(cost)}</span>}
               <span>{when(t.startedAt, now)}</span>
             </span>
+            {unread?.has(t.id) && <i className="unread" role="img" aria-label="Unread" />}
           </button>
         )}
         {menuFor && renaming !== t.id && (

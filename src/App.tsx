@@ -33,7 +33,8 @@ import { Toast, type Note } from "./shell/Toast";
 import { threadMenu, type ThreadActions } from "./thread/actions";
 import { liveTitle, threadTitle } from "./thread/title";
 import { SECTIONS, type SectionId } from "./shell/sections";
-import { formatCost } from "./thread/fold";
+import { foldRun, formatCost } from "./thread/fold";
+import { seenMark, useNotify, useWaitingBadge } from "./thread/notify";
 import { DEFAULT_PREVIEW } from "./thread/PreviewView";
 import { reopen, workThreads } from "./thread/reopen";
 import { threadState } from "./thread/ThreadList";
@@ -149,10 +150,15 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   // Moves on whenever the person renames, pins, archives or discards a thread, so the ledger is read again.
   const [ledgerTick, setLedgerTick] = useState(0);
   const reread = () => setLedgerTick((n) => n + 1);
+  // Set once the ledger has been read, so the first read can count every thread as seen.
+  const [ledgerRead, setLedgerRead] = useState(false);
   useEffect(() => {
     bridge
       .ledgerThreads()
-      .then(setLedger)
+      .then((all) => {
+        setLedger(all);
+        setLedgerRead(true);
+      })
       .catch(() => setLedger([]));
     // Read again on a commit or on opening Threads too, so each thread shows where it got to.
   }, [bridge, activity, trialRunning, notesRunning, section, ledgerTick]);
@@ -161,6 +167,40 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const keptThreads = useMemo(() => pastThreads.filter((t) => !t.archivedAt), [pastThreads]);
   const liveIdsKey = live.map((t) => t.id).join();
   const liveIds = useMemo(() => new Set(live.flatMap((t) => (t.id === undefined ? [] : [t.id]))), [liveIdsKey]);
+
+  // The thread the person is looking at, which has no news for them and needs no notification.
+  const viewing = section === "threads" ? thread?.id : undefined;
+  useNotify(bridge, threads, viewing, prefs.notify);
+  // A thread whose runs moved on since the person last looked at it is marked unread in the list. At the first
+  // read of the ledger every thread counts as seen, so only what happens from then on is news.
+  useEffect(() => {
+    if (!ledgerRead) return;
+    if (!prefs.seen) {
+      setPrefs({ seen: Object.fromEntries(pastThreads.map((t) => [t.id, seenMark(t)])) });
+      return;
+    }
+    const shown = pastThreads.find((t) => t.id === viewing);
+    if (shown && prefs.seen[shown.id] !== seenMark(shown)) {
+      setPrefs((now) => ({ seen: { ...now.seen, [shown.id]: seenMark(shown) } }));
+    }
+  }, [ledgerRead, pastThreads, viewing, prefs.seen]);
+  const unread = useMemo(
+    () =>
+      new Set(
+        keptThreads
+          .filter((t) => prefs.seen && !(t.id in prefs.seen && prefs.seen[t.id] === seenMark(t)))
+          .filter((t) => t.id !== viewing && !liveIds.has(t.id) && !t.discardedAt)
+          .map((t) => t.id),
+      ),
+    [keptThreads, prefs.seen, viewing, liveIds],
+  );
+  // The icon counts what waits for the person: unread threads that need them, and running ones asking to run a
+  // command.
+  const asking = live.filter((t) => foldRun(t.turns.at(-1)!.events).asking !== undefined).length;
+  const waiting = prefs.notify
+    ? asking + keptThreads.filter((t) => unread.has(t.id) && threadState(t, liveIds).group === "Needs you").length
+    : 0;
+  useWaitingBadge(bridge, waiting);
   // And the project's commands, for / at the start of a task.
   const [projectCommands, setProjectCommands] = useState<SlashCommand[]>([]);
   useEffect(() => {
@@ -542,6 +582,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     }}
                     threads={pastThreads}
                     running={liveIds}
+                    unread={unread}
                     current={thread?.id}
                     showCosts={prefs.showCosts}
                     onOpen={openRecord}
