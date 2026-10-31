@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { EFFORTS, MODELS } from "../../runtime/src/models";
+import { EFFORTS, MODELS, type ModelId } from "../../runtime/src/models";
 import { ROLES, STACKS, type Role, type Seat, type Stack, type StackName } from "../../runtime/src/stack";
 import type { Bridge, LedgerThread, TrialRequest } from "../bridge";
 import {
@@ -14,7 +14,7 @@ import {
   type StackLock,
 } from "./lock";
 import { listedDay } from "./catalog";
-import { ModelPick, modelGroups } from "./ModelPick";
+import { familyOf, ModelPick, modelGroups, priceLine } from "./ModelPick";
 import { TrialSection } from "./TrialSection";
 import type { Trial } from "./useTrial";
 import { watch } from "./watch";
@@ -33,6 +33,10 @@ interface StackViewProps {
   onSave: (stack: Stack) => Promise<void>;
   /** The person's past threads, for the Watching row. */
   ledger: LedgerThread[];
+  /** Every model the person has had the chance to try: the ones there at first, and new ones once tried or set
+   *  aside. Any other model the list brings is Worth a trial. */
+  seenModels: ModelId[];
+  onSeeModels: (models: ModelId[]) => void;
 }
 
 function when(at: number): string {
@@ -51,8 +55,12 @@ export function StackView({
   error,
   onSave,
   ledger,
+  seenModels,
+  onSeeModels,
 }: StackViewProps) {
   const [draft, setDraft] = useState<Stack | null>(null);
+  // Which role's model list Watching asked to open, and when.
+  const [openPick, setOpenPick] = useState<{ role: Role; at: number } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const shown = draft ?? stack;
   const changed = changedRoles(stack, shown);
@@ -61,9 +69,19 @@ export function StackView({
 
   const edit = (next: Stack) => setDraft(sameStack(next, stack) ? null : next);
   const seat = (role: Role, change: Partial<Seat>) => edit({ ...shown, [role]: { ...shown[role], ...change } });
+  // New models from the list that nobody has tried or set aside yet.
+  const fresh = Object.keys(MODELS).filter((id) => !seenModels.includes(id));
+  const usedIn = (s: Stack) => ROLES.map((role) => s[role].model);
+  // Puts a new model on the roles it most likely suits, and brings Trial into view: nothing runs until Run trial.
+  const tryModel = (model: ModelId) => {
+    const roles = rolesFor(model, shown);
+    edit({ ...shown, ...Object.fromEntries(roles.map((role) => [role, { ...shown[role], model }])) });
+    document.getElementById("trial-h")?.scrollIntoView?.({ block: "start" });
+  };
   const save = () =>
     onSave(shown).then(
       () => {
+        onSeeModels(usedIn(shown));
         setDraft(null);
         setSaveError(null);
       },
@@ -102,6 +120,25 @@ export function StackView({
               </div>
             </div>
 
+            {fresh
+              .filter((model) => !usedIn(shown).includes(model))
+              .map((model) => (
+                <div key={model} className="worth">
+                  <span className="tag">Worth a trial</span>
+                  <p>
+                    <b>{MODELS[model].label}</b> is new in the model list, at {priceLine(model)} per million tokens.
+                  </p>
+                  <span className="acts">
+                    <button type="button" className="btn sm ghost" onClick={() => onSeeModels([model])}>
+                      Not now
+                    </button>
+                    <button type="button" className="btn sm" onClick={() => tryModel(model)}>
+                      Try it on {listed(rolesFor(model, shown).map((role) => ROLE_NAMES[role].label))}
+                    </button>
+                  </span>
+                </div>
+              ))}
+
             <div className="card">
               {ROLES.map((role) => (
                 <div key={role} className="srow role" data-changed={changed.includes(role) || undefined}>
@@ -113,6 +150,8 @@ export function StackView({
                     label={`${ROLE_NAMES[role].label} model`}
                     value={shown[role].model}
                     onPick={(model) => seat(role, { model })}
+                    fresh={fresh}
+                    openAt={openPick?.role === role ? openPick.at : 0}
                   />
                   <div className="seg" role="radiogroup" aria-label={`${ROLE_NAMES[role].label} effort`}>
                     {EFFORTS.map((effort) => (
@@ -162,11 +201,15 @@ export function StackView({
             saved={stack}
             candidate={shown}
             trial={trial}
-            onStart={onStartTrial}
+            onStart={(request) => {
+              // A model that has been on trial isn't new any more.
+              onSeeModels(usedIn(request.stack));
+              onStartTrial(request);
+            }}
             onStop={onStopTrial}
           />
 
-          <Watching ledger={ledger} stack={stack} />
+          <Watching ledger={ledger} stack={stack} onTryAnother={(role) => setOpenPick({ role, at: Date.now() })} />
 
           <section className="prices" aria-labelledby="prices-h">
             <h2 id="prices-h">Prices</h2>
@@ -210,8 +253,34 @@ export function StackView({
   );
 }
 
-/** Models in the saved stack that got slower, dearer or worse at their role this week. */
-function Watching({ ledger, stack }: { ledger: LedgerThread[]; stack: Stack }) {
+/**
+ * The roles a new model most likely suits: those on a model of its family, or else those on the model closest
+ * to it in price.
+ */
+export function rolesFor(model: ModelId, stack: Stack): Role[] {
+  const kin = ROLES.filter((role) => familyOf(stack[role].model) === familyOf(model));
+  if (kin.length) return kin;
+  const gap = (role: Role) => Math.abs(MODELS[stack[role].model].output - MODELS[model].output);
+  const nearest = Math.min(...ROLES.map(gap));
+  return ROLES.filter((role) => gap(role) === nearest);
+}
+
+/** "Scout", "Scout and Review", "Plan, Build and Review". */
+function listed(names: string[]): string {
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+}
+
+/** Models in the saved stack that got slower, dearer or worse at their role this week. Each can open its
+ *  role's model list, to put another model on trial. */
+function Watching({
+  ledger,
+  stack,
+  onTryAnother,
+}: {
+  ledger: LedgerThread[];
+  stack: Stack;
+  onTryAnother: (role: Role) => void;
+}) {
   const { compared, regressions } = useMemo(() => watch(ledger, stack, Date.now()), [ledger, stack]);
   if (!compared) return null;
   return (
@@ -234,6 +303,9 @@ function Watching({ ledger, stack }: { ledger: LedgerThread[]; stack: Stack }) {
                 <b>{r.headline}</b>
                 <span className="d">{r.detail}</span>
               </div>
+              <button type="button" className="btn sm" onClick={() => onTryAnother(r.role)}>
+                Try another model
+              </button>
             </div>
           ))}
         </div>

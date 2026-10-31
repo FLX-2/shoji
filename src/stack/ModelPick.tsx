@@ -5,7 +5,7 @@ import { MODELS, type ModelId } from "../../runtime/src/models";
 const FILTER_FROM = 9;
 
 /** A model's family, such as Opus: the first word of its name. */
-const familyOf = (id: ModelId) => MODELS[id].label.split(" ")[0];
+export const familyOf = (id: ModelId) => MODELS[id].label.split(" ")[0];
 
 /**
  * Every model Shoji knows, in families: the family with the dearest model first, and in each family the newest
@@ -31,11 +31,17 @@ export function ModelPick({
   label,
   value,
   onPick,
+  fresh = [],
+  openAt = 0,
 }: {
   /** What the choice is, such as "Plan model". */
   label: string;
   value: ModelId;
   onPick: (model: ModelId) => void;
+  /** Models the list brought that the person hasn't tried or set aside, marked New. */
+  fresh?: ModelId[];
+  /** Opens the list when it changes to a new time, as when Watching suggests another model for this role. */
+  openAt?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
@@ -76,6 +82,15 @@ export function ModelPick({
   }, [open]);
 
   useEffect(() => {
+    if (!openAt) return;
+    setActive(value);
+    setOpen(true);
+    button.current?.scrollIntoView?.({ block: "center" });
+    // Only a new request opens it, never a new pick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openAt]);
+
+  useEffect(() => {
     if (open) list.current?.querySelector(`[data-model="${current}"]`)?.scrollIntoView?.({ block: "nearest" });
   }, [open, current]);
 
@@ -111,7 +126,10 @@ export function ModelPick({
       onClick={() => pick(model)}
       onMouseMove={() => model !== current && setActive(model)}
     >
-      <b>{MODELS[model].label}</b>
+      <b>
+        {MODELS[model].label}
+        {fresh.includes(model) && <i className="new">New</i>}
+      </b>
       <span>{priceLine(model)}</span>
       <svg className="tick" viewBox="0 0 12 12" aria-hidden="true">
         <path d="M2.5 6.5l2.5 2.5 4.5-5.5" />
