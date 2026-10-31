@@ -43,6 +43,10 @@ Options:
   --plan-only         Stop once the plan is written, for the person to build or change
   --build             Build the plan in --plan-file, which the person approved, skipping
                       scout and plan
+  --fresh             With --build, throw away the work in the project first, so the plan
+                      is built again from the start
+  --review            Run the checks and review the work in the project again, against
+                      the plan in --plan-file
   --replan <notes>    Scout and plan again from the plan in --plan-file and the person's
                       notes on it
   --failing-before <command>
@@ -210,6 +214,8 @@ async function main() {
       changes: { type: "string" },
       "plan-only": { type: "boolean", default: false },
       build: { type: "boolean", default: false },
+      fresh: { type: "boolean", default: false },
+      review: { type: "boolean", default: false },
       replan: { type: "string" },
       question: { type: "string" },
       "plan-file": { type: "string" },
@@ -262,11 +268,14 @@ async function main() {
   const continuing = [
     values.changes !== undefined,
     values.build,
+    values.review,
     values.replan !== undefined,
     values.question !== undefined,
   ].filter(Boolean).length;
-  if (continuing > 1) fail("Use one of --changes, --build, --replan and --question.");
-  if (continuing && !values["plan-file"]) fail("--changes, --build, --replan and --question need --plan-file.");
+  if (continuing > 1) fail("Use one of --changes, --build, --review, --replan and --question.");
+  if (continuing && !values["plan-file"])
+    fail("--changes, --build, --review, --replan and --question need --plan-file.");
+  if (values.fresh && !values.build) fail("--fresh goes with --build.");
   const plan = values["plan-file"] ? fs.readFileSync(values["plan-file"], "utf8") : "";
   const changes = values.changes !== undefined ? { notes: values.changes, plan } : undefined;
   const replan = values.replan !== undefined ? { notes: values.replan, plan } : undefined;
@@ -354,6 +363,8 @@ async function main() {
       changes,
       planOnly: values["plan-only"],
       approved: values.build ? plan : undefined,
+      ...(values.fresh && { fresh: true }),
+      ...(values.review && { reviewAgain: { plan } }),
       replan,
       failingBefore: values["failing-before"],
       failingTestsBefore: values["failing-test-before"],

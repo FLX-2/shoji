@@ -31,3 +31,9 @@ export function diffOf(root: string, hidden: (file: string) => boolean = () => f
 export function commitDiff(root: string, commit: string): string {
   return git(root, ["diff", "--no-color", "--no-renames", `${commit}^`, commit, ...NOT_LOCKFILES]).stdout;
 }
+
+/** Throws away everything the thread changed since its last commit, new files too. Ignored files stay. */
+export function discardWork(root: string): void {
+  git(root, ["reset", "--hard", "--quiet", "HEAD"]);
+  git(root, ["clean", "-fd", "--quiet"]);
+}

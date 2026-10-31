@@ -49,9 +49,11 @@ export const isTrial = (thread: LedgerThread) => thread.runs[0]?.kind === "trial
 /** Scout reading a project to write its SHOJI.md. It spends once per project, and isn't work to accept either. */
 export const isNotes = (thread: LedgerThread) => thread.runs[0]?.kind === "notes";
 
+/** A run that redid the work: changes the person asked for, or the plan built again from the start. */
+export const reworked = (run: LedgerThread["runs"][number]) => run.kind === "changes" || run.kind === "rebuild";
+
 /** Accepted without a request for changes. */
-export const firstTry = (thread: LedgerThread) =>
-  accepted(thread) && !thread.runs.some((run) => run.kind === "changes");
+export const firstTry = (thread: LedgerThread) => accepted(thread) && !thread.runs.some(reworked);
 
 /** "2026-10" for the month a thread started in, in local time. */
 export function monthOf(at: number): string {
@@ -225,7 +227,7 @@ export function toCsv(threads: LedgerThread[]): string {
     stackSummary(t.stack),
     outcome(t),
     t.committed ?? "",
-    t.runs.filter((run) => run.kind === "changes").length,
+    t.runs.filter(reworked).length,
     threadSpend(t).toFixed(4),
     oneModelCost(t).toFixed(4),
     modelLabel(baselineModel(t)),

@@ -14,6 +14,7 @@ import {
   outcome,
   projectSpend,
   receipt,
+  reworked,
   summarize,
   threadSpend,
   toCsv,
@@ -330,7 +331,7 @@ function DailyChart({ days, month }: { days: number[]; month: string }) {
 
 function ReceiptPane({ thread }: { thread: LedgerThread }) {
   const r = receipt(thread);
-  const changes = thread.runs.filter((run) => run.kind === "changes").length;
+  const changes = thread.runs.filter(reworked).length;
   return (
     <aside className="rpane" aria-label="Receipt">
       <h2>{threadTitle(thread)}</h2>

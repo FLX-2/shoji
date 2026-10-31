@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RuntimeEvent } from "../../runtime/src/events";
-import { MODELS } from "../../runtime/src/models";
+import { MODELS, type ModelId } from "../../runtime/src/models";
 import type { Stack } from "../../runtime/src/stack";
-import type { Bridge, ChangesRequest, RunExit } from "../bridge";
+import type { Bridge, CarryOn, ChangesRequest, RunExit } from "../bridge";
 import { foldRun, reviewNotes } from "./fold";
 
 /** One ask and the run that answered it: the task itself, or a request for changes. */
@@ -10,7 +10,7 @@ export interface Turn {
   ask: string;
   /** The names of files attached to the ask. */
   attached?: string[];
-  kind: "task" | "changes" | "build" | "replan" | "question";
+  kind: "task" | CarryOn;
   events: RuntimeEvent[];
   /** Set once the run has ended. */
   exit?: RunExit;
@@ -46,6 +46,11 @@ export interface Thread {
   context?: string;
   turns: Turn[];
 }
+
+/** The steps that can be done again on another model. */
+export type Redo = "plan" | "build" | "review";
+
+const PLAN_AGAIN = "Write the plan again from the start, from your own reading of the task and the code.";
 
 export function isRunning(turn: Turn | undefined): boolean {
   return !!turn && !turn.exit && !turn.error;
@@ -232,7 +237,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
 
   /** Carries a held thread on from its latest plan: changes to the work, building the plan, or a new plan. */
   const carryOnHeld = useCallback(
-    (held: Held | undefined, ask: string, notes: string, kind: "changes" | "build" | "replan" | "question", extra = 0) => {
+    (held: Held | undefined, ask: string, notes: string, kind: CarryOn, extra = 0) => {
       if (!held || held.thread.id === undefined) return;
       const { key, thread } = held;
       const results = thread.turns.map((t) => foldRun(t.events).result);
@@ -259,7 +264,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
   );
   /** Carries the thread on show on. */
   const carryOn = useCallback(
-    (ask: string, notes: string, kind: "changes" | "build" | "replan" | "question", extra = 0) =>
+    (ask: string, notes: string, kind: CarryOn, extra = 0) =>
       carryOnHeld(shown, ask, notes, kind, extra),
     [shown, carryOnHeld],
   );
@@ -291,6 +296,21 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
 
   /** Plans again from the person's notes on the plan, and pauses again. */
   const replan = useCallback((notes: string) => carryOn(notes, notes, "replan"), [carryOn]);
+
+  /** Does one step again on another model: plans again, builds the plan again from the start, or reviews the
+   *  work again, with `extra` more to spend. The thread's stack keeps the new model for that role. */
+  const redo = useCallback(
+    (role: Redo, model: ModelId, extra = 0) => {
+      if (!shown) return;
+      const stack = { ...shown.thread.stack, [role]: { ...shown.thread.stack[role], model } };
+      const again = { ...shown, thread: { ...shown.thread, stack } };
+      const label = MODELS[model].label;
+      if (role === "plan") carryOnHeld(again, `Plan it again with ${label}`, PLAN_AGAIN, "replan", extra);
+      else if (role === "build") carryOnHeld(again, `Build it again with ${label}`, "", "rebuild", extra);
+      else carryOnHeld(again, `Review it again with ${label}`, "", "review", extra);
+    },
+    [shown, carryOnHeld],
+  );
 
   /** Asks about the work. The answer changes nothing, so the thread stays where it was. */
   const question = useCallback((text: string) => carryOn(text, text, "question"), [carryOn]);
@@ -382,6 +402,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
     resume,
     build,
     replan,
+    redo,
     question,
     stop,
     answer,
