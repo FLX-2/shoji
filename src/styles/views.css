@@ -275,14 +275,6 @@
   overflow-y: auto;
 }
 
-/* A list beside the view it opens, as Home's projects */
-.split {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 252px minmax(0, 1fr);
-}
-
 .solo {
   flex: 1;
   min-height: 0;
@@ -894,7 +886,7 @@
   gap: 24px;
 }
 
-/* A list of pages beside the page shown, as Settings has */
+/* A list beside what it opens: Settings' pages, Home's projects */
 .split {
   flex: 1;
   min-height: 0;
@@ -2687,8 +2679,10 @@ button.rrow:focus-visible {
   white-space: nowrap;
 }
 
-/* Asking before the daily limit: a small window over a dimmed app. */
-.scrim {
+/* A small window over a dimmed app: asking before the daily limit, and search. It's named under .app so the
+   shell's rule that lifts every layer over the field doesn't pull it back into the page. */
+.scrim,
+.app > .scrim {
   position: fixed;
   inset: 0;
   z-index: 20;
@@ -2696,6 +2690,92 @@ button.rrow:focus-visible {
   place-items: center;
   padding: 16px;
   background: rgba(6, 5, 5, 0.6);
+}
+
+/* Search sits high, where the eye already is. */
+.scrim.top {
+  place-items: start center;
+  padding-top: 96px;
+}
+
+.search {
+  width: min(560px, 100%);
+  max-height: min(460px, 100vh - 140px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: var(--solid2);
+  overflow: hidden;
+}
+
+.search input {
+  all: unset;
+  flex: none;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--hair);
+  font-size: 14px;
+  color: var(--z10);
+}
+
+.search input::placeholder {
+  color: var(--z6);
+}
+
+.search ul {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+}
+
+.search .k {
+  display: block;
+  padding: 10px 10px 4px;
+}
+
+.search [role="option"] {
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 3px;
+}
+
+.search [role="option"][aria-selected="true"] {
+  background: var(--z3);
+}
+
+.search [role="option"] b {
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--z9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search [role="option"][aria-selected="true"] b {
+  color: var(--z10);
+}
+
+.search [role="option"] span {
+  flex: none;
+  max-width: 45%;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--z6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search .none {
+  margin: 0;
+  padding: 18px 16px;
+  font-size: 13px;
+  color: var(--z7);
 }
 
 .ask {
