@@ -52,6 +52,14 @@ export function threadState(thread: LedgerThread, running?: Set<number>): { stat
   return { status, group: groupOf(status) };
 }
 
+/** The threads the list shows, in its order: pinned first, then by group, leaving out archived ones. */
+export function listOrder(threads: LedgerThread[], running?: Set<number>): LedgerThread[] {
+  const shown = threads.filter((t) => !t.archivedAt).map((t) => ({ t, group: threadState(t, running).group }));
+  return GROUPS.flatMap((g) =>
+    shown.filter((x) => (g === "Pinned" ? !!x.t.pinned : !x.t.pinned && x.group === g)).map((x) => x.t),
+  );
+}
+
 interface ThreadListProps {
   threads: LedgerThread[];
   /** The ledger ids of threads with a run going now. A run the ledger never saw end, as when Shoji closed during
@@ -211,7 +219,21 @@ export function ThreadList({
     );
   };
   return (
-    <nav className="tlist" aria-label="Threads">
+    <nav
+      className="tlist"
+      aria-label="Threads"
+      onKeyDown={(e) => {
+        // ↑ and ↓ move between the rows, past the folded groups.
+        const move = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+        const target = e.target as HTMLElement;
+        if (!move || !target.matches(".groups li > button:not(.more)")) return;
+        const rows = [...e.currentTarget.querySelectorAll<HTMLButtonElement>(".groups li > button:not(.more)")];
+        const next = rows[rows.indexOf(target as HTMLButtonElement) + move];
+        if (!next) return;
+        e.preventDefault();
+        next.focus();
+      }}
+    >
       <div className="mh">
         <h2 className="title">Threads</h2>
         {repos.length > 1 && onProject && (

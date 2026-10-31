@@ -15,13 +15,15 @@ import { Field } from "./look/Field";
 import { lookStyle } from "./look/LookRows";
 import { ReceiptsView } from "./receipts/ReceiptsView";
 import { useSchedules } from "./schedule/useSchedules";
-import { usePrefs } from "./settings/prefs";
+import { TEXT_SIZES, usePrefs } from "./settings/prefs";
 import { readMcpServers, SETTINGS_PAGES, type SettingsPage, SettingsView } from "./settings/SettingsView";
 import { SetupView } from "./setup/SetupView";
 import { notesProgress, useNotes } from "./setup/useNotes";
 import { useModelCatalog } from "./stack/catalog";
 import { StackView } from "./stack/StackView";
-import { estimateCost, tierStack, type Tier } from "./stack/tier";
+import { estimateCost, tierStack, TIERS, type Tier } from "./stack/tier";
+import { keyLabel } from "./settings/shortcuts";
+import { SEPARATOR } from "./shell/Menu";
 import { useStack } from "./stack/useStack";
 import { trialProgress, useTrial } from "./stack/useTrial";
 import { Mark } from "./shell/Mark";
@@ -37,7 +39,7 @@ import { foldRun, formatCost } from "./thread/fold";
 import { seenMark, useNotify, useWaitingBadge } from "./thread/notify";
 import { DEFAULT_PREVIEW } from "./thread/PreviewView";
 import { reopen, workThreads } from "./thread/reopen";
-import { threadState } from "./thread/ThreadList";
+import { listOrder, threadState } from "./thread/ThreadList";
 import { AgentsView } from "./agents/AgentsView";
 import { ProjectList } from "./home/ProjectList";
 import { projectsFrom } from "./home/projects";
@@ -335,23 +337,15 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
 
   // Search, from the title bar or Ctrl+K (⌘K on a Mac), anywhere in the app.
   const [searching, setSearching] = useState(false);
+  // The app's own keys, read afresh on each press, since what they do depends on what's on show.
+  const onKey = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!(isMac ? e.metaKey : e.ctrlKey) || e.altKey || e.shiftKey) return;
-      const key = e.key.toLowerCase();
-      if (key === "k") {
-        e.preventDefault();
-        setSearching((open) => !open);
-      } else if (key === "b") {
-        // Hides the thread list, or shows it again, for more room for the thread.
-        e.preventDefault();
-        setPrefs((now) => ({ listHidden: !now.listHidden }));
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const listen = (e: KeyboardEvent) => onKey.current(e);
+    window.addEventListener("keydown", listen);
+    return () => window.removeEventListener("keydown", listen);
   }, []);
   const searchItems = (): SearchItem[] => [
+    ...actionItems(),
     ...pastThreads.map((t) => ({
       id: `thread-${t.id}`,
       group: "Threads",
@@ -453,6 +447,129 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
         start(task, repo, tierStack(stack.stack, tier), prefs.cap, prefs.planFirst, attachments, false, from);
       });
     },
+  };
+
+  useEffect(() => {
+    bridge.setZoom(prefs.textSize).catch(() => {});
+  }, [bridge, prefs.textSize]);
+
+  // The threads in the list's order, for stepping through them from the keyboard.
+  const filtered = prefs.listProject && pastThreads.some((t) => t.repo === prefs.listProject);
+  const order = listOrder(filtered ? pastThreads.filter((t) => t.repo === prefs.listProject) : pastThreads, liveIds);
+  const askingIds = new Set(live.filter((t) => foldRun(t.turns.at(-1)!.events).asking !== undefined).map((t) => t.id));
+  const stepThreads = (by: number, only?: (t: LedgerThread) => boolean) => {
+    const pool = only ? order.filter((t) => only(t) || t.id === thread?.id) : order;
+    const at = pool.findIndex((t) => t.id === thread?.id);
+    const next = at < 0 ? (by > 0 ? pool[0] : pool.at(-1)) : pool[(at + by + pool.length) % pool.length];
+    if (next && next.id !== thread?.id) openRecord(next).catch(failed);
+  };
+  const nextNeedingYou = () =>
+    stepThreads(1, (t) => askingIds.has(t.id) || threadState(t, liveIds).group === "Needs you");
+  const resize = (by: number) =>
+    setPrefs((now) => {
+      const known = TEXT_SIZES.indexOf(now.textSize);
+      const at = known < 0 ? TEXT_SIZES.indexOf(1) : known;
+      return { textSize: TEXT_SIZES[Math.min(Math.max(at + by, 0), TEXT_SIZES.length - 1)] };
+    });
+  const canBuild =
+    !!thread &&
+    !threadRunning &&
+    !thread.committed &&
+    foldRun(thread.turns.at(-1)?.events ?? []).result?.status === "planned";
+  const openShortcuts = () => {
+    setSettingsPage("shortcuts");
+    setSection("settings");
+  };
+
+  onKey.current = (e) => {
+    const mod = isMac ? e.metaKey : e.ctrlKey;
+    if (mod && !e.altKey && ["=", "+", "-", "0"].includes(e.key)) {
+      e.preventDefault();
+      if (e.key === "0") setPrefs({ textSize: 1 });
+      else resize(e.key === "-" ? -1 : 1);
+      return;
+    }
+    if (inSetup) return;
+    if (e.key === "Tab" && e.ctrlKey && !e.altKey && !e.metaKey) {
+      e.preventDefault();
+      stepThreads(e.shiftKey ? -1 : 1);
+      return;
+    }
+    if (e.key === "Escape") {
+      // Esc stops the thread on show, unless it's closing something else or there's writing in the box.
+      const field = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+      const busy = document.querySelector('[role="dialog"], [role="menu"]');
+      if (e.defaultPrevented || busy || (field && (e.target as HTMLInputElement).value !== "")) return;
+      if (section === "threads" && threadRunning) {
+        e.preventDefault();
+        stop();
+      }
+      return;
+    }
+    if (!mod || e.altKey) return;
+    const key = e.key.toLowerCase();
+    if (e.shiftKey) {
+      if (key === "a") {
+        e.preventDefault();
+        nextNeedingYou();
+      }
+      return;
+    }
+    const keys: Record<string, () => void> = {
+      k: () => setSearching((open) => !open),
+      // Hides the thread list, or shows it again, for more room for the thread.
+      b: () => setPrefs((now) => ({ listHidden: !now.listHidden })),
+      n: newTask,
+      ",": () => setSection("settings"),
+      "/": openShortcuts,
+    };
+    if (!keys[key]) return;
+    e.preventDefault();
+    setSearching(false);
+    keys[key]();
+  };
+
+  // What ⌘K can do, besides finding: the actions on show elsewhere, the likeliest first, with their keys.
+  const actionItems = (): SearchItem[] => {
+    const act = (id: string, label: string, run: () => void, keys?: string[], detail?: string): SearchItem => ({
+      id: `act-${id}`,
+      group: "Actions",
+      label,
+      run,
+      ...(keys && { keys: keys.map((k) => keyLabel(k, isMac)) }),
+      ...(detail && { detail }),
+    });
+    const onShow = section === "threads" && thread ? liveTitle(thread) : undefined;
+    const threadActions =
+      onShow && shownRecord
+        ? menuFor(shownRecord).flatMap((item, i) =>
+            item === SEPARATOR || item.confirm || item.disabled
+              ? []
+              : [act(`thread-${i}`, item.label, item.run, item.hint ? [item.hint] : undefined, onShow)],
+          )
+        : [];
+    return [
+      ...(onShow && threadRunning ? [act("stop", "Stop this thread", stop, ["Esc"], onShow)] : []),
+      ...(onShow && canBuild ? [act("build", "Build the plan", build, undefined, onShow)] : []),
+      act("new", "New task", newTask, ["mod", "N"]),
+      act("next", "Next thread that needs you", nextNeedingYou, ["mod", "Shift", "A"]),
+      ...threadActions,
+      act("list", prefs.listHidden ? "Show the thread list" : "Hide the thread list", () =>
+        setPrefs({ listHidden: !prefs.listHidden }), ["mod", "B"]),
+      act(
+        "plan",
+        prefs.planFirst ? "Stop checking the plan first" : "Check the plan first",
+        () => setPrefs({ planFirst: !prefs.planFirst }),
+        undefined,
+        "For new tasks",
+      ),
+      ...(Object.keys(TIERS) as Tier[])
+        .filter((id) => id !== tier)
+        .map((id) => act(`tier-${id}`, `Quality: ${TIERS[id].label}`, () => setTier(id), undefined, "For the next task")),
+      act("bigger", "Larger text", () => resize(1), ["mod", "+"]),
+      act("smaller", "Smaller text", () => resize(-1), ["mod", "-"]),
+      act("shortcuts", "Keyboard shortcuts", openShortcuts, ["mod", "/"]),
+    ];
   };
 
   return (

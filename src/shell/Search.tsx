@@ -7,6 +7,8 @@ export interface SearchItem {
   label: string;
   /** A second, quieter line, such as a thread's status. */
   detail?: string;
+  /** The keys that do the same, shown on the right, so the palette teaches them. */
+  keys?: string[];
   run: () => void;
 }
 
@@ -63,7 +65,7 @@ export function Search({ items, onClose }: SearchProps) {
           aria-controls="search-list"
           aria-activedescendant={found[picked] ? `search-${found[picked].id}` : undefined}
           aria-label="Search threads, projects, views and settings"
-          placeholder="Search threads, projects, views and settings"
+          placeholder="Search, or type what to do"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -93,6 +95,13 @@ export function Search({ items, onClose }: SearchProps) {
                 >
                   <b>{item.label}</b>
                   {item.detail && <span>{item.detail}</span>}
+                  {item.keys && (
+                    <span className="kbds" aria-hidden="true">
+                      {item.keys.map((key) => (
+                        <kbd key={key}>{key}</kbd>
+                      ))}
+                    </span>
+                  )}
                 </div>
               </li>
             ))}
