@@ -1,4 +1,15 @@
-import { Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from "react";
 import type { CheckResult } from "../../runtime/src/events";
 import { MODELS } from "../../runtime/src/models";
 import type { Bridge, Pushed } from "../bridge";
@@ -72,7 +83,14 @@ interface ThreadViewProps {
   onPreviewUrl: (url: string) => void;
 }
 
-type Mode = "conversation" | "code" | "preview" | "terminal";
+/** What opens beside the conversation. */
+type Pane = "code" | "preview" | "terminal";
+
+const PANES: { id: Pane; label: string; key: string }[] = [
+  { id: "code", label: "Code", key: "2" },
+  { id: "preview", label: "Preview", key: "3" },
+  { id: "terminal", label: "Terminal", key: "4" },
+];
 
 const MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 const SHORTCUT = MAC ? "⌘" : "Ctrl+";
@@ -132,13 +150,16 @@ export function ThreadView({
   const { history: historyIn, follow: followIn } = terminals;
   const termHistory = useCallback(() => historyIn(here), [historyIn, here]);
   const termFollow = useCallback((listen: (data: string) => void) => followIn(here, listen), [followIn, here]);
-  // The composer, open for changes to the work or for a question about it.
-  const [asking, setAsking] = useState<false | "changes" | "question">(false);
-  // The project's files and commands, for @ and / in the changes box, read each time it opens.
+  // The composer stays under the conversation: it takes changes to the work or a question about it, and
+  // while a run works it holds what's next and Stop.
+  const [say, setSay] = useState<"changes" | "question">("changes");
+  const talkable = !thread.committed && runs.some((run) => run.result?.plan);
+  const talking = running || talkable;
+  // The project's files and commands, for @ and / in the composer.
   const [files, setFiles] = useState<string[]>([]);
   const [commands, setCommands] = useState<SlashCommand[]>([]);
   useEffect(() => {
-    if (!asking) return;
+    if (!talking) return;
     let current = true;
     bridge.projectFiles(putAway ? thread.repo : place).then(
       (list) => current && setFiles(list),
@@ -151,15 +172,16 @@ export function ThreadView({
     return () => {
       current = false;
     };
-  }, [asking, bridge, place, putAway, thread.repo]);
+  }, [talking, bridge, place, putAway, thread.repo]);
   const scroller = useFollow(thread);
-  const [mode, setMode] = useState<Mode>("conversation");
-  useModeKeys(setMode);
-  // Held here so the chosen file outlives switching to Conversation.
+  // Code, Preview or Terminal, open beside the conversation, or nothing.
+  const [pane, setPane] = useState<Pane | null>(null);
+  usePaneKeys(setPane);
+  // Held here so the chosen file outlives closing Code.
   const [chosenFile, setChosenFile] = useState<string | null>(null);
   // Read the project again whenever a run ends or Code opens.
   const ended = thread.turns.filter((t) => t.exit || t.error).length;
-  const { changes, error, act } = useChanges(bridge, putAway ? null : place, `${ended}-${mode}-${thread.committed}`);
+  const { changes, error, act } = useChanges(bridge, putAway ? null : place, `${ended}-${pane}-${thread.committed}`);
   const fileCount = changes?.files.length ?? 0;
   // Comments on lines of the diff, kept across views until they go to Build.
   const [comments, setComments] = useState<LineComment[]>([]);
@@ -226,271 +248,232 @@ export function ThreadView({
     <section className="thread">
       <div className="tbar solid">
         <h1>{thread.task.split("\n")[0]}</h1>
-        <nav className="modes" aria-label="Views of this thread">
-          <button
-            type="button"
-            className="mode"
-            aria-current={mode === "conversation" ? "page" : undefined}
-            title={`Conversation (${SHORTCUT}1)`}
-            onClick={() => setMode("conversation")}
-          >
-            Conversation
-          </button>
-          <button
-            type="button"
-            className="mode"
-            aria-current={mode === "code" ? "page" : undefined}
-            title={`Code (${SHORTCUT}2)`}
-            onClick={() => setMode("code")}
-          >
-            Code
-            {fileCount > 0 && <span className="cnt">{count(fileCount, "file")}</span>}
-          </button>
-          <button
-            type="button"
-            className="mode"
-            aria-current={mode === "preview" ? "page" : undefined}
-            title={`Preview (${SHORTCUT}3)`}
-            onClick={() => setMode("preview")}
-          >
-            Preview
-          </button>
-          <button
-            type="button"
-            className="mode"
-            aria-current={mode === "terminal" ? "page" : undefined}
-            title={`Terminal (${SHORTCUT}4)`}
-            onClick={() => setMode("terminal")}
-          >
-            Terminal
-          </button>
+        <nav className="modes" aria-label="Beside the conversation">
+          {PANES.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className="mode"
+              aria-pressed={pane === p.id}
+              title={`${pane === p.id ? "Close" : "Open"} ${p.label} beside the conversation (${SHORTCUT}${p.key})`}
+              onClick={() => setPane(pane === p.id ? null : p.id)}
+            >
+              {p.label}
+              {p.id === "code" && fileCount > 0 && <span className="cnt">{count(fileCount, "file")}</span>}
+            </button>
+          ))}
         </nav>
         <div className="tend">
           <span className="stage" data-outcome={outcome}>
             <span className="dot live" aria-hidden="true" />
             {stage}
           </span>
-          {running && (
-            <button type="button" className="btn sm" onClick={onStop} disabled={last.stoppedByYou}>
-              Stop
-            </button>
+        </div>
+      </div>
+
+      <div className="tbody">
+        <div className="convo">
+          <div className="scroll" ref={scroller}>
+            <div className="tcol">
+              {thread.turns.map((turn, i) => (
+                <TurnView
+                  key={i}
+                  turn={turn}
+                  run={runs[i]}
+                  live={running && i === thread.turns.length - 1}
+                  waiting={planned && i === thread.turns.length - 1}
+                />
+              ))}
+            </div>
+          </div>
+
+          {running && lastRun.asking && (
+            <CommandAsk
+              key={lastRun.asking}
+              command={lastRun.asking}
+              tool={!!lastRun.askingTool}
+              step={now ? ROLE_NAMES[now.role].label : undefined}
+              project={fileName(thread.repo)}
+              onAnswer={(allow, always) => onAnswer(lastRun.asking!, allow, always)}
+            />
+          )}
+
+          {!running &&
+            (planned ? (
+              <div className="review">
+                <button type="button" className="btn solid" onClick={onBuild}>
+                  Build it
+                </button>
+                <span className="sum">
+                  {dotted([
+                    showCosts && (
+                      <>
+                        <b>{formatCost(spent)}</b> so far
+                      </>
+                    ),
+                  ])}
+                </span>
+              </div>
+            ) : (
+              <div className="review">
+                {thread.committed ? (
+                  <>
+                    {thread.branch && (
+                      <button
+                        type="button"
+                        className={push && "done" in push ? "btn" : "btn solid"}
+                        onClick={pushBranch}
+                        disabled={!!push && "pushing" in push}
+                      >
+                        {push && "pushing" in push ? "Pushing…" : "Push and open PR"}
+                      </button>
+                    )}
+                    <span className="done">
+                      {push && "done" in push ? (
+                        <>
+                          Pushed {thread.branch} to {push.done.remote}
+                          {!push.done.url && ". Open a pull request for it on your git host"}
+                        </>
+                      ) : (
+                        <>
+                          Committed <b>{thread.committed}</b> on {thread.branch}
+                        </>
+                      )}
+                    </span>
+                    {push && "error" in push && <span className="err">{push.error}</span>}
+                  </>
+                ) : (
+                  <>
+                    {thread.id === undefined && last.error && (
+                      <button type="button" className="btn solid" onClick={onRetry}>
+                        Try again
+                      </button>
+                    )}
+                    {stopped && (
+                      <button type="button" className="btn solid" onClick={onKeepGoing}>
+                        Keep going, up to {formatCost(more)} more
+                      </button>
+                    )}
+                    {fixable && (
+                      <button type="button" className="btn solid" onClick={onFix}>
+                        Fix it, up to {formatCost(more)} more
+                      </button>
+                    )}
+                    {thread.branch && fileCount > 0 && (
+                      <button
+                        type="button"
+                        className={stopped || fixable ? "btn" : "btn solid"}
+                        onClick={commit}
+                        disabled={committing}
+                      >
+                        Accept and commit
+                      </button>
+                    )}
+                    {commitError && <span className="err">{commitError}</span>}
+                  </>
+                )}
+                <span className="sum">
+                  {dotted([
+                    !thread.committed && checksSummary(lastWork.result?.checks),
+                    showCosts && (
+                      <>
+                        <b>{formatCost(spent)}</b> in all
+                      </>
+                    ),
+                    !thread.committed && spent >= thread.cap && `the ${formatCost(thread.cap)} limit is spent`,
+                  ])}
+                </span>
+              </div>
+            ))}
+
+          {talking && (
+            <Composer
+              key={thread.id ?? "new"}
+              label={running ? "What's next" : say === "question" ? "Question" : planned ? "Plan changes" : "Changes"}
+              placeholder={
+                running
+                  ? "Shoji is working. Write what's next, and send it when this run ends."
+                  : say === "question"
+                    ? "Ask about this work. Nothing will change."
+                    : planned
+                      ? "What should the plan do differently?"
+                      : "Describe the changes you want…"
+              }
+              blocked={spent >= thread.cap}
+              onSend={(notes) => (say === "question" ? onQuestion : planned ? onReplan : onRequestChanges)(notes)}
+              files={files}
+              commands={commands}
+              {...(running && { onStop, stopping: last.stoppedByYou })}
+            >
+              {!running && (
+                <div className="seg" role="radiogroup" aria-label="What to send">
+                  <button type="button" role="radio" aria-checked={say === "changes"} onClick={() => setSay("changes")}>
+                    {planned ? "Change the plan" : "Request changes"}
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={say === "question"}
+                    onClick={() => setSay("question")}
+                  >
+                    Ask a question
+                  </button>
+                </div>
+              )}
+            </Composer>
           )}
         </div>
-      </div>
-
-      {mode === "code" && (
-        <CodeView
-          changes={changes}
-          error={error}
-          running={running}
-          chosen={chosenFile}
-          onChoose={setChosenFile}
-          onAccept={(path) => act(bridge.acceptFile(place, path))}
-          onRevert={(path) => act(bridge.revertFile(place, path))}
-          onRead={(path) => bridge.readFile(place, path)}
-          {...(!thread.committed && {
-            onSave: (path: string, text: string) => act(bridge.writeFile(place, path, text)),
-          })}
-          comments={comments}
-          {...(canChange && { onComments: setComments })}
-          onSendComments={() => {
-            onRequestChanges(commentsNote(comments));
-            setComments([]);
-            setMode("conversation");
-          }}
-        />
-      )}
-
-      {mode === "terminal" && (
-        <Suspense fallback={<div className="terminal" />}>
-          <TerminalView
-            session={terminals.sessions[here]}
-            history={termHistory}
-            follow={termFollow}
-            onOpen={(cols, rows) => terminals.open(here, cols, rows)}
-            onInput={(data) => terminals.write(here, data)}
-            onResize={(cols, rows) => terminals.resize(here, cols, rows)}
-            still={still}
-          />
-        </Suspense>
-      )}
-      {mode === "preview" && (
-        <PreviewView
-          url={previewUrl}
-          onUrl={onPreviewUrl}
-          freshness={String(ended)}
-          server={server}
-          command={devCommand}
-          onStartServer={(command) => onStartServer(here, command)}
-          onStopServer={() => onStopServer(here)}
-        />
-      )}
-
-      <div className="scroll" ref={scroller} hidden={mode !== "conversation"}>
-        <div className="tcol">
-          {thread.turns.map((turn, i) => (
-            <TurnView
-              key={i}
-              turn={turn}
-              run={runs[i]}
-              live={running && i === thread.turns.length - 1}
-              waiting={planned && i === thread.turns.length - 1}
-            />
-          ))}
-        </div>
-      </div>
-
-      {mode === "conversation" && running && lastRun.asking && (
-        <CommandAsk
-          key={lastRun.asking}
-          command={lastRun.asking}
-          tool={!!lastRun.askingTool}
-          step={now ? ROLE_NAMES[now.role].label : undefined}
-          project={fileName(thread.repo)}
-          onAnswer={(allow, always) => onAnswer(lastRun.asking!, allow, always)}
-        />
-      )}
-
-      {mode === "conversation" &&
-        !running &&
-        (asking ? (
-          <Composer
-            key={asking}
-            label={asking === "question" ? "Question" : planned ? "Plan changes" : "Changes"}
-            placeholder={
-              asking === "question"
-                ? "Ask about this work. Nothing will change."
-                : planned
-                  ? "What should the plan do differently?"
-                  : "Describe the changes you want…"
-            }
-            autoFocus
-            onCancel={() => setAsking(false)}
-            blocked={spent >= thread.cap}
-            onSend={(notes) => {
-              setAsking(false);
-              (asking === "question" ? onQuestion : planned ? onReplan : onRequestChanges)(notes);
-            }}
-            files={files}
-            commands={commands}
-          />
-        ) : planned ? (
-          <div className="review">
-            <button type="button" className="btn solid" onClick={onBuild}>
-              Build it
-            </button>
-            <button type="button" className="btn" onClick={() => setAsking("changes")} disabled={spent >= thread.cap}>
-              Change the plan
-            </button>
-            <button
-              type="button"
-              className="btn ghost"
-              onClick={() => setAsking("question")}
-              disabled={spent >= thread.cap}
-            >
-              Ask a question
-            </button>
-            <span className="sum">
-              {dotted([
-                showCosts && (
-                  <>
-                    <b>{formatCost(spent)}</b> so far
-                  </>
-                ),
-              ])}
-            </span>
-          </div>
-        ) : (
-          <div className="review">
-            {thread.committed ? (
-              <>
-                {thread.branch && (
-                  <button
-                    type="button"
-                    className={push && "done" in push ? "btn" : "btn solid"}
-                    onClick={pushBranch}
-                    disabled={!!push && "pushing" in push}
-                  >
-                    {push && "pushing" in push ? "Pushing…" : "Push and open PR"}
-                  </button>
-                )}
-                <span className="done">
-                  {push && "done" in push ? (
-                    <>
-                      Pushed {thread.branch} to {push.done.remote}
-                      {!push.done.url && ". Open a pull request for it on your git host"}
-                    </>
-                  ) : (
-                    <>
-                      Committed <b>{thread.committed}</b> on {thread.branch}
-                    </>
-                  )}
-                </span>
-                {push && "error" in push && <span className="err">{push.error}</span>}
-              </>
-            ) : (
-              <>
-                {thread.id === undefined && last.error && (
-                  <button type="button" className="btn solid" onClick={onRetry}>
-                    Try again
-                  </button>
-                )}
-                {stopped && (
-                  <button type="button" className="btn solid" onClick={onKeepGoing}>
-                    Keep going, up to {formatCost(more)} more
-                  </button>
-                )}
-                {fixable && (
-                  <button type="button" className="btn solid" onClick={onFix}>
-                    Fix it, up to {formatCost(more)} more
-                  </button>
-                )}
-                {runs.some((run) => run.result?.plan) && (
-                  <>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => setAsking("changes")}
-                      disabled={spent >= thread.cap}
-                    >
-                      Request changes
-                    </button>
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      onClick={() => setAsking("question")}
-                      disabled={spent >= thread.cap}
-                    >
-                      Ask a question
-                    </button>
-                  </>
-                )}
-                {thread.branch && fileCount > 0 && (
-                  <button
-                    type="button"
-                    className={stopped || fixable ? "btn" : "btn solid"}
-                    onClick={commit}
-                    disabled={committing}
-                  >
-                    Accept and commit
-                  </button>
-                )}
-                {commitError && <span className="err">{commitError}</span>}
-              </>
+        {pane && (
+          <aside className="tpane" aria-label={PANES.find((p) => p.id === pane)!.label}>
+            {pane === "code" && (
+              <CodeView
+                changes={changes}
+                error={error}
+                running={running}
+                chosen={chosenFile}
+                onChoose={setChosenFile}
+                onAccept={(path) => act(bridge.acceptFile(place, path))}
+                onRevert={(path) => act(bridge.revertFile(place, path))}
+                onRead={(path) => bridge.readFile(place, path)}
+                {...(!thread.committed && {
+                  onSave: (path: string, text: string) => act(bridge.writeFile(place, path, text)),
+                })}
+                comments={comments}
+                {...(canChange && { onComments: setComments })}
+                onSendComments={() => {
+                  onRequestChanges(commentsNote(comments));
+                  setComments([]);
+                }}
+              />
             )}
-            <span className="sum">
-              {dotted([
-                !thread.committed && checksSummary(lastWork.result?.checks),
-                showCosts && (
-                  <>
-                    <b>{formatCost(spent)}</b> in all
-                  </>
-                ),
-                !thread.committed && spent >= thread.cap && `the ${formatCost(thread.cap)} limit is spent`,
-              ])}
-            </span>
-          </div>
-        ))}
+
+            {pane === "terminal" && (
+              <Suspense fallback={<div className="terminal" />}>
+                <TerminalView
+                  session={terminals.sessions[here]}
+                  history={termHistory}
+                  follow={termFollow}
+                  onOpen={(cols, rows) => terminals.open(here, cols, rows)}
+                  onInput={(data) => terminals.write(here, data)}
+                  onResize={(cols, rows) => terminals.resize(here, cols, rows)}
+                  still={still}
+                />
+              </Suspense>
+            )}
+            {pane === "preview" && (
+              <PreviewView
+                url={previewUrl}
+                onUrl={onPreviewUrl}
+                freshness={String(ended)}
+                server={server}
+                command={devCommand}
+                onStartServer={(command) => onStartServer(here, command)}
+                onStopServer={() => onStopServer(here)}
+              />
+            )}
+          </aside>
+        )}
+      </div>
     </section>
   );
 }
@@ -801,21 +784,21 @@ function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean 
   return <p className={result?.status === "ready" ? "outcome" : "outcome warn"}>{text}</p>;
 }
 
-/** Ctrl+1, Ctrl+2 and Ctrl+3 (⌘ on a Mac) switch between Conversation, Code and Preview. */
-function useModeKeys(setMode: (mode: Mode) => void) {
+/** Ctrl+2, Ctrl+3 and Ctrl+4 (⌘ on a Mac) open or close Code, Preview and Terminal beside the
+ *  conversation; Ctrl+1 closes whichever is open. */
+function usePaneKeys(setPane: Dispatch<SetStateAction<Pane | null>>) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(MAC ? e.metaKey : e.ctrlKey) || e.altKey || e.shiftKey) return;
-      if (e.key === "1") setMode("conversation");
-      else if (e.key === "2") setMode("code");
-      else if (e.key === "3") setMode("preview");
-      else if (e.key === "4") setMode("terminal");
+      const opened = PANES.find((p) => p.key === e.key)?.id;
+      if (e.key === "1") setPane(null);
+      else if (opened) setPane((open) => (open === opened ? null : opened));
       else return;
       e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [setMode]);
+  }, [setPane]);
 }
 
 /** Keeps the conversation at its end while new work arrives, unless the person scrolled up. */

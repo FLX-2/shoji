@@ -40,7 +40,7 @@ describe("asking about a thread's work", () => {
     fake.emit(result("ready", "1. Price cards yearly."));
     await act(async () => fake.exit(0));
 
-    fireEvent.click(screen.getByRole("button", { name: "Ask a question" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Ask a question" }));
     const box = screen.getByRole("textbox", { name: "Question" });
     fireEvent.change(box, { target: { value: "Does the toggle remember its choice?" } });
     await act(async () => {
@@ -64,6 +64,6 @@ describe("asking about a thread's work", () => {
     expect(screen.getByText("No, it resets on reload.")).toBeTruthy();
     // Still ready to accept, with the same ways on.
     expect(document.querySelector(".tbar .stage")?.textContent).toBe("Ready to accept");
-    expect(screen.getByRole("button", { name: "Request changes" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Request changes" })).toBeTruthy();
   });
 });

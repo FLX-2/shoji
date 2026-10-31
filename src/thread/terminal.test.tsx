@@ -78,8 +78,9 @@ describe("the thread's Terminal", () => {
     expect(fake.calls.typed).toEqual([{ terminal: 1, data: "ls\r" }]);
     await fake.terminalSays(1, "src\r\n");
 
-    // Back from Conversation, the same shell is drawn again with what it printed.
-    await view("Conversation");
+    // Closed and opened again, the same shell is drawn again with what it printed.
+    await view("Terminal");
+    expect(screen.queryByRole("complementary", { name: "Terminal" })).toBeNull();
     await view("Terminal");
     expect(fake.calls.terminals).toHaveLength(1);
     expect(shown().written.join("")).toBe("~/thread $ src\r\n");

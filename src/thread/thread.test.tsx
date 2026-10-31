@@ -186,7 +186,7 @@ describe("a thread in the app", () => {
     expect(screen.getByText("You stopped this thread.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
     // Nothing was planned yet, so there's no work to change.
-    expect(screen.queryByRole("button", { name: "Request changes" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Changes" })).toBeNull();
   });
 
   it("leaves the cost off the review bar when costs are hidden", async () => {
@@ -205,7 +205,7 @@ describe("a thread in the app", () => {
     expect(screen.getByText(/^Ready to accept\. The checks pass/)).toBeTruthy();
     expect(document.querySelector(".review .sum")?.textContent).toBe("1 check passed · $0.12 in all");
 
-    fireEvent.click(screen.getByRole("button", { name: "Request changes" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Request changes" }));
     const notes = screen.getByRole("textbox", { name: "Changes" });
     fireEvent.change(notes, { target: { value: "Make the badge smaller" } });
     await act(async () => {
@@ -220,23 +220,26 @@ describe("a thread in the app", () => {
     expect(screen.getByText("Make the badge smaller").className).toBe("umsg");
   });
 
-  it("closes the Changes box on Escape without sending", async () => {
+  it("keeps the box at the bottom while running, with Stop inside it", async () => {
     const fake = await startThread();
-    fake.emit(running("review", "review", HAIKU), done("review", "review", HAIKU, "VERDICT: APPROVE"));
+    fake.emit(running("build", "build", SONNET));
+    const box = screen.getByRole("textbox", { name: "What's next" });
+    const stop = screen.getByRole("button", { name: "Stop" });
+    expect(stop.closest(".composer")).toBe(box.closest(".composer"));
+    // What's written waits for the run to end: there's nothing to send it with yet.
+    fireEvent.change(box, { target: { value: "Make the badge smaller" } });
+    await act(async () => {
+      fireEvent.keyDown(box, { key: "Enter" });
+    });
+    expect(fake.calls.starts.length).toBe(1);
+
     fake.emit(result("ready", 0.12));
     fake.exit(0);
-
-    fireEvent.click(screen.getByRole("button", { name: "Request changes" }));
+    expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+    // The same box carries on, now for changes, with what was written still in it.
     const notes = screen.getByRole("textbox", { name: "Changes" });
-    fireEvent.change(notes, { target: { value: "Make the badge smaller" } });
-    await act(async () => {
-      fireEvent.keyDown(notes, { key: "Escape" });
-    });
-
-    expect(screen.queryByRole("textbox", { name: "Changes" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Request changes" })).toBeTruthy();
-    expect(fake.calls.starts.length).toBe(1);
-    expect(screen.queryByText("Make the badge smaller")).toBeNull();
+    expect((notes as HTMLTextAreaElement).value).toBe("Make the badge smaller");
+    expect(screen.getByRole("radio", { name: "Request changes" }).getAttribute("aria-checked")).toBe("true");
   });
 
   it("accepts the thread's work as one commit on its branch", async () => {
@@ -265,7 +268,7 @@ describe("a thread in the app", () => {
     expect(document.querySelector(".review")?.textContent).toBe(
       "Push and open PRCommitted a1b2c3d on shoji/thread$0.12 in all",
     );
-    expect(screen.queryByRole("button", { name: "Request changes" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Request changes" })).toBeNull();
     // Nothing is pushed until the person presses the button.
     expect(fake.calls.pushes).toEqual([]);
 
@@ -313,7 +316,7 @@ describe("a thread in the app", () => {
     expect(screen.getByText("The plan").closest("details")?.open).toBe(true);
     expect(screen.queryByRole("button", { name: "Accept and commit" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "Change the plan" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Change the plan" }));
     const notes = screen.getByRole("textbox", { name: "Plan changes" });
     fireEvent.change(notes, { target: { value: "Keep the monthly price visible" } });
     await act(async () => {
@@ -564,7 +567,7 @@ describe("a thread in the app", () => {
     const fake = await startThread();
     fake.exit(2, "The project has uncommitted changes. Commit or stash them, or pass --allow-dirty.");
     expect(screen.getByText(/^The project has uncommitted changes/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Request changes" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "Changes" })).toBeNull();
   });
 });
 

@@ -22,6 +22,10 @@ interface ComposerProps {
   files?: string[];
   /** The commands a task can start with. Typing / first offers them, and a picked one starts the text. */
   commands?: SlashCommand[];
+  /** Set while a run works: Stop takes Send's place, and what's written waits until the run ends. */
+  onStop?: () => void;
+  /** The run was asked to stop and hasn't yet. */
+  stopping?: boolean;
 }
 
 /** One line of the list under the text: a file after @, or a command after a leading /. */
@@ -48,9 +52,11 @@ export function Composer({
   above,
   files,
   commands,
+  onStop,
+  stopping,
 }: ComposerProps) {
   const [text, setText] = useState("");
-  const ready = text.trim() !== "" && !blocked;
+  const ready = text.trim() !== "" && !blocked && !onStop;
   const box = useRef<HTMLTextAreaElement>(null);
   const listId = useId();
   const [caret, setCaret] = useState(0);
@@ -190,11 +196,26 @@ export function Composer({
       {above}
       <div className="row">
         {children}
-        <button type="submit" className="send" aria-label="Send" disabled={!ready}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 19V5M5 12l7-7 7 7" />
-          </svg>
-        </button>
+        {onStop ? (
+          <button
+            type="button"
+            className="send stop"
+            aria-label="Stop"
+            title="Stop this run"
+            onClick={onStop}
+            disabled={stopping}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="7" y="7" width="10" height="10" rx="1.5" />
+            </svg>
+          </button>
+        ) : (
+          <button type="submit" className="send" aria-label="Send" disabled={!ready}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 19V5M5 12l7-7 7 7" />
+            </svg>
+          </button>
+        )}
       </div>
     </form>
   );
