@@ -59,8 +59,8 @@ describe("the Stack view", () => {
   it("shows each role's model and effort, starting from Balanced", async () => {
     await openStack();
     expect(screen.getByText(describeStack(STACKS.balanced))).toBeTruthy();
-    const plan = screen.getByRole("radiogroup", { name: "Plan model" });
-    expect(within(plan).getByRole("radio", { name: "Opus" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("button", { name: "Plan model" }).textContent).toBe("Opus 5.5");
+    expect(screen.getByRole("button", { name: "Build model" }).textContent).toBe("Sonnet 5.5");
     const scout = screen.getByRole("radiogroup", { name: "Scout effort" });
     expect(within(scout).getByRole("radio", { name: "Low" }).getAttribute("aria-checked")).toBe("true");
     expect(screen.getByRole("radio", { name: "Balanced" }).getAttribute("aria-checked")).toBe("true");
@@ -70,9 +70,16 @@ describe("the Stack view", () => {
   it("saves a change to stack.lock only when asked, and the next thread uses it", async () => {
     localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page" }));
     const fake = await openStack();
-    fireEvent.click(
-      within(screen.getByRole("radiogroup", { name: "Review model" })).getByRole("radio", { name: "Sonnet" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Review model" }));
+    const models = screen.getByRole("listbox", { name: "Review model" });
+    expect(
+      within(models)
+        .getByRole("option", { name: /Haiku 5\.5/ })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+    fireEvent.click(within(models).getByRole("option", { name: /Sonnet 5\.5/ }));
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(screen.getByRole("button", { name: "Review model" }).textContent).toBe("Sonnet 5.5");
     fireEvent.click(
       within(screen.getByRole("radiogroup", { name: "Review effort" })).getByRole("radio", { name: "Medium" }),
     );
