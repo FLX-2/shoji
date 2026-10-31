@@ -59,7 +59,7 @@ describe("first-run setup", () => {
     expect(screen.queryByText("A key was found in your shell")).toBeNull();
   });
 
-  it("walks through stack, project and look, saving only what changed", async () => {
+  it("walks through stack and project, saving only what changed", async () => {
     const fake = fakeBridge();
     render(<App bridge={fake.bridge} />);
     // With a key already saved, setup comes from Settings.
@@ -79,10 +79,8 @@ describe("first-run setup", () => {
     await click("Open a folder…");
     expect(prefs().repo).toBe("/work/pricing-page");
     expect(screen.getByRole("button", { name: /pricing-page/ }).getAttribute("aria-pressed")).toBe("true");
-    await click("Continue");
-
-    fireEvent.click(screen.getByRole("switch", { name: "Interface motion" }));
-    expect(prefs().motion).toBe(false);
+    // Look isn't a step; it's in Settings.
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
     await click("Start using Shoji");
     expect(prefs().setupDone).toBe(true);
     expect(screen.queryByRole("region", { name: "Setup" })).toBeNull();

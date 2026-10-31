@@ -74,6 +74,10 @@ export interface Prefs {
   foldedGroups: string[];
   /** How large the whole interface is drawn, 1 being as designed: one of TEXT_SIZES. */
   textSize: number;
+  /** Projects the person removed from the list, with when, by folder. A thread started later brings one back. */
+  hiddenProjects: Record<string, number>;
+  /** First tasks Scout's notes suggested, by project folder. */
+  starters: Record<string, string[]>;
 }
 
 /** The text sizes Look offers, and Ctrl or ⌘ with + and − steps through. */
@@ -109,6 +113,8 @@ export const DEFAULT_PREFS: Prefs = {
   listHidden: false,
   foldedGroups: [],
   textSize: 1,
+  hiddenProjects: {},
+  starters: {},
 };
 
 const STORE = "shoji.prefs";

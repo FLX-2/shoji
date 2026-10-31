@@ -18,6 +18,7 @@ import { commentsNote, type LineComment } from "../code/comments";
 import { useChanges } from "../code/useChanges";
 import { ClipIcon } from "../shell/ClipIcon";
 import { ROLE_NAMES } from "../stack/lock";
+import { TIERS, type Tier } from "../stack/tier";
 import { Composer } from "../shell/Composer";
 import { Menu, under, type MenuEntry } from "../shell/Menu";
 import { Working } from "../shell/Mark";
@@ -67,6 +68,10 @@ interface ThreadViewProps {
   onContinue: () => void;
   /** Builds the plan the person has read. */
   onBuild: () => void;
+  /** The tier the thread's next run takes, or null when its stack is none of them. */
+  tier?: Tier | null;
+  /** Moves the thread's next runs to another tier. */
+  onTier?: (tier: Tier) => void;
   /** Plans again from the person's notes on the plan. */
   onReplan: (notes: string) => void;
   /** Asks about the work; the answer changes nothing. */
@@ -143,6 +148,8 @@ export function ThreadView({
   onResume,
   onContinue,
   onBuild,
+  tier,
+  onTier,
   onReplan,
   onQuestion,
   onCommit,
@@ -562,6 +569,22 @@ export function ThreadView({
                 <button type="button" role="radio" aria-checked={say === "question"} onClick={() => setSay("question")}>
                   Ask a question
                 </button>
+              </div>
+            )}
+            {!running && !thread.committed && onTier && say !== "question" && (
+              <div className="seg tier" role="radiogroup" aria-label="Quality">
+                {(Object.keys(TIERS) as Tier[]).map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={tier === id}
+                    title={`${TIERS[id].does}, from the next run`}
+                    onClick={() => onTier(id)}
+                  >
+                    {TIERS[id].label}
+                  </button>
+                ))}
               </div>
             )}
           </Composer>

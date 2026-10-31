@@ -30,6 +30,12 @@ export function tierStack(stack: Stack, tier: Tier): Stack {
   return stack;
 }
 
+/** Which tier of `base` a thread's stack is, or null when it's none of them, as after the stack changed. */
+export function tierOf(stack: Stack, base: Stack): Tier | null {
+  const same = (a: Stack, b: Stack) => JSON.stringify(a) === JSON.stringify(b);
+  return (["balanced", "draft", "max"] as Tier[]).find((t) => same(stack, tierStack(base, t))) ?? null;
+}
+
 /** Fewer finished tasks than this, and there's nothing honest to estimate from. */
 const LEAST_HISTORY = 3;
 const RECENT = 20;

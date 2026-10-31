@@ -236,8 +236,62 @@
   white-space: nowrap;
 }
 
-.composer .est + .send {
+.composer .est + .send,
+.composer .est + .sends {
   margin-left: 0;
+}
+
+/* Send, with a second way to send joined to its side: the clock that schedules the task instead. */
+.sends {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+
+.sends .send {
+  margin-left: 0;
+}
+
+.sends .also {
+  all: unset;
+  cursor: pointer;
+  box-sizing: border-box;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--hair);
+  border-right: 0;
+  border-radius: 6px 0 0 6px;
+  color: var(--z7);
+}
+
+.sends .also:hover {
+  color: var(--z10);
+}
+
+.sends .also[aria-pressed="true"] {
+  background: var(--z3);
+  color: var(--z10);
+}
+
+.sends .also:focus-visible {
+  outline: 2px solid var(--z10);
+  outline-offset: 2px;
+}
+
+.sends .also svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.sends .also + .send {
+  border-radius: 0 6px 6px 0;
 }
 
 .send {
@@ -4352,4 +4406,17 @@ input.rename {
   padding: 0 5px;
   font-size: 11px;
   color: var(--z7);
+}
+
+/* Starter tasks on a first run, which put their task in the box. */
+.firstrun .starters {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.firstrun .starters .chip {
+  white-space: normal;
+  text-align: left;
 }

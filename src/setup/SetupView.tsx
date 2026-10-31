@@ -3,7 +3,6 @@ import { MODELS } from "../../runtime/src/models";
 import { ROLES, STACKS, type Stack, type StackName } from "../../runtime/src/stack";
 import type { Bridge, KeyStatus } from "../bridge";
 import { folderName } from "../home/HomeView";
-import { AccentRow, BackgroundRow, MotionRow } from "../look/LookRows";
 import { MoneyRow } from "../settings/MoneyRow";
 import type { Prefs } from "../settings/prefs";
 import { Mark } from "../shell/Mark";
@@ -26,9 +25,10 @@ interface SetupViewProps {
   onDone: () => void;
 }
 
-const STEPS = ["Models", "Stack", "Project", "Look"];
+// Look isn't a step: its defaults are calm, and Settings has it for later.
+const STEPS = ["Models", "Stack", "Project"];
 
-/** The first run: connect a model provider, take a starting stack, open a project and pick a look. */
+/** The first run: connect a model provider, take a starting stack and open a project. */
 export function SetupView(props: SetupViewProps) {
   const [step, setStep] = useState(0);
   const [choice, setChoice] = useState(props.stack);
@@ -66,7 +66,6 @@ export function SetupView(props: SetupViewProps) {
             onWriteNotes={props.onWriteNotes}
           />
         )}
-        {step === 4 && <Look prefs={props.prefs} onChange={props.onChange} />}
 
         {step > 0 && (
           <div className="suf">
@@ -77,7 +76,7 @@ export function SetupView(props: SetupViewProps) {
             {step === 1 && (
               <span className="note">{connected ? "Anthropic is connected" : "Connect Anthropic to go on"}</span>
             )}
-            {step < 4 ? (
+            {step < STEPS.length ? (
               <button type="button" className="btn solid" disabled={step === 1 && !connected} onClick={next}>
                 Continue
               </button>
@@ -445,22 +444,6 @@ function NotesRow({
           </span>
         </div>
         {action}
-      </div>
-    </div>
-  );
-}
-
-function Look({ prefs, onChange }: { prefs: Prefs; onChange: (change: Partial<Prefs>) => void }) {
-  return (
-    <div className="sup">
-      <div className="suhd">
-        <h2>Make it yours</h2>
-        <p>Changes apply as you pick. All of it can be changed later in Settings.</p>
-      </div>
-      <div className="card">
-        <BackgroundRow prefs={prefs} onChange={onChange} />
-        <MotionRow prefs={prefs} onChange={onChange} />
-        <AccentRow prefs={prefs} onChange={onChange} />
       </div>
     </div>
   );
