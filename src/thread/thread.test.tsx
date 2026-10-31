@@ -155,6 +155,9 @@ describe("a thread in the app", () => {
     expect(steps[0].textContent).toContain("Haiku");
     expect(steps[1].textContent).toContain("Planning the change");
     expect(steps[1].textContent).toContain("Opus");
+    // Only the step being worked on carries the working mark.
+    expect(steps[1].querySelector(".c .working")).toBeTruthy();
+    expect(steps[0].querySelector(".working")).toBeNull();
     expect(document.querySelector(".stage")?.textContent).toContain("Planning the change · Opus 5.5");
   });
 
