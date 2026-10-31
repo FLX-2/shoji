@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MODELS } from "../runtime/src/models";
 import { LimitAsk, type Ask } from "./budget/LimitAsk";
 import { spentOn } from "./budget/daily";
 import {
@@ -64,6 +65,10 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("look");
   const [prefs, setPrefs] = usePrefs();
   const catalog = useModelCatalog(prefs.updateModels);
+  // The models there at first are known ones; only a model the list brings later is new.
+  useEffect(() => {
+    if (!prefs.seenModels) setPrefs({ seenModels: Object.keys(MODELS) });
+  }, [prefs.seenModels, setPrefs]);
   // The project's files, for @ in the task box, read again when the project changes. Threads work in their
   // own copies, so the project itself only changes in the person's hands.
   const [projectFiles, setProjectFiles] = useState<string[]>([]);
@@ -544,6 +549,10 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 error={stack.error}
                 onSave={stack.save}
                 ledger={ledger}
+                seenModels={prefs.seenModels ?? Object.keys(MODELS)}
+                onSeeModels={(models) =>
+                  setPrefs({ seenModels: [...new Set([...(prefs.seenModels ?? Object.keys(MODELS)), ...models])] })
+                }
               />
             ) : section === "threads" && (thread || pastThreads.length > 0 || prefs.schedules.length > 0) ? (
               <div className="threads">

@@ -2627,6 +2627,63 @@ button.rrow:focus-visible {
   }
 }
 
+/* A model the list brought that nobody has tried: dashed, like anything Shoji found but hasn't been taken up. */
+.worth {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px 14px;
+  align-items: center;
+  padding: 10px 12px 10px 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+}
+
+.worth p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--z8);
+}
+
+.worth p b {
+  font-weight: 500;
+  color: var(--z10);
+}
+
+.worth .acts {
+  display: flex;
+  gap: 8px;
+}
+
+.worth .tag,
+.mlist .new {
+  padding: 1px 6px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 400;
+  color: var(--z8);
+  white-space: nowrap;
+}
+
+.mlist .new {
+  margin-left: 8px;
+  font-size: 10.5px;
+  color: var(--z7);
+}
+
+@media (max-width: 1220px) {
+  .worth {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+
+  /* Not now's text lines up with the sentence above it. */
+  .worth .acts {
+    margin-left: -10px;
+  }
+}
+
 .savebar {
   display: flex;
   flex-wrap: wrap;
@@ -2728,9 +2785,13 @@ button.rrow:focus-visible {
 }
 
 .srow.watch {
-  grid-template-columns: 16px minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: start;
+}
+
+.srow.watch .btn {
+  align-self: center;
 }
 
 .srow.watch svg {
