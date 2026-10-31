@@ -31,6 +31,9 @@ import { SECTIONS, type SectionId } from "./shell/sections";
 import { formatCost } from "./thread/fold";
 import { DEFAULT_PREVIEW } from "./thread/PreviewView";
 import { reopen, workThreads } from "./thread/reopen";
+import { threadState } from "./thread/ThreadList";
+import { ProjectList } from "./home/ProjectList";
+import { projectsFrom } from "./home/projects";
 import { ThreadList } from "./thread/ThreadList";
 import { ThreadView } from "./thread/ThreadView";
 import { isRunning, threadCost, useThreads } from "./thread/useThread";
@@ -138,7 +141,8 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     // Read again on a commit or on opening Threads too, so each thread shows where it got to.
   }, [bridge, activity, trialRunning, notesRunning, section]);
   const pastThreads = useMemo(() => workThreads(ledger), [ledger]);
-  const liveIds = new Set(live.flatMap((t) => (t.id === undefined ? [] : [t.id])));
+  const liveIdsKey = live.map((t) => t.id).join();
+  const liveIds = useMemo(() => new Set(live.flatMap((t) => (t.id === undefined ? [] : [t.id]))), [liveIdsKey]);
   // And the project's commands, for / at the start of a task.
   const [projectCommands, setProjectCommands] = useState<SlashCommand[]>([]);
   useEffect(() => {
@@ -193,6 +197,21 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   );
 
   const [startProblem, setStartProblem] = useState<string | null>(null);
+  const openRecord = async (record: LedgerThread) => {
+    if (!showId(record.id)) open(await reopen(bridge, record, prefs.cap));
+    setSection("threads");
+  };
+  const projects = useMemo(() => projectsFrom(pastThreads, liveIds, prefs.repo), [pastThreads, liveIdsKey, prefs.repo]);
+  const recent = useMemo(
+    () =>
+      pastThreads
+        .filter((t) => t.repo === prefs.repo)
+        .map((thread) => ({ thread, ...threadState(thread, liveIds) }))
+        .filter((t) => t.group !== "Earlier")
+        .slice(0, 3),
+    [pastThreads, liveIdsKey, prefs.repo],
+  );
+
   const pickProject = async () => {
     const repo = await bridge.pickProject();
     if (repo) {
@@ -257,55 +276,71 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
           <Rail current={section} onSelect={setSection} />
           <main className="main">
             {section === "home" ? (
-              <HomeView
-                repo={prefs.repo}
-                hasKey={hasKey}
-                onPickProject={pickProject}
-                onOpenSettings={() => {
-                  setSettingsPage("models");
-                  setSection("settings");
-                }}
-                problem={startProblem}
-                planFirst={prefs.planFirst}
-                onTogglePlanFirst={() => setPrefs({ planFirst: !prefs.planFirst })}
-                tier={tier}
-                onTier={setTier}
-                estimate={estimate}
-                onPickAttachments={() => bridge.pickAttachments()}
-                onSavePasted={async (image) =>
-                  bridge.saveAttachment(
-                    image.name || "pasted.png",
-                    Array.from(new Uint8Array(await image.arrayBuffer())),
-                  )
-                }
-                files={projectFiles}
-                commands={projectCommands}
-                onSchedule={(task, when) => {
-                  if (!prefs.repo) return;
-                  const schedule = {
-                    id: crypto.randomUUID(),
-                    task,
-                    repo: prefs.repo,
-                    tier,
-                    created: Date.now(),
-                    ...when,
-                  };
-                  setPrefs({ schedules: [...prefs.schedules, schedule] });
-                  setSection("threads");
-                }}
-                onStart={async (task, attachments) => {
-                  const repo = prefs.repo;
-                  if (!repo) return false;
-                  // Checked here so the task stays in the composer while the person sorts the folder out.
-                  const problem = await folderProblem(bridge, repo);
-                  setStartProblem(problem);
-                  if (problem) return false;
-                  return withinDay("This thread", prefs.cap, () => {
+              <div className={projects.length > 1 ? "split" : "solo"}>
+                {projects.length > 1 && (
+                  <ProjectList
+                    projects={projects}
+                    open={prefs.repo}
+                    onOpen={(repo) => {
+                      setPrefs({ repo });
+                      setStartProblem(null);
+                    }}
+                    onAdd={pickProject}
+                  />
+                )}
+                <HomeView
+                  repo={prefs.repo}
+                  hasKey={hasKey}
+                  onPickProject={pickProject}
+                  onOpenSettings={() => {
+                    setSettingsPage("models");
+                    setSection("settings");
+                  }}
+                  problem={startProblem}
+                  planFirst={prefs.planFirst}
+                  onTogglePlanFirst={() => setPrefs({ planFirst: !prefs.planFirst })}
+                  tier={tier}
+                  onTier={setTier}
+                  estimate={estimate}
+                  onPickAttachments={() => bridge.pickAttachments()}
+                  onSavePasted={async (image) =>
+                    bridge.saveAttachment(
+                      image.name || "pasted.png",
+                      Array.from(new Uint8Array(await image.arrayBuffer())),
+                    )
+                  }
+                  files={projectFiles}
+                  commands={projectCommands}
+                  recent={recent}
+                  onOpenThread={openRecord}
+                  showCosts={prefs.showCosts}
+                  onSchedule={(task, when) => {
+                    if (!prefs.repo) return;
+                    const schedule = {
+                      id: crypto.randomUUID(),
+                      task,
+                      repo: prefs.repo,
+                      tier,
+                      created: Date.now(),
+                      ...when,
+                    };
+                    setPrefs({ schedules: [...prefs.schedules, schedule] });
                     setSection("threads");
-                    start(task, repo, tierStack(stack.stack, tier), prefs.cap, prefs.planFirst, attachments);
-                  });
-                }}
-              />
+                  }}
+                  onStart={async (task, attachments) => {
+                    const repo = prefs.repo;
+                    if (!repo) return false;
+                    // Checked here so the task stays in the composer while the person sorts the folder out.
+                    const problem = await folderProblem(bridge, repo);
+                    setStartProblem(problem);
+                    if (problem) return false;
+                    return withinDay("This thread", prefs.cap, () => {
+                      setSection("threads");
+                      start(task, repo, tierStack(stack.stack, tier), prefs.cap, prefs.planFirst, attachments);
+                    });
+                  }}
+                />
+              </div>
             ) : section === "receipts" ? (
               <ReceiptsView bridge={bridge} />
             ) : section === "stack" ? (
@@ -339,9 +374,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     running={liveIds}
                     current={thread?.id}
                     showCosts={prefs.showCosts}
-                    onOpen={async (record) => {
-                      if (!showId(record.id)) open(await reopen(bridge, record, prefs.cap));
-                    }}
+                    onOpen={openRecord}
                     onNew={() => setSection("home")}
                   />
                 )}

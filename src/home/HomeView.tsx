@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { LedgerThread } from "../bridge";
 import { REPEATS, type Repeat, type Schedule } from "../schedule/schedule";
 import { ClipIcon } from "../shell/ClipIcon";
 import { Composer } from "../shell/Composer";
@@ -34,6 +35,10 @@ interface HomeViewProps {
   files: string[];
   /** The commands a task can start with, after a /. */
   commands: SlashCommand[];
+  /** The project's threads that are running or wait for the person, latest first. */
+  recent?: { thread: LedgerThread; status: string }[];
+  onOpenThread?: (thread: LedgerThread) => void;
+  showCosts?: boolean;
 }
 
 /** Start: pick a project and describe a change. */
@@ -54,6 +59,9 @@ export function HomeView({
   onSchedule,
   files,
   commands,
+  recent = [],
+  onOpenThread = () => {},
+  showCosts = true,
 }: HomeViewProps) {
   const [attached, setAttached] = useState<string[]>([]);
   const [attachProblem, setAttachProblem] = useState<string | null>(null);
@@ -229,6 +237,34 @@ export function HomeView({
         ) : !repo ? (
           <p className="hint">Choose a project folder. It must be a git repository.</p>
         ) : null}
+        {recent.length > 0 && (
+          <section className="recent" aria-labelledby="recent-h">
+            <h2 id="recent-h" className="k">
+              Pick up where you left off
+            </h2>
+            <ul>
+              {recent.map(({ thread, status }) => {
+                const cost = thread.runs.reduce((sum, run) => sum + run.calls.reduce((s, c) => s + c.cost, 0), 0);
+                return (
+                  <li key={thread.id}>
+                    <button type="button" onClick={() => onOpenThread(thread)}>
+                      <b>{thread.task.split("\n")[0]}</b>
+                      <span className="meta">
+                        <span
+                          className={status === "Running" ? "dot" : "dot ok"}
+                          data-running={status === "Running" || undefined}
+                          aria-hidden="true"
+                        />
+                        <span>{status}</span>
+                        {showCosts && cost > 0 && <span>{formatCost(cost)}</span>}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
       </div>
     </div>
   );
