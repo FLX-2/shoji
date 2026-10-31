@@ -616,6 +616,7 @@ describe("settings", () => {
   it("lets the limit be typed a character at a time and keeps only a positive amount", async () => {
     render(<App bridge={fakeBridge().bridge} />);
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Spending" }));
     const limit = screen.getByRole("spinbutton", { name: /Limit per thread/ }) as HTMLInputElement;
     for (const typed of ["", "0", "0.0", "0.03"]) fireEvent.change(limit, { target: { value: typed } });
     expect(limit.value).toBe("0.03");
