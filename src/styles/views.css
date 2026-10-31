@@ -631,14 +631,99 @@
 }
 
 .st.now .c::before {
-  border: none;
-  background: var(--safe);
-  box-shadow:
-    0 0 0 3px rgba(var(--safe-rgb), 0.18),
-    0 0 10px var(--safe);
+  display: none;
 }
 
-.st .c svg {
+/* The working mark: the Shoji mark's two panels slide shut over each other and open again, and the
+   safelight shows where they overlap. With motion off it rests in the mark's own pose. */
+.working {
+  width: 16px;
+  height: 14px;
+  overflow: visible;
+}
+
+.working rect {
+  fill: var(--z5);
+}
+
+.working .po {
+  fill: var(--safe);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.working .pa,
+.working .pb,
+.working .po {
+  animation: 2.4s var(--e-move) infinite;
+}
+
+.working .pa {
+  animation-name: working-a;
+}
+
+.working .pb {
+  animation-name: working-b;
+}
+
+.working .po {
+  animation-name: working-o;
+}
+
+/* Rest in the mark's pose, slide most of the way shut, and open again. They never close all the way,
+   so the mark keeps its shape and the red stays a band between the panels. */
+@keyframes working-a {
+  0%,
+  15%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(2px);
+  }
+  85% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes working-b {
+  0%,
+  15%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-2px);
+  }
+  85% {
+    transform: translateX(0);
+  }
+}
+
+/* The overlap grows from 4 wide to 8 as the panels close. */
+@keyframes working-o {
+  0%,
+  15%,
+  100% {
+    transform: scaleX(1);
+  }
+  50% {
+    transform: scaleX(2);
+  }
+  85% {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .working .pa,
+  .working .pb,
+  .working .po {
+    animation: none;
+  }
+}
+
+.st .c .tick {
   width: 12px;
   height: 12px;
   fill: none;

@@ -19,6 +19,7 @@ import { useChanges } from "../code/useChanges";
 import { ClipIcon } from "../shell/ClipIcon";
 import { ROLE_NAMES } from "../stack/lock";
 import { Composer } from "../shell/Composer";
+import { Working } from "../shell/Mark";
 import type { SlashCommand } from "../shell/mention";
 import {
   approves,
@@ -578,8 +579,9 @@ function StepRow({
   return (
     <li className={now ? "st now" : finished ? "st done" : "st"}>
       <span className="c" aria-hidden="true">
+        {now && <Working />}
         {finished && (
-          <svg viewBox="0 0 12 12">
+          <svg className="tick" viewBox="0 0 12 12">
             <path d="M2.5 6.5l2.5 2.5 4.5-5.5" />
           </svg>
         )}
