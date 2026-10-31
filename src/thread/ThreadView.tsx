@@ -9,6 +9,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react";
+import type { ComparedPage } from "../../runtime/src/compare";
 import type { CheckResult } from "../../runtime/src/events";
 import { MODELS } from "../../runtime/src/models";
 import type { Bridge, Pushed } from "../bridge";
@@ -243,6 +244,27 @@ export function ThreadView({
   };
   useOnRise(liveEdits.length, () => follow("code", liveEdits[liveEdits.length - 1]));
   useOnRise(liveLooks, () => follow("preview"));
+  // The before and after a run made of the pages it changed: the last work's, unless the person opened an
+  // earlier turn's. A new turn starts from the last work again.
+  const [compareAsk, setCompareAsk] = useState<{ turn: number; page: number; at: number } | null>(null);
+  useEffect(() => setCompareAsk(null), [turnCount]);
+  const compareRun = runs[compareAsk?.turn ?? workAt];
+  const compare =
+    compareRun?.compare && !compareRun.compare.running && compareRun.compare.pages.length
+      ? compareRun.compare
+      : undefined;
+  const openCompare = (turn: number, page: number) => {
+    setCompareAsk({ turn, page, at: Date.now() });
+    changePanel({ open: true, tab: "preview" });
+  };
+  // A comparison that just arrived shows by itself, on Preview: opening the panel when it's closed, or in it
+  // when it's already on Preview. Another tab is left alone.
+  const compared = running && lastRun.compare && !lastRun.compare.running ? lastRun.compare.pages.length : 0;
+  useOnRise(compared, () => {
+    if (!autoPanel || closedIn.current === turnCount || (panel.open && panel.tab !== "preview")) return;
+    setCompareAsk({ turn: turnCount - 1, page: 0, at: Date.now() });
+    setPanel({ open: true, tab: "preview" });
+  });
   // A preview starting is something the person asked for, so it shows even over another tab.
   useOnRise(server?.url && serverRunning(server) ? 1 : 0, () => autoPanel && setPanel({ open: true, tab: "preview" }));
   // Read the project again whenever a run ends or edits a file, or Code opens.
@@ -311,6 +333,8 @@ export function ThreadView({
   const stage = running ? (
     lastRun.asking ? (
       "Waiting for you"
+    ) : lastRun.compare?.running ? (
+      "Comparing the pages before and after"
     ) : now ? (
       <>
         {stepLabel(lastRun.steps, lastRun.steps.indexOf(now))}
@@ -318,6 +342,8 @@ export function ThreadView({
       </>
     ) : last.stoppedByYou ? (
       "Stopping"
+    ) : lastRun.result ? (
+      STATUS[lastRun.result.status]
     ) : (
       "Starting"
     )
@@ -376,6 +402,7 @@ export function ThreadView({
                 live={running && i === thread.turns.length - 1}
                 waiting={planned && i === thread.turns.length - 1}
                 onOpenFile={openFile}
+                onCompare={(page) => openCompare(i, page)}
               />
             ))}
           </div>
@@ -627,6 +654,9 @@ export function ThreadView({
                 command={devCommand}
                 onStartServer={(command) => onStartServer(here, command)}
                 onStopServer={() => onStopServer(here)}
+                compare={compare}
+                compareAsk={compareAsk}
+                readShot={bridge.readShot}
               />
             )}
           </div>
@@ -688,6 +718,7 @@ function TurnView({
   live,
   waiting,
   onOpenFile,
+  onCompare,
 }: {
   turn: Turn;
   run: RunView;
@@ -695,6 +726,8 @@ function TurnView({
   waiting: boolean;
   /** Opens the side panel on Code, at this file. */
   onOpenFile: (path: string) => void;
+  /** Opens the side panel on Preview, comparing this run's page before and after. */
+  onCompare: (page: number) => void;
 }) {
   return (
     <>
@@ -718,6 +751,9 @@ function TurnView({
               {run.steps.map((_, i) => (
                 <StepRow key={i} steps={run.steps} index={i} live={live} showPlan={waiting} onOpenFile={onOpenFile} />
               ))}
+              {run.compare && (live || !run.compare.running) && (
+                <CompareRow compare={run.compare} live={live} onCompare={onCompare} />
+              )}
             </ol>
           )}
           {run.unreached?.map((u) => (
@@ -777,6 +813,62 @@ function StepRow({
       </div>
     </li>
   );
+}
+
+/** The step after the work: the pages Build looked at, before and after, which calls no model. */
+function CompareRow({
+  compare,
+  live,
+  onCompare,
+}: {
+  compare: NonNullable<RunView["compare"]>;
+  live: boolean;
+  onCompare: (page: number) => void;
+}) {
+  const now = live && compare.running;
+  const widths = (page: ComparedPage) => listed(page.shots.filter((s) => s.before || s.after).map((s) => `${s.width}`));
+  return (
+    <li className={now ? "st now" : "st done"}>
+      <span className="c" aria-hidden="true">
+        {now ? (
+          <Working />
+        ) : (
+          <svg className="tick" viewBox="0 0 12 12">
+            <path d="M2.5 6.5l2.5 2.5 4.5-5.5" />
+          </svg>
+        )}
+      </span>
+      <div className="sb">
+        <div className="sl">{now ? "Comparing the pages before and after" : "Compared the pages before and after"}</div>
+        {compare.problem && <p className="esc">{compare.problem}</p>}
+        {!now && compare.pages.some((p) => widths(p)) && (
+          <div className="work">
+            {compare.pages.map(
+              (page, i) =>
+                widths(page) && (
+                  <button key={page.path} type="button" className="wk wkbtn" onClick={() => onCompare(i)}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d={ICONS.compare} />
+                    </svg>
+                    <span>
+                      {page.path} at {widths(page)} px
+                    </span>
+                    <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M9 6l6 6-6 6" />
+                    </svg>
+                  </button>
+                ),
+            )}
+          </div>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/** "360", "360 and 768", "360, 768 and 1280". */
+function listed(items: string[]): string {
+  return items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}` : (items[0] ?? "");
 }
 
 const READS = new Set(["read_file", "list_files", "search"]);
@@ -1072,4 +1164,5 @@ const ICONS = {
   edit: "M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4",
   term: "M4 17l6-6-6-6M12 19h8",
   note: "M5 4h14v16H5zM9 9h6M9 13h6M9 17h3",
+  compare: "M4 5h16v14H4zM12 3v18",
 };
