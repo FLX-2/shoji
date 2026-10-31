@@ -105,6 +105,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     resume,
     build,
     replan,
+    redo,
     question,
     stop,
     answer,
@@ -913,6 +914,9 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     })}
                     onTier={(t) => thread.id !== undefined && patch(thread.id, { stack: tierStack(stack.stack, t) })}
                     onReplan={replan}
+                    onRedo={(role, model) =>
+                      withinDay("Doing this step again", prefs.cap, () => redo(role, model, prefs.cap))
+                    }
                     onQuestion={question}
                     onCommit={commit}
                     onPush={() => bridge.pushThread(thread.repo, thread.branch!)}

@@ -2,7 +2,7 @@ import { MAX_TOKENS, OUT_OF_TURNS, runAgent, textOf } from "./agent";
 import { type Attachments, withAttachments } from "./attachments";
 import { runChecks } from "./commands";
 import type { CheckResult, Emit, ThreadResult } from "./events";
-import { diffOf } from "./git";
+import { diffOf, discardWork } from "./git";
 import { projectInstructions, projectNotes } from "./instructions";
 import { BudgetExceeded, Meter, RefusedError } from "./meter";
 import * as prompts from "./prompts";
@@ -36,6 +36,10 @@ export interface ThreadInput {
   approved?: string;
   /** The person's notes on an earlier plan, which the planner writes a new one from. */
   replan?: { plan: string; notes: string };
+  /** With `approved`: throw the work in the project away first, so the plan is built again from the start. */
+  fresh?: boolean;
+  /** Only run the checks and review the work already in the project again, against this plan. */
+  reviewAgain?: { plan: string };
   /** Checks that failed before the thread's first build. A changes run can't see the project as it
    *  was, so it's told. */
   failingBefore?: string[];
@@ -148,7 +152,44 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   ];
   const lookingTools = [...READ_TOOLS, ...skills.tools, ...mcp.readOnly];
 
+  const asked = changes
+    ? `\n\nThe work so far is already in the project. The person asked for these changes:\n${changes.notes}`
+    : "";
+  // With `recheck`, the checks run again inside the review step, as a review on its own does.
+  const review = (recheck = false) =>
+    step("review", "review", stack.review, async () => {
+      if (recheck) check("review");
+      return textOf(
+        await meter.send("review", "review", {
+          model: stack.review.model,
+          effort: stack.review.effort,
+          system: prompts.REVIEW,
+          messages: [
+            {
+              role: "user",
+              content: withAttachments(
+                reviewPrompt(
+                  task + asked + guide,
+                  diffOf(workspace.root, (file) => workspace.isPrivate(file)),
+                  state.checks,
+                ),
+                input.attachments,
+              ),
+            },
+          ],
+          maxTokens: MAX_TOKENS,
+        }),
+      );
+    });
+
   try {
+    if (input.reviewAgain) {
+      state.plan = input.reviewAgain.plan;
+      state.review = await review(true);
+      const passing = state.checks.every((c) => c.ok || c.failedBefore);
+      return finish(passing && approves(state.review) ? "ready" : "needs-work");
+    }
+    if (approved && input.fresh) discardWork(workspace.root);
     state.plan = changes ? changes.plan : (approved ?? (await planFor()));
     if (input.planOnly) return finish("planned");
     if (!changes) {
@@ -162,9 +203,6 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
             ? `\n\nThese checks already failed before any change, so leave their failures alone unless the task is about them: ${[...failingBefore].join(", ")}`
             : ""
         }`
-      : "";
-    const asked = changes
-      ? `\n\nThe work so far is already in the project. The person asked for these changes:\n${changes.notes}`
       : "";
     const buildPrompt = `Task: ${task}${guide}${skills.note}\n\nPlan:\n${state.plan}${commandsNote}${asked}`;
     const buildStep = changes ? "changes" : "build";
@@ -211,31 +249,6 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
       fixRounds++;
       passing = check("fix-2");
     }
-
-    const review = () =>
-      step("review", "review", stack.review, async () =>
-        textOf(
-          await meter.send("review", "review", {
-            model: stack.review.model,
-            effort: stack.review.effort,
-            system: prompts.REVIEW,
-            messages: [
-              {
-                role: "user",
-                content: withAttachments(
-                  reviewPrompt(
-                    task + asked + guide,
-                    diffOf(workspace.root, (file) => workspace.isPrivate(file)),
-                    state.checks,
-                  ),
-                  input.attachments,
-                ),
-              },
-            ],
-            maxTokens: MAX_TOKENS,
-          }),
-        ),
-      );
 
     state.review = await review();
     if (!approves(state.review) && fixRounds < 2) {

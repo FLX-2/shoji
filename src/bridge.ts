@@ -43,6 +43,10 @@ export interface RunRequest {
   from?: string;
 }
 
+/** How a run carries a thread on: changes to the work, building the plan or building it again from the start,
+ *  reviewing the work again, a new plan, or a question. */
+export type CarryOn = "changes" | "build" | "rebuild" | "review" | "replan" | "question";
+
 export interface ChangesRequest {
   /** The thread's id in the ledger. */
   thread: number;
@@ -50,7 +54,7 @@ export interface ChangesRequest {
   plan: string;
   branch: string;
   /** Changes to the work (the default), building an approved plan, or planning again from notes on it. */
-  kind?: "changes" | "build" | "replan" | "question";
+  kind?: CarryOn;
   /** Checks that failed before the thread's first build, which these changes leave alone. */
   failingBefore?: string[];
   /** The failures those checks named then, so a new one inside them still counts. */
@@ -178,7 +182,7 @@ export interface LedgerThread {
 
 export interface LedgerRun {
   id: number;
-  kind: "task" | "changes" | "build" | "replan" | "question" | "trial" | "notes";
+  kind: "task" | CarryOn | "trial" | "notes";
   startedAt: number;
   /** How the run ended; null while it's going. */
   status: "ready" | "needs-work" | "stopped" | "failed" | "planned" | "answered" | null;

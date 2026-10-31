@@ -11,6 +11,8 @@ const ASKED: Record<Turn["kind"], string> = {
   task: "",
   changes: "Changes",
   build: "Build it",
+  rebuild: "Build it again",
+  review: "Review it again",
   replan: "Plan again",
   question: "Question",
 };

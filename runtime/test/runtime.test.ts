@@ -243,6 +243,42 @@ describe("thread pipeline", () => {
     expect(JSON.stringify(building.requests[0].messages)).toContain("exactly as approved");
   });
 
+  it("builds the approved plan again from nothing, and reviews the work again on its own", async () => {
+    const root = tempRepo({ "src/hello.js": "export default 'hello';\n" });
+    const go = (provider: ModelProvider, extra: object, emit: (e: RuntimeEvent) => void = () => {}) =>
+      runThread({
+        task: "Make the greeting say hello to Shoji.",
+        stack: STACKS.balanced,
+        provider,
+        workspace: new Workspace(root),
+        checks: [CHECK],
+        cap: 1,
+        emit,
+        ...extra,
+      });
+    await go(team(() => true), { approved: "Say hello to Shoji." });
+    fs.writeFileSync(path.join(root, "stray.txt"), "left over from the first build");
+    fs.writeFileSync(path.join(root, "src/hello.js"), "export default 'hello, shoji, half done';\n");
+
+    const rebuilt = await go(team(() => true), { approved: "Say hello to Shoji.", fresh: true });
+    expect(rebuilt.status).toBe("ready");
+    expect(fs.existsSync(path.join(root, "stray.txt"))).toBe(false);
+    // The check failed again before the build, so the work was gone before it started.
+    expect(rebuilt.failingBefore).toEqual([CHECK]);
+    expect(fs.readFileSync(path.join(root, "src/hello.js"), "utf8")).toBe("export default 'hello, shoji';\n");
+
+    const reviewing = team(() => true, "VERDICT: REQUEST CHANGES\n\nSay why it's Shoji.");
+    const events: RuntimeEvent[] = [];
+    const reviewed = await go(reviewing, { reviewAgain: { plan: "Say hello to Shoji." } }, (e) => events.push(e));
+    expect(reviewing.requests.map(roleOf)).toEqual(["reviewer"]);
+    expect(JSON.stringify(reviewing.requests[0].messages)).toContain("hello, shoji");
+    expect(reviewed.status).toBe("needs-work");
+    expect(reviewed.plan).toBe("Say hello to Shoji.");
+    expect(reviewed.review).toContain("Say why it's Shoji.");
+    expect(events.find((e) => e.type === "checks")).toMatchObject({ step: "review", results: [{ ok: true }] });
+    expect(fs.readFileSync(path.join(root, "src/hello.js"), "utf8")).toBe("export default 'hello, shoji';\n");
+  });
+
   it("says when a check can't run at all, and spends nothing trying to fix it", async () => {
     const provider = team(() => true);
     const { result, events } = await run(provider, 1, undefined, ["shoji-no-such-program --version"]);

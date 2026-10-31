@@ -244,8 +244,9 @@ struct Changes {
     plan: String,
     /// The thread's branch, which the project must still be on.
     branch: String,
-    /// "changes" to the work (the default), "build" for an approved plan, "replan" for notes
-    /// on the plan, or "question" for a question about the work, which changes nothing.
+    /// "changes" to the work (the default), "build" for an approved plan, "rebuild" to build it again
+    /// from the start, "review" to check and review the work again, "replan" for notes on the plan,
+    /// or "question" for a question about the work, which changes nothing.
     #[serde(default)]
     kind: Option<String>,
     /// Checks that failed before the thread's first build, which these changes leave alone.
@@ -260,6 +261,8 @@ impl Changes {
     fn kind(&self) -> &str {
         match self.kind.as_deref() {
             Some("build") => "build",
+            Some("rebuild") => "rebuild",
+            Some("review") => "review",
             Some("replan") => "replan",
             Some("question") => "question",
             _ => "changes",
@@ -370,6 +373,8 @@ fn start_run(
         args.extend(changes.failing_tests_before.iter().map(|name| format!("--failing-test-before={name}")));
         match changes.kind() {
             "build" => args.push("--build".into()),
+            "rebuild" => args.extend(["--build".into(), "--fresh".into()]),
+            "review" => args.push("--review".into()),
             kind => args.extend([format!("--{kind}"), changes.notes]),
         }
     }

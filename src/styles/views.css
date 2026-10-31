@@ -874,6 +874,31 @@
   white-space: nowrap;
 }
 
+/* A finished step's model, which opens the models it can be done again on. */
+.st .sl button.m {
+  all: unset;
+  margin-left: auto;
+  padding: 0 6px;
+  margin-right: -6px;
+  border-radius: 3px;
+  font-size: var(--t-sm);
+  color: var(--z6);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--d-quick) var(--e-out);
+}
+
+.st .sl button.m:hover,
+.st .sl button.m[aria-expanded="true"] {
+  color: var(--z10);
+  background: var(--z3);
+}
+
+.st .sl button.m:focus-visible {
+  outline: 2px solid var(--z10);
+  outline-offset: 2px;
+}
+
 .esc {
   margin: 6px 0 0;
   font-size: var(--t-md);

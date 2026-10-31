@@ -1,7 +1,7 @@
 import { MODELS, type ModelId } from "../../runtime/src/models";
 import { ROLES, type Role, type Stack } from "../../runtime/src/stack";
 import type { LedgerThread } from "../bridge";
-import { firstTry, isNotes, isTrial } from "../receipts/receipts";
+import { firstTry, isNotes, isTrial, reworked } from "../receipts/receipts";
 import { ROLE_NAMES } from "./lock";
 import { locale } from "../shell/locale";
 
@@ -98,7 +98,7 @@ export function watch(ledger: LedgerThread[], stack: Stack, now: number): Watch 
     const dearer = median(recent.map((s) => s.cost)) / median(before.map((s) => s.cost));
     // Acceptance belongs to the whole thread. It's put down to Build, which writes the code, and
     // judged only among threads that are settled: accepted, or sent back for changes.
-    const settled = work.filter((t) => t.committed !== null || t.runs.some((r) => r.kind === "changes"));
+    const settled = work.filter((t) => t.committed !== null || t.runs.some(reworked));
     const used = (t: LedgerThread) => t.runs.some((r) => r.calls.some((c) => c.role === role && c.model === model));
     const recentThreads = settled.filter((t) => used(t) && t.startedAt >= now - RECENT);
     const beforeThreads = settled.filter((t) => used(t) && t.startedAt < now - RECENT);

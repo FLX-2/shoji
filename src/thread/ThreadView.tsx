@@ -11,13 +11,14 @@ import {
 } from "react";
 import type { ComparedPage } from "../../runtime/src/compare";
 import type { CheckResult } from "../../runtime/src/events";
-import { MODELS } from "../../runtime/src/models";
+import { MODELS, type ModelId } from "../../runtime/src/models";
 import type { Bridge, Pushed } from "../bridge";
 import { CodeView } from "../code/CodeView";
 import { commentsNote, type LineComment } from "../code/comments";
 import { useChanges } from "../code/useChanges";
 import { ClipIcon } from "../shell/ClipIcon";
 import { ROLE_NAMES } from "../stack/lock";
+import { modelGroups } from "../stack/ModelPick";
 import { TIERS, type Tier } from "../stack/tier";
 import { Composer } from "../shell/Composer";
 import { Copy } from "../shell/Copy";
@@ -41,7 +42,7 @@ import type { useTerminals } from "./useTerminals";
 import { serverRunning, type Server } from "./useServers";
 import { RenameField } from "./ThreadList";
 import { liveTitle } from "./title";
-import { fileName, isRunning, threadCost, type Thread, type Turn } from "./useThread";
+import { fileName, isRunning, threadCost, type Redo, type Thread, type Turn } from "./useThread";
 
 type Terminals = ReturnType<typeof useTerminals>;
 
@@ -80,6 +81,8 @@ interface ThreadViewProps {
   onViewReceipt?: () => void;
   /** Plans again from the person's notes on the plan. */
   onReplan: (notes: string) => void;
+  /** Does a finished step of the latest work again on another model. */
+  onRedo?: (role: Redo, model: ModelId) => void;
   /** Asks about the work; the answer changes nothing. */
   onQuestion: (question: string) => void;
   onCommit: () => Promise<void>;
@@ -159,6 +162,7 @@ export function ThreadView({
   routing,
   onViewReceipt,
   onReplan,
+  onRedo,
   onQuestion,
   onCommit,
   onPush,
@@ -188,6 +192,20 @@ export function ThreadView({
   const workAt = thread.turns.findLastIndex((t) => t.kind !== "question");
   const lastWork = workAt < 0 ? lastRun : runs[workAt];
   const workTurn = workAt < 0 ? last : thread.turns[workAt];
+  // A finished step of the latest work can be done again on another model, until the work is accepted or thrown away.
+  const redoable = !!onRedo && !running && thread.id !== undefined && !thread.committed && !thread.discarded;
+  const status = lastWork.result?.status;
+  const redoFor = (steps: StepView[], index: number): Redo | undefined => {
+    const step = steps[index];
+    if (step.running || step.unfinished) return undefined;
+    // A new plan only while the plan waits: once it's built, the work came from it.
+    if (step.name === "plan") return status === "planned" ? "plan" : undefined;
+    if (status !== "ready" && status !== "needs-work") return undefined;
+    // Building again starts from nothing, so only a run that built the whole plan, not changes on top of it.
+    if (step.name === "build") return ["task", "build", "rebuild"].includes(workTurn.kind) ? "build" : undefined;
+    if (step.name === "review") return steps.findLastIndex((s) => s.name === "review") === index ? "review" : undefined;
+    return undefined;
+  };
   const spent = threadCost(thread);
   // Where the thread's work is: its own copy of the project, or the project itself for an older thread. Once
   // the work is committed the copy is put away, and its branch holds the work.
@@ -416,6 +434,7 @@ export function ThreadView({
                 run={runs[i]}
                 live={running && i === thread.turns.length - 1}
                 waiting={planned && i === thread.turns.length - 1}
+                {...(i === workAt && redoable && { redo: redoFor, onRedo })}
                 onOpenFile={openFile}
                 onCompare={(page) => openCompare(i, page)}
               />
@@ -775,6 +794,8 @@ function TurnView({
   run,
   live,
   waiting,
+  redo,
+  onRedo,
   onOpenFile,
   onCompare,
 }: {
@@ -782,6 +803,9 @@ function TurnView({
   run: RunView;
   live: boolean;
   waiting: boolean;
+  /** Which role a step can be done again as, on another model, if it can. */
+  redo?: (steps: StepView[], index: number) => Redo | undefined;
+  onRedo?: (role: Redo, model: ModelId) => void;
   /** Opens the side panel on Code, at this file. */
   onOpenFile: (path: string) => void;
   /** Opens the side panel on Preview, comparing this run's page before and after. */
@@ -807,7 +831,15 @@ function TurnView({
           {run.steps.length > 0 && (
             <ol className="steps">
               {run.steps.map((_, i) => (
-                <StepRow key={i} steps={run.steps} index={i} live={live} showPlan={waiting} onOpenFile={onOpenFile} />
+                <StepRow
+                  key={i}
+                  steps={run.steps}
+                  index={i}
+                  live={live}
+                  showPlan={waiting}
+                  {...(onRedo && redo?.(run.steps, i) && { redo: redo(run.steps, i), onRedo })}
+                  onOpenFile={onOpenFile}
+                />
               ))}
               {run.compare && (live || !run.compare.running) && (
                 <CompareRow compare={run.compare} live={live} onCompare={onCompare} />
@@ -831,15 +863,22 @@ function StepRow({
   index,
   live,
   showPlan,
+  redo,
+  onRedo,
   onOpenFile,
 }: {
   steps: StepView[];
   index: number;
   live: boolean;
   showPlan: boolean;
+  redo?: Redo;
+  onRedo?: (role: Redo, model: ModelId) => void;
   onOpenFile: (path: string) => void;
 }) {
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
   const step = steps[index];
+  const label = stepLabel(steps, index);
+  const about = step.cost > 0 ? `${MODELS[step.model].label} · ${formatCost(step.cost)}` : MODELS[step.model].label;
   const now = live && step.running;
   const finished = !step.running && !step.unfinished;
   return (
@@ -854,13 +893,37 @@ function StepRow({
       </span>
       <div className="sb">
         <div className="sl">
-          {stepLabel(steps, index)}
-          <span
-            className="m mn"
-            title={step.cost > 0 ? `${MODELS[step.model].label} · ${formatCost(step.cost)}` : MODELS[step.model].label}
-          >
-            {modelName(step.model)}
-          </span>
+          {label}
+          {redo && onRedo ? (
+            <>
+              <button
+                type="button"
+                className="m mn redo"
+                title={`${about}. Do it again on another model`}
+                aria-label={`${label} with ${MODELS[step.model].label}. Do it again on another model`}
+                aria-haspopup="menu"
+                aria-expanded={!!menuAt}
+                onClick={(e) => setMenuAt(menuAt ? null : under(e.currentTarget))}
+              >
+                {modelName(step.model)}
+              </button>
+              {menuAt && (
+                <Menu
+                  at={menuAt}
+                  label="Do it again on"
+                  items={redoModels(step.model).map((model) => ({
+                    label: `${AGAIN[redo]} with ${MODELS[model].label}`,
+                    run: () => onRedo(redo, model),
+                  }))}
+                  onClose={() => setMenuAt(null)}
+                />
+              )}
+            </>
+          ) : (
+            <span className="m mn" title={about}>
+              {modelName(step.model)}
+            </span>
+          )}
         </div>
         {step.escalation && (
           <p className="esc">
@@ -872,6 +935,11 @@ function StepRow({
     </li>
   );
 }
+
+const AGAIN: Record<Redo, string> = { plan: "Plan again", build: "Build again", review: "Review again" };
+
+/** The models a step can be done again on: the newest of each family, other than the one it ran on. */
+const redoModels = (ran: ModelId) => modelGroups().map((g) => g.ids[0]).filter((id) => id !== ran);
 
 /** The step after the work: the pages Build looked at, before and after, which calls no model. */
 function CompareRow({
