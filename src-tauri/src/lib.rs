@@ -1,6 +1,6 @@
 mod ledger;
-#[cfg(unix)]
 mod push;
+#[cfg(unix)]
 mod shell_path;
 mod slash;
 mod server;
