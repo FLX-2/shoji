@@ -357,6 +357,10 @@ fn start_run(
     args.extend(mcp_args(&request.mcp_servers));
     // Joined with = so the command can't be read as a flag of its own.
     args.extend(request.dev_command.iter().filter(|c| !c.trim().is_empty()).map(|c| format!("--dev-command={c}")));
+    // Where the pages Build looked at are saved before and after the work, beside the run's log.
+    if request.dev_command.as_deref().is_some_and(|c| !c.trim().is_empty()) {
+        args.push(format!("--shots-dir={}", runs.join(format!("{stamp}-shots")).display()));
+    }
     if let Some(changes) = request.changes {
         let plan = runs.join(format!("{stamp}-plan.md"));
         fs::write(&plan, &changes.plan).map_err(|e| e.to_string())?;
@@ -976,6 +980,24 @@ fn read_events(runs: &Path, log: &Path) -> Result<Vec<serde_json::Value>, String
     Ok(text.lines().filter_map(|line| serde_json::from_str(line).ok()).collect())
 }
 
+/// A screenshot a run saved of a page before or after its work, as PNG bytes. Only PNGs in the app's
+/// own runs folder are read.
+#[tauri::command]
+async fn read_shot(app: AppHandle, path: String) -> Result<tauri::ipc::Response, String> {
+    let runs = app.path().app_data_dir().map_err(|e| e.to_string())?.join("runs");
+    shot_bytes(&runs, Path::new(&path)).map(tauri::ipc::Response::new)
+}
+
+fn shot_bytes(runs: &Path, file: &Path) -> Result<Vec<u8>, String> {
+    let runs = fs::canonicalize(runs).map_err(|e| e.to_string())?;
+    // Resolved first, so a link or a .. can't lead out of the folder.
+    let file = fs::canonicalize(file).map_err(|_| "That screenshot is gone.".to_string())?;
+    if !file.starts_with(&runs) || file.extension().and_then(|e| e.to_str()) != Some("png") {
+        return Err("That isn't a screenshot in Shoji's runs folder.".into());
+    }
+    fs::read(&file).map_err(|e| e.to_string())
+}
+
 /// Every thread in the ledger with its runs and calls, newest first, for Receipts.
 #[tauri::command]
 async fn ledger_threads(ledger: State<'_, Ledger>) -> Result<Vec<ThreadRecord>, String> {
@@ -1186,6 +1208,7 @@ pub fn run() {
             set_zoom,
             ledger_threads,
             run_events,
+            read_shot,
             export_csv,
             read_stack_lock,
             write_stack_lock,
@@ -1285,6 +1308,22 @@ mod tests {
         assert_eq!(events[1]["type"], "result");
         assert!(read_events(&runs, &runs.join("gone.jsonl")).unwrap().is_empty());
         assert!(read_events(&runs, Path::new("/etc/passwd")).is_err());
+    }
+
+    #[test]
+    fn reads_only_screenshots_in_the_runs_folder() {
+        let root = std::env::temp_dir().join(format!("shoji-shots-{}", std::process::id()));
+        let runs = root.join("runs");
+        fs::create_dir_all(runs.join("1-shots")).unwrap();
+        let shot = runs.join("1-shots").join("after-1-360.png");
+        fs::write(&shot, b"png").unwrap();
+        fs::write(runs.join("1.jsonl"), "{}").unwrap();
+        fs::write(root.join("outside.png"), b"png").unwrap();
+        assert_eq!(shot_bytes(&runs, &shot).unwrap(), b"png");
+        assert!(shot_bytes(&runs, &runs.join("1.jsonl")).is_err());
+        assert!(shot_bytes(&runs, &runs.join("1-shots/../../outside.png")).is_err());
+        assert!(shot_bytes(&runs, &runs.join("gone.png")).is_err());
+        fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

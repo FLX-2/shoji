@@ -11,6 +11,7 @@ import { applyCatalog, MODELS, parseCatalog } from "./models";
 import { writeNotes, type NotesEvent } from "./notes";
 import { runThread } from "./pipeline";
 import { NO_PREVIEW, previewFor } from "./preview";
+import { compareBeforeAndAfter } from "./compare";
 import { defaultChecks } from "./project";
 import { AnthropicProvider } from "./provider";
 import { answerQuestion } from "./question";
@@ -75,6 +76,9 @@ Options:
                       The project's dev server, such as "pnpm dev". With a Chrome, Edge,
                       Chromium or Brave on this computer (or one SHOJI_BROWSER names), Build
                       can start it and look at pages in a headless browser
+  --shots-dir <folder>
+                      With --dev-command, after a run that changed the pages Build looked at,
+                      save each at every width as it was before the thread and as it is now
   --log <file>        Append every event to a JSON lines file
   --json              Print events as JSON lines, for the app
   --allow-dirty       Run even if the project has uncommitted changes
@@ -141,6 +145,10 @@ function describe(event: RuntimeEvent): string | null {
       return "error" in event
         ? `  couldn't reach the ${event.server} MCP server: ${event.error}`
         : `  ${event.server} MCP server: ${event.tools} tools`;
+    case "compare":
+      return event.status === "running"
+        ? "compare · before and after"
+        : `  ${event.pages.length} ${event.pages.length === 1 ? "page" : "pages"} compared${event.problem ? `. ${event.problem}` : ""}`;
     case "result": {
       const r = event.result;
       const roles = Object.entries(r.costByRole)
@@ -196,6 +204,7 @@ async function main() {
       "models-json": { type: "string" },
       "mcp-json": { type: "string" },
       "dev-command": { type: "string" },
+      "shots-dir": { type: "string" },
       cap: { type: "string", default: "0.50" },
       check: { type: "string", multiple: true },
       changes: { type: "string" },
@@ -356,6 +365,19 @@ async function main() {
       preview,
     });
     process.exitCode = result.status === "ready" || result.status === "planned" ? 0 : 1;
+    // The pages Build looked at, before and after its work, for the person to compare. No model is called.
+    const changed = (result.status === "ready" || result.status === "needs-work") && result.diff.trim() !== "";
+    if (values["shots-dir"] && browser && changed && preview.looked().length) {
+      emit({ type: "compare", status: "running" });
+      const comparison = await compareBeforeAndAfter({
+        root,
+        devCommand: values["dev-command"]!,
+        after: preview,
+        launch: () => Browser.launch(browser),
+        dir: values["shots-dir"],
+      });
+      emit({ type: "compare", status: "done", ...comparison });
+    }
   } finally {
     await Promise.all([mcp.close(), preview.close()]);
   }

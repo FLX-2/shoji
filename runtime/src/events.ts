@@ -1,3 +1,4 @@
+import type { Comparison } from "./compare";
 import type { McpEvent } from "./mcp";
 import type { Effort, ModelId } from "./models";
 import type { Role } from "./stack";
@@ -45,6 +46,9 @@ export type RuntimeEvent =
   | { type: "answer"; step: string; command: string; allowed: boolean }
   | { type: "escalate"; step: string; from: ModelId; to: ModelId; reason: string }
   | { type: "result"; result: ThreadResult }
+  /** After a run that changed pages Build looked at: screenshots of each before the work and after it. */
+  | { type: "compare"; status: "running" }
+  | ({ type: "compare"; status: "done" } & Comparison)
   /** An MCP server the person added: how many tools it gave, or why it couldn't be reached. */
   | McpEvent;
 
