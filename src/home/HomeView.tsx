@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { REPEATS, type Repeat, type Schedule } from "../schedule/schedule";
 import { ClipIcon } from "../shell/ClipIcon";
 import { Composer } from "../shell/Composer";
 import type { SlashCommand } from "../shell/mention";
@@ -27,6 +28,8 @@ interface HomeViewProps {
   onSavePasted: (image: File) => Promise<string>;
   /** Resolves to false when the task didn't start, so the composer keeps it and its files. */
   onStart: (task: string, attachments: string[]) => void | boolean | Promise<void | boolean>;
+  /** Saves the task to run by itself on a schedule. */
+  onSchedule: (task: string, when: Pick<Schedule, "repeat" | "time" | "day">) => void;
   /** The project's files, which the task can mention with @. */
   files: string[];
   /** The commands a task can start with, after a /. */
@@ -48,6 +51,7 @@ export function HomeView({
   onPickAttachments,
   onSavePasted,
   onStart,
+  onSchedule,
   files,
   commands,
 }: HomeViewProps) {
@@ -63,6 +67,10 @@ export function HomeView({
     }
   };
   const shown = problem ?? attachProblem;
+  // Set while the task is to repeat rather than run once.
+  const [repeat, setRepeat] = useState<Repeat | null>(null);
+  const [time, setTime] = useState("09:00");
+  const [day, setDay] = useState(() => new Date().getDay());
 
   return (
     <div className="home">
@@ -76,42 +84,84 @@ export function HomeView({
           files={files}
           commands={commands}
           onSend={async (task) => {
+            if (repeat) {
+              onSchedule(task, { repeat, time, day });
+              setRepeat(null);
+              return;
+            }
             const started = await onStart(task, attached);
             if (started !== false) setAttached([]);
             return started;
           }}
           onPasteImages={(images) => attach(Promise.all(images.map(onSavePasted)))}
           above={
-            attached.length > 0 && (
-              <div className="attached">
-                {attached.map((path) => (
-                  <button
-                    key={path}
-                    type="button"
-                    className="chip"
-                    title={`Remove ${fileName(path)}`}
-                    onClick={() => setAttached((now) => now.filter((p) => p !== path))}
-                  >
-                    <ClipIcon />
-                    {fileName(path)}
-                    <span className="x" aria-hidden="true">
-                      ×
-                    </span>
-                  </button>
-                ))}
+            repeat ? (
+              <div className="repeat">
+                <div className="seg" role="radiogroup" aria-label="Repeat">
+                  {(Object.keys(REPEATS) as Repeat[]).map((id) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="radio"
+                      aria-checked={repeat === id}
+                      onClick={() => setRepeat(id)}
+                    >
+                      {REPEATS[id]}
+                    </button>
+                  ))}
+                </div>
+                {repeat === "week" && (
+                  <select aria-label="Day" value={day} onChange={(e) => setDay(Number(e.target.value))}>
+                    {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((name, i) => (
+                      <option key={name} value={i}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <input
+                  type="time"
+                  aria-label="Time"
+                  value={time}
+                  required
+                  onChange={(e) => e.target.value && setTime(e.target.value)}
+                />
+                <span className="est">Runs by itself while Shoji is open</span>
               </div>
+            ) : (
+              attached.length > 0 && (
+                <div className="attached">
+                  {attached.map((path) => (
+                    <button
+                      key={path}
+                      type="button"
+                      className="chip"
+                      title={`Remove ${fileName(path)}`}
+                      onClick={() => setAttached((now) => now.filter((p) => p !== path))}
+                    >
+                      <ClipIcon />
+                      {fileName(path)}
+                      <span className="x" aria-hidden="true">
+                        ×
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )
             )
           }
         >
-          <button
-            type="button"
-            className="chip icon"
-            aria-label="Attach screenshots or files"
-            title="Attach screenshots or files. You can also paste a screenshot."
-            onClick={() => attach(onPickAttachments())}
-          >
-            <ClipIcon />
-          </button>
+          {!repeat && (
+            <button
+              type="button"
+              className="chip icon"
+              aria-label="Attach screenshots or files"
+              title="Attach screenshots or files. You can also paste a screenshot."
+              onClick={() => attach(onPickAttachments())}
+            >
+              <ClipIcon />
+            </button>
+          )}
           <button type="button" className="chip" onClick={onPickProject} title={repo ?? undefined}>
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M3 6h6l2 2h10v11H3z" />
@@ -121,15 +171,30 @@ export function HomeView({
           <button
             type="button"
             className="chip"
-            aria-pressed={planFirst}
-            onClick={onTogglePlanFirst}
-            title="Pause after the plan, to build it or change it first"
+            aria-pressed={repeat !== null}
+            onClick={() => setRepeat(repeat ? null : "weekdays")}
+            title="Run this task by itself on a schedule"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              {planFirst ? <path d="M5 12l5 5 9-10" /> : <path d="M6 12h12" />}
+              <circle cx="12" cy="12" r="8" />
+              <path d="M12 8v4l3 2" />
             </svg>
-            Check the plan first
+            Repeat
           </button>
+          {!repeat && (
+            <button
+              type="button"
+              className="chip"
+              aria-pressed={planFirst}
+              onClick={onTogglePlanFirst}
+              title="Pause after the plan, to build it or change it first"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                {planFirst ? <path d="M5 12l5 5 9-10" /> : <path d="M6 12h12" />}
+              </svg>
+              Check the plan first
+            </button>
+          )}
           <div className="seg" role="radiogroup" aria-label="Quality">
             {(Object.keys(TIERS) as Tier[]).map((id) => (
               <button

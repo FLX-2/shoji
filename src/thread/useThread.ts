@@ -167,12 +167,24 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
     setShownKey(key);
   }, []);
 
-  /** Starts a thread and shows it. With `planFirst`, it pauses once the plan is written. */
+  /** Starts a thread and shows it. With `planFirst`, it pauses once the plan is written. In the `background`, as a
+   *  scheduled task starts, it's shown only when no other thread is. */
   const start = useCallback(
-    (task: string, repo: string, stack: Stack, cap: number, planFirst = false, attachments: string[] = []) => {
+    (
+      task: string,
+      repo: string,
+      stack: Stack,
+      cap: number,
+      planFirst = false,
+      attachments: string[] = [],
+      background = false,
+    ) => {
       const key = ++keys.current;
       const thread: Thread = { task, repo, stack, cap, turns: [], ...(attachments.length && { attachments }) };
-      show(key, thread);
+      if (background) {
+        setHeld((all) => [...all, { key, thread }]);
+        setShownKey((shown) => shown ?? key);
+      } else show(key, thread);
       return run(
         key,
         thread,

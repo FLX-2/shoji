@@ -13,6 +13,7 @@ import { folderName, HomeView } from "./home/HomeView";
 import { Field } from "./look/Field";
 import { lookStyle } from "./look/LookRows";
 import { ReceiptsView } from "./receipts/ReceiptsView";
+import { useSchedules } from "./schedule/useSchedules";
 import { usePrefs } from "./settings/prefs";
 import { readMcpServers, SettingsView } from "./settings/SettingsView";
 import { SetupView } from "./setup/SetupView";
@@ -168,6 +169,20 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     return false;
   };
 
+  const hasKey = !!keyStatus && (keyStatus.saved || keyStatus.fromEnv);
+  // Scheduled tasks start by themselves, never past the daily limit, since nobody may be here to say yes.
+  useSchedules(
+    prefs.schedules,
+    (schedules) => setPrefs({ schedules }),
+    (schedule) => {
+      if (!hasKey) return "there was no API key";
+      if (spentToday + prefs.cap > prefs.dailyLimit)
+        return `it could have taken the day past your ${formatCost(prefs.dailyLimit)} limit`;
+      start(schedule.task, schedule.repo, tierStack(stack.stack, schedule.tier), prefs.cap, false, [], true);
+      return null;
+    },
+  );
+
   const [startProblem, setStartProblem] = useState<string | null>(null);
   const pickProject = async () => {
     const repo = await bridge.pickProject();
@@ -235,7 +250,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
             {section === "home" ? (
               <HomeView
                 repo={prefs.repo}
-                hasKey={!!keyStatus && (keyStatus.saved || keyStatus.fromEnv)}
+                hasKey={hasKey}
                 onPickProject={pickProject}
                 onOpenSettings={() => setSection("settings")}
                 problem={startProblem}
@@ -253,6 +268,19 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 }
                 files={projectFiles}
                 commands={projectCommands}
+                onSchedule={(task, when) => {
+                  if (!prefs.repo) return;
+                  const schedule = {
+                    id: crypto.randomUUID(),
+                    task,
+                    repo: prefs.repo,
+                    tier,
+                    created: Date.now(),
+                    ...when,
+                  };
+                  setPrefs({ schedules: [...prefs.schedules, schedule] });
+                  setSection("threads");
+                }}
                 onStart={async (task, attachments) => {
                   const repo = prefs.repo;
                   if (!repo) return false;
@@ -281,10 +309,20 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 onSave={stack.save}
                 ledger={ledger}
               />
-            ) : section === "threads" && (thread || pastThreads.length > 0) ? (
+            ) : section === "threads" && (thread || pastThreads.length > 0 || prefs.schedules.length > 0) ? (
               <div className="threads">
-                {pastThreads.length > 0 && (
+                {(pastThreads.length > 0 || prefs.schedules.length > 0) && (
                   <ThreadList
+                    schedules={prefs.schedules}
+                    onPause={(id) =>
+                      setPrefs({
+                        // Times missed while paused stay missed.
+                        schedules: prefs.schedules.map((s) =>
+                          s.id === id ? { ...s, paused: !s.paused, ...(s.paused && { last: Date.now() }) } : s,
+                        ),
+                      })
+                    }
+                    onRemove={(id) => setPrefs({ schedules: prefs.schedules.filter((s) => s.id !== id) })}
                     threads={pastThreads}
                     current={thread?.id}
                     showCosts={prefs.showCosts}

@@ -3,6 +3,7 @@ import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import type { StackName } from "../../runtime/src/stack";
 import type { AccentId } from "../look/accent";
 import type { FieldId } from "../look/fields";
+import type { Schedule } from "../schedule/schedule";
 
 export interface Prefs {
   /** The open project's folder. */
@@ -48,6 +49,8 @@ export interface Prefs {
   mcpServers: string;
   /** Let Build start the dev server in its copy and look at pages in a headless browser. */
   lookAtPages: boolean;
+  /** Tasks Shoji starts by itself on a schedule. */
+  schedules: Schedule[];
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -73,6 +76,7 @@ export const DEFAULT_PREFS: Prefs = {
   updateModels: true,
   mcpServers: "",
   lookAtPages: true,
+  schedules: [],
 };
 
 const STORE = "shoji.prefs";
