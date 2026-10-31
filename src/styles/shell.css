@@ -112,12 +112,12 @@ button {
 
 .winctl button:hover {
   color: var(--z10);
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(var(--ink-rgb), 0.07);
 }
 
 .winctl button:active {
   color: var(--z8);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--ink-rgb), 0.04);
 }
 
 .winctl button.close:hover {
@@ -269,7 +269,7 @@ button {
 
 .rail button:hover {
   color: var(--z10);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--ink-rgb), 0.05);
 }
 
 .rail button[aria-current="page"] {
@@ -326,7 +326,7 @@ button {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  background: rgba(11, 10, 10, var(--tm));
+  background: rgba(var(--matte-rgb), var(--tm));
   backdrop-filter: blur(var(--bm));
   -webkit-backdrop-filter: blur(var(--bm));
 }

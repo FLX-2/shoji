@@ -36,7 +36,7 @@
 }
 
 .btn:hover {
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(var(--ink-rgb), 0.3);
 }
 
 .btn:disabled {
@@ -74,7 +74,7 @@
 
 .chip:hover {
   color: var(--z10);
-  border-color: rgba(255, 255, 255, 0.24);
+  border-color: rgba(var(--ink-rgb), 0.24);
 }
 
 /* An icon on its own, the same height as the chips beside it. */
@@ -113,7 +113,8 @@
 
 /* A chip that is switched on lifts like a picked segment. */
 .chip[aria-pressed="true"] {
-  background: var(--z3);
+  background: var(--lifted);
+  box-shadow: var(--lifted-edge);
   border-color: var(--z4);
   color: var(--z10);
 }
@@ -144,9 +145,9 @@
 /* Composer */
 .composer {
   margin: 12px 18px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(var(--ink-rgb), 0.14);
   border-radius: 8px;
-  background: rgba(20, 19, 18, 0.82);
+  background: rgba(var(--z2-rgb), 0.82);
   padding: 12px 14px 10px;
   display: grid;
   gap: 10px;
@@ -272,7 +273,8 @@
 }
 
 .sends .also[aria-pressed="true"] {
-  background: var(--z3);
+  background: var(--lifted);
+  box-shadow: var(--lifted-edge);
   color: var(--z10);
 }
 
@@ -442,7 +444,7 @@
   padding: 14px;
   border: 1px solid var(--hair);
   border-radius: 6px;
-  background: rgba(14, 13, 12, 0.74);
+  background: rgba(var(--z1-rgb), 0.74);
   transition: border-color var(--d-quick) var(--e-out);
 }
 
@@ -590,7 +592,8 @@
 
 .ptoggle[aria-pressed="true"] {
   color: var(--z10);
-  background: var(--z3);
+  background: var(--lifted);
+  box-shadow: var(--lifted-edge);
 }
 
 .ptoggle:focus-visible {
@@ -667,7 +670,7 @@
 .umsg {
   align-self: flex-end;
   max-width: 84%;
-  background: rgba(40, 38, 36, 0.7);
+  background: rgba(var(--z3-rgb), 0.7);
   border: 1px solid var(--hair2);
   border-radius: 8px 8px 4px 8px;
   padding: 12px 16px;
@@ -993,7 +996,7 @@
   font-size: 0.86em;
   padding: 1px 4px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--ink-rgb), 0.06);
   color: var(--z9);
 }
 
@@ -1003,7 +1006,7 @@
   line-height: 1.7;
   padding: 10px 12px;
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--ink-rgb), 0.04);
   color: var(--z8);
   white-space: pre;
   overflow-x: auto;
@@ -1050,7 +1053,7 @@
 
 .wk > summary:hover,
 .wk[open] > summary {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--ink-rgb), 0.04);
   color: var(--z9);
 }
 
@@ -1085,7 +1088,7 @@
   margin: 6px 0 10px 10px;
   padding: 10px 14px;
   border-radius: 6px;
-  background: rgba(14, 13, 12, 0.72);
+  background: rgba(var(--z1-rgb), 0.72);
   max-height: 360px;
   overflow: auto;
   scrollbar-width: thin;
@@ -1293,7 +1296,7 @@
 }
 
 .side li button:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--ink-rgb), 0.04);
   color: var(--z10);
 }
 
@@ -1328,7 +1331,7 @@
 .card {
   border: 1px solid var(--hair);
   border-radius: 8px;
-  background: rgba(14, 13, 12, 0.74);
+  background: rgba(var(--z1-rgb), 0.74);
 }
 
 .srow {
@@ -1423,7 +1426,8 @@
 
 .seg button[aria-checked="true"],
 .seg button[aria-selected="true"] {
-  background: var(--z3);
+  background: var(--lifted);
+  box-shadow: var(--lifted-edge);
   color: var(--z10);
 }
 
@@ -1504,7 +1508,7 @@
 }
 
 .srow.mcp textarea:focus-visible {
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(var(--ink-rgb), 0.3);
 }
 
 .mcplist {
@@ -1539,7 +1543,7 @@
 .keyform input:focus-visible,
 .money input:focus-visible,
 .srow.private textarea:focus-visible {
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(var(--ink-rgb), 0.3);
 }
 
 .money span {
@@ -1584,7 +1588,8 @@
 }
 
 .sw[aria-checked="true"] {
-  background: var(--z3);
+  background: var(--lifted);
+  box-shadow: var(--lifted-edge);
   border-color: var(--z4);
 }
 
@@ -1661,7 +1666,7 @@
 }
 
 .pvbar .url:focus-visible {
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(var(--ink-rgb), 0.3);
 }
 
 .pvbar .seg:last-child {
@@ -1723,8 +1728,8 @@
   width: 1px;
   margin-left: -0.5px;
   background: var(--z10);
-  /* A dark edge keeps the line seen on a light page. */
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  /* An edge in the ground colour keeps the line seen on any page. */
+  box-shadow: 0 0 0 1px rgba(var(--z0-rgb), 0.35);
   pointer-events: none;
 }
 
@@ -1802,7 +1807,7 @@
 }
 
 .wk.wkbtn:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--ink-rgb), 0.04);
   color: var(--z9);
 }
 
@@ -1864,7 +1869,7 @@
 }
 
 .pvstart input:focus-visible {
-  border-color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(var(--ink-rgb), 0.3);
 }
 
 .terminal {
@@ -1963,11 +1968,11 @@
 }
 
 .fl:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(var(--ink-rgb), 0.03);
 }
 
 .fl[aria-current="true"] {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--ink-rgb), 0.05);
   box-shadow: inset 2px 0 0 var(--z9);
 }
 
@@ -2008,7 +2013,7 @@
   display: flex;
   height: 3px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--ink-rgb), 0.06);
   overflow: hidden;
 }
 
@@ -2517,11 +2522,11 @@ button.rrow {
 }
 
 button.rrow:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(var(--ink-rgb), 0.03);
 }
 
 button.rrow[aria-current="true"] {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--ink-rgb), 0.05);
   color: var(--z10);
 }
 
@@ -2733,7 +2738,7 @@ button.rrow:focus-visible {
   width: 272px;
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(var(--ink-rgb), 0.14);
   border-radius: 6px;
   background: var(--solid2);
   overflow: hidden;
@@ -2860,7 +2865,7 @@ button.rrow:focus-visible {
   gap: 8px 14px;
   align-items: center;
   padding: 10px 12px 10px 14px;
-  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border: 1px dashed rgba(var(--ink-rgb), 0.18);
   border-radius: 6px;
 }
 
@@ -2883,7 +2888,7 @@ button.rrow:focus-visible {
 .worth .tag,
 .mlist .new {
   padding: 1px 6px;
-  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border: 1px dashed rgba(var(--ink-rgb), 0.18);
   border-radius: 3px;
   font-size: var(--t-xs);
   font-style: normal;
@@ -3226,9 +3231,9 @@ button.rrow:focus-visible {
   display: grid;
   gap: 20px;
   padding: 26px 30px 22px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(var(--ink-rgb), 0.12);
   border-radius: 8px;
-  background: rgba(14, 13, 12, 0.8);
+  background: rgba(var(--z1-rgb), 0.8);
 }
 
 .sust {
@@ -3388,7 +3393,7 @@ button.rrow:focus-visible {
   gap: var(--s-4);
   align-items: center;
   padding: 11px 14px;
-  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border: 1px dashed rgba(var(--ink-rgb), 0.18);
   border-radius: 6px;
 }
 
@@ -3455,11 +3460,11 @@ button.rrow:focus-visible {
 }
 
 .proj:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(var(--ink-rgb), 0.03);
 }
 
 .proj[aria-pressed="true"] {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(var(--ink-rgb), 0.06);
   box-shadow: inset 2px 0 0 var(--z10);
 }
 
@@ -3504,7 +3509,7 @@ button.rrow:focus-visible {
   display: grid;
   place-items: center;
   padding: 16px;
-  background: rgba(6, 5, 5, 0.6);
+  background: var(--scrim);
 }
 
 /* Search sits high, where the eye already is. */
@@ -3518,7 +3523,7 @@ button.rrow:focus-visible {
   max-height: min(460px, 100vh - 140px);
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(var(--ink-rgb), 0.14);
   border-radius: 8px;
   background: var(--solid2);
   overflow: hidden;
@@ -3598,7 +3603,7 @@ button.rrow:focus-visible {
   display: grid;
   gap: var(--s-3);
   padding: 20px 22px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(var(--ink-rgb), 0.14);
   border-radius: 8px;
   background: var(--solid2);
 }
@@ -3631,7 +3636,7 @@ button.rrow:focus-visible {
 
 /* Setup sits on the stage's glass too. */
 .setup {
-  background: rgba(11, 10, 10, var(--tm));
+  background: rgba(var(--matte-rgb), var(--tm));
   backdrop-filter: blur(var(--bm));
   -webkit-backdrop-filter: blur(var(--bm));
 }
@@ -3738,7 +3743,8 @@ button.rrow:focus-visible {
 }
 
 .swc[aria-checked="true"] {
-  background: var(--z3);
+  background: var(--lifted);
+  box-shadow: var(--lifted-edge);
   color: var(--z10);
 }
 
@@ -3891,7 +3897,7 @@ button.rrow:focus-visible {
 }
 
 .tlist .groups li button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--ink-rgb), 0.04);
 }
 
 .tlist .groups li button[aria-current="true"] {
@@ -3981,7 +3987,7 @@ button.rrow:focus-visible {
 
 .tlist .sched .x:hover {
   color: var(--z9);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--ink-rgb), 0.04);
 }
 
 .tlist .sched .x:focus-visible {
@@ -4038,7 +4044,7 @@ button.rrow:focus-visible {
   padding: 16px;
   border: 1px solid var(--hair);
   border-radius: 6px;
-  background: rgba(14, 13, 12, 0.74);
+  background: rgba(var(--z1-rgb), 0.74);
 }
 
 .agents header {
@@ -4110,10 +4116,10 @@ button.rrow:focus-visible {
   max-width: 300px;
   display: grid;
   padding: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(var(--ink-rgb), 0.14);
   border-radius: 6px;
   background: var(--solid2);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--lift);
   font-family: var(--sans);
 }
 
@@ -4188,10 +4194,10 @@ button.rrow:focus-visible {
   align-items: center;
   gap: 14px;
   padding: 8px 8px 8px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(var(--ink-rgb), 0.14);
   border-radius: 6px;
   background: var(--solid2);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--lift);
   font-size: var(--t-md);
   color: var(--z9);
 }
@@ -4221,7 +4227,7 @@ button.rrow:focus-visible {
 
 .toast .x:hover {
   color: var(--z9);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--ink-rgb), 0.04);
 }
 
 .app[data-motion="on"] .toast {
@@ -4417,7 +4423,7 @@ input.rename {
 .tlist .mh .filter:hover,
 .tlist .mh .filter[aria-expanded="true"] {
   color: var(--z10);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(var(--ink-rgb), 0.04);
 }
 
 .tlist .mh .filter:focus-visible,

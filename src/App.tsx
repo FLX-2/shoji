@@ -15,6 +15,7 @@ import { startersIn } from "./home/starters";
 import { baselineModel, modelLabel, oneModelCost, routingLine, threadSpend } from "./receipts/receipts";
 import { Field } from "./look/Field";
 import { lookStyle } from "./look/LookRows";
+import { useTheme } from "./look/theme";
 import { ReceiptsView } from "./receipts/ReceiptsView";
 import { useSchedules } from "./schedule/useSchedules";
 import { TEXT_SIZES, usePrefs } from "./settings/prefs";
@@ -66,6 +67,7 @@ const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent
 
 function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const [prefs, setPrefs] = usePrefs();
+  const theme = useTheme(prefs.theme);
   // Shoji opens where the person left it: the same place, and the thread that was on show.
   const [section, setSection] = useState<SectionId>(() => prefs.place?.section ?? "home");
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("look");
@@ -699,10 +701,10 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       data-density={prefs.density}
       data-models={prefs.showModels ? undefined : "hidden"}
       data-status={prefs.statusBar ? undefined : "hidden"}
-      style={lookStyle(prefs)}
+      style={lookStyle(prefs, theme)}
     >
       {!prefs.opaque && prefs.field !== "none" && (
-        <Field key={prefs.field} id={prefs.field} running={running} still={!prefs.motion} />
+        <Field key={`${prefs.field}-${theme}`} id={prefs.field} running={running} still={!prefs.motion} />
       )}
       <header className="titlebar solid" data-tauri-drag-region>
         <div data-tauri-drag-region />

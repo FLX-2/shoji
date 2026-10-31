@@ -46,6 +46,45 @@ describe("the Zone look", () => {
     expect(app().style.getPropertyValue("--tm")).toBe("0.820");
   });
 
+  it("is dark by default, turns to paper, and follows the system when asked", async () => {
+    const listeners: (() => void)[] = [];
+    let light = false;
+    const was = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      get matches() {
+        return query.includes("light") && light;
+      },
+      addEventListener: (_: string, fn: () => void) => listeners.push(fn),
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      await settings();
+      const theme = screen.getByRole("radiogroup", { name: "Theme" });
+      expect(within(theme).getByRole("radio", { name: "Dark" }).getAttribute("aria-checked")).toBe("true");
+      expect(document.documentElement.dataset.theme).toBe("dark");
+
+      fireEvent.click(within(theme).getByRole("radio", { name: "Light" }));
+      expect(prefs().theme).toBe("light");
+      expect(document.documentElement.dataset.theme).toBe("light");
+
+      fireEvent.click(within(theme).getByRole("radio", { name: "Match system" }));
+      expect(document.documentElement.dataset.theme).toBe("dark");
+      light = true;
+      act(() => listeners.forEach((fn) => fn()));
+      expect(document.documentElement.dataset.theme).toBe("light");
+    } finally {
+      window.matchMedia = was;
+    }
+  });
+
+  it("draws the Mono accent in dark ink on paper", async () => {
+    await settings();
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Accent" })).getByRole("radio", { name: "Mono" }));
+    expect(app().style.getPropertyValue("--safe-rgb")).toBe("248,246,242");
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Theme" })).getByRole("radio", { name: "Light" }));
+    expect(app().style.getPropertyValue("--safe-rgb")).toBe("18,17,15");
+  });
+
   it("makes every surface solid and stops drawing when transparency is reduced", async () => {
     await settings();
     fireEvent.click(screen.getByRole("switch", { name: "Reduce transparency" }));

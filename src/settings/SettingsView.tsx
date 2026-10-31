@@ -3,7 +3,17 @@ import { type McpServer, parseMcpServers } from "../../runtime/src/mcpConfig";
 import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import type { Stack } from "../../runtime/src/stack";
 import type { KeyStatus } from "../bridge";
-import { AccentRow, BackgroundRow, DensityRow, FrostRow, MotionRow, OpaqueRow, SwitchRow, TextSizeRow } from "../look/LookRows";
+import {
+  AccentRow,
+  BackgroundRow,
+  DensityRow,
+  FrostRow,
+  MotionRow,
+  OpaqueRow,
+  SwitchRow,
+  TextSizeRow,
+  ThemeRow,
+} from "../look/LookRows";
 import { listedDay } from "../stack/catalog";
 import { describeStack } from "../stack/lock";
 import { fileName } from "../thread/useThread";
@@ -105,6 +115,7 @@ export function SettingsView({
               <div className="card">
                 {shown.id === "look" && (
                   <>
+                    <ThemeRow prefs={prefs} onChange={onChange} />
                     <BackgroundRow prefs={prefs} onChange={onChange} />
                     <FrostRow prefs={prefs} onChange={onChange} />
                     <OpaqueRow prefs={prefs} onChange={onChange} />
