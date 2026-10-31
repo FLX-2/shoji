@@ -189,6 +189,6 @@ describe("Settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Shortcuts" }));
     const anywhere = screen.getByRole("region", { name: "Anywhere" });
     expect(anywhere.textContent).toBe("AnywhereSearch threads, projects, views and settingsCtrlK");
-    expect(screen.getByRole("region", { name: "In a thread" }).textContent).toContain("CodeCtrl2");
+    expect(screen.getByRole("region", { name: "In a thread" }).textContent).toContain("Code, in the side panelCtrl2");
   });
 });

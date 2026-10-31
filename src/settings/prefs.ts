@@ -33,6 +33,9 @@ export interface Prefs {
   showCosts: boolean;
   /** Which model takes each step, shown beside it. */
   showModels: boolean;
+  /** A thread's side panel opens by itself on Code when Shoji edits a file, and on Preview when it looks at a
+   *  page or a preview starts. */
+  autoPanel: boolean;
   /** The first-run setup was finished once, so it doesn't open on its own again. */
   setupDone: boolean;
   /** Commands beyond the checks that the person always allows, by project folder. */
@@ -68,6 +71,7 @@ export const DEFAULT_PREFS: Prefs = {
   statusBar: true,
   showCosts: true,
   showModels: true,
+  autoPanel: true,
   setupDone: false,
   allowedCommands: {},
   privateFiles: DEFAULT_PRIVATE,
