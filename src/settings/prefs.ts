@@ -3,7 +3,7 @@ import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import type { StackName } from "../../runtime/src/stack";
 import type { AccentId } from "../look/accent";
 import type { FieldId } from "../look/fields";
-import type { Schedule } from "../schedule/schedule";
+import type { Queued, Schedule } from "../schedule/schedule";
 import type { SectionId } from "../shell/sections";
 
 export interface Prefs {
@@ -58,6 +58,8 @@ export interface Prefs {
   lookAtPages: boolean;
   /** Tasks Shoji starts by itself on a schedule. */
   schedules: Schedule[];
+  /** Tasks waiting their turn, first in line first. */
+  queue: Queued[];
   /** Tell the person through the system when a thread asks for them or ends, and count waiting threads on the
    *  app's icon. */
   notify: boolean;
@@ -109,6 +111,7 @@ export const DEFAULT_PREFS: Prefs = {
   mcpServers: "",
   lookAtPages: true,
   schedules: [],
+  queue: [],
   notify: true,
   listHidden: false,
   foldedGroups: [],

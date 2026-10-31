@@ -42,6 +42,8 @@ export interface Thread {
   discarded?: boolean;
   /** The branch of a committed thread this one carries on from, which its copy starts from. */
   from?: string;
+  /** What earlier threads the task mentions planned and found, sent to the runtime with the task. */
+  context?: string;
   turns: Turn[];
 }
 
@@ -139,7 +141,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
       try {
         const started = await bridge.startRun({
           repo: next.repo,
-          task: next.task,
+          task: next.context ? `${next.task}\n\n${next.context}` : next.task,
           stack: next.stack,
           cap: next.cap - spent,
           changes,
@@ -189,6 +191,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
       attachments: string[] = [],
       background = false,
       from?: string,
+      context?: string,
     ) => {
       const key = ++keys.current;
       const thread: Thread = {
@@ -199,6 +202,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
         turns: [],
         ...(attachments.length && { attachments }),
         ...(from && { from }),
+        ...(context && { context }),
       };
       if (background) {
         setHeld((all) => [...all, { key, thread }]);
