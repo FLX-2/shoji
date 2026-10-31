@@ -72,6 +72,11 @@ interface ThreadViewProps {
   tier?: Tier | null;
   /** Moves the thread's next runs to another tier. */
   onTier?: (tier: Tier) => void;
+  /** What routing did for the thread, from the ledger: which model took each role, and what the same calls would
+   *  have cost on the stack's Plan model alone. */
+  routing?: { line: string; spent: number; oneModel: number; baseline: string };
+  /** Opens the thread's receipt. */
+  onViewReceipt?: () => void;
   /** Plans again from the person's notes on the plan. */
   onReplan: (notes: string) => void;
   /** Asks about the work; the answer changes nothing. */
@@ -150,6 +155,8 @@ export function ThreadView({
   onBuild,
   tier,
   onTier,
+  routing,
+  onViewReceipt,
   onReplan,
   onQuestion,
   onCommit,
@@ -447,6 +454,21 @@ export function ThreadView({
               </span>
             </div>
           ) : (
+            <>
+            {showCosts && routing?.line && (thread.committed || (thread.branch && fileCount > 0)) && (
+              <p className="routed">
+                {dotted([
+                  routing.line,
+                  routing.oneModel - routing.spent >= 0.005 &&
+                    `about ${formatCost(routing.oneModel - routing.spent)} less than ${routing.baseline} alone`,
+                ])}
+                {onViewReceipt && (
+                  <button type="button" className="link" onClick={onViewReceipt}>
+                    View receipt
+                  </button>
+                )}
+              </p>
+            )}
             <div className="review">
               {thread.committed ? (
                 <>
@@ -529,6 +551,7 @@ export function ThreadView({
                 ])}
               </span>
             </div>
+            </>
           ))}
 
         {talking && (

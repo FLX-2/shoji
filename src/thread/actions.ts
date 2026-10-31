@@ -9,6 +9,8 @@ export interface ThreadActions {
   discard: (thread: LedgerThread) => void;
   reveal: (thread: LedgerThread) => void;
   copyBranch: (thread: LedgerThread) => void;
+  /** Shows what the thread cost in Receipts, step by step. */
+  receipt?: (thread: LedgerThread) => void;
 }
 
 /** Whether a thread's uncommitted work lives in its own copy, which Shoji can throw away with its branch. */
@@ -37,5 +39,6 @@ export function threadMenu(t: LedgerThread, actions: ThreadActions, running: boo
     SEPARATOR,
     { label: "Open folder", run: () => actions.reveal(t) },
     ...(t.branch && !t.discardedAt ? [{ label: "Copy branch name", run: () => actions.copyBranch(t) }] : []),
+    ...(actions.receipt ? [SEPARATOR, { label: "View receipt", run: () => actions.receipt!(t) }] : []),
   ];
 }
