@@ -4,6 +4,7 @@ import type { StackName } from "../../runtime/src/stack";
 import type { AccentId } from "../look/accent";
 import type { FieldId } from "../look/fields";
 import type { Schedule } from "../schedule/schedule";
+import type { SectionId } from "../shell/sections";
 
 export interface Prefs {
   /** The open project's folder. */
@@ -63,6 +64,14 @@ export interface Prefs {
   /** How each thread stood when the person last looked at it, by ledger id, to mark the ones with news. Unset
    *  until the ledger is first read, when every thread then counts as seen. */
   seen?: Record<number, string>;
+  /** Where the person was when Shoji closed, to open there again: the section, and the thread on show. */
+  place?: { section: SectionId; thread?: number };
+  /** The thread list is hidden, for more room, with Ctrl+B or ⌘B. */
+  listHidden: boolean;
+  /** The project whose threads alone the list shows, or null for every project. */
+  listProject?: string | null;
+  /** The thread list's groups the person folded away. */
+  foldedGroups: string[];
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -92,6 +101,8 @@ export const DEFAULT_PREFS: Prefs = {
   lookAtPages: true,
   schedules: [],
   notify: true,
+  listHidden: false,
+  foldedGroups: [],
 };
 
 const STORE = "shoji.prefs";

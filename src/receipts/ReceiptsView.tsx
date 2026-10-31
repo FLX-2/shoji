@@ -51,7 +51,8 @@ function when(at: number): string {
 }
 
 /** What each month cost, what routing saved against one model, and a receipt for every thread. */
-export function ReceiptsView({ bridge }: { bridge: Bridge }) {
+/** `onNew` opens the box for a new task, from the empty state. */
+export function ReceiptsView({ bridge, onNew }: { bridge: Bridge; onNew?: () => void }) {
   const [threads, setThreads] = useState<LedgerThread[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [month, setMonth] = useState<string | null>(null);
@@ -99,6 +100,11 @@ export function ReceiptsView({ bridge }: { bridge: Bridge }) {
             <div className="empty">
               <h2>{SECTIONS.receipts.title}</h2>
               <p>{SECTIONS.receipts.body}</p>
+              {onNew && (
+                <button type="button" className="btn sm" onClick={onNew}>
+                  Start a task
+                </button>
+              )}
             </div>
           )
         )}

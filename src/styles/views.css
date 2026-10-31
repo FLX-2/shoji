@@ -3718,6 +3718,7 @@ button.rrow:focus-visible {
 }
 
 .threads > .thread,
+.threads > .home,
 .threads > .empty {
   min-width: 0;
 }
@@ -4285,4 +4286,58 @@ input.rename {
 
 .tlist .groups li[data-unread] b {
   color: var(--z10);
+}
+
+/* The thread list's project filter, beside its title, and its groups that fold on their heading. */
+.tlist .mh .filter {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 120px;
+  margin: 0 8px 0 auto;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: var(--z7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tlist .mh .filter:hover,
+.tlist .mh .filter[aria-expanded="true"] {
+  color: var(--z10);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tlist .mh .filter:focus-visible,
+.tlist .groups .k .fold:focus-visible {
+  outline: 2px solid var(--z10);
+  outline-offset: 1px;
+}
+
+.tlist .mh .filter svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tlist .groups .k .fold {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  border-radius: 3px;
+}
+
+.tlist .groups .k .fold:hover {
+  color: var(--z9);
 }

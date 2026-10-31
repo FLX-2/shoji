@@ -551,6 +551,7 @@ export function ThreadView({
             }
             files={files}
             commands={commands}
+            {...(thread.id !== undefined && { draft: `thread:${thread.id}` })}
             {...(running && { onStop, stopping: last.stoppedByYou })}
           >
             {!running && !thread.committed && (

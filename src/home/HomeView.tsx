@@ -54,6 +54,8 @@ interface HomeViewProps {
   firstRun?: boolean;
   onOpenThread?: (thread: LedgerThread) => void;
   showCosts?: boolean;
+  /** What the page says above the box: Home's tagline, or what the Threads pane is for. */
+  heading?: string;
 }
 
 /** Start: pick a project and describe a change. */
@@ -79,6 +81,7 @@ export function HomeView({
   onOpenThread = () => {},
   showCosts = true,
   draft,
+  heading = "The right model for every step.",
 }: HomeViewProps) {
   const [attached, setAttached] = useState<string[]>(draft?.attachments ?? []);
   const [from, setFrom] = useState(draft?.from);
@@ -101,12 +104,13 @@ export function HomeView({
   return (
     <div className="home">
       <div className="hwrap">
-        <h1 className="hello">The right model for every step.</h1>
+        <h1 className="hello">{heading}</h1>
         <Composer
           hero
           label="Task"
           placeholder={from ? "What should happen next?" : "Describe a change…"}
           initial={draft?.task}
+          draft="task"
           autoFocus={!!draft}
           blocked={!repo || !hasKey}
           files={files}

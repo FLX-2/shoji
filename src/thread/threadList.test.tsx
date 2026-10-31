@@ -135,7 +135,9 @@ describe("the thread list", () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatch(/^Fix the footerNeeds work\$0\.020\d\d:\d\d$/);
     expect(rows[1]).toMatch(/^Add a FAQCommitted\$0\.030\d+ \w{3}$/);
-    expect(screen.getByRole("heading", { name: "Pick a thread" })).toBeTruthy();
+    // With nothing on show, the pane beside the list takes a new task.
+    expect(screen.getByRole("heading", { name: "New thread" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Task" })).toBeTruthy();
   });
 
   it("groups threads by what they need, and counts a run Shoji closed during as stopped", async () => {

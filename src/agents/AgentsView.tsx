@@ -19,6 +19,8 @@ interface AgentsViewProps {
   agents: Agent[];
   showCosts: boolean;
   onOpen: (record: LedgerThread) => void;
+  /** Opens the box for a new task, from the empty state. */
+  onNew?: () => void;
 }
 
 /** What a live thread is doing now, and the last file or command it touched. */
@@ -34,7 +36,7 @@ function doing(thread: Thread): { stage: string; target?: string } {
 }
 
 /** Every thread that's running or needs the person, side by side, to follow several at once. */
-export function AgentsView({ agents, showCosts, onOpen }: AgentsViewProps) {
+export function AgentsView({ agents, showCosts, onOpen, onNew }: AgentsViewProps) {
   const waiting = agents.filter((a) => a.status !== "Running").length;
   const projects = new Set(agents.map((a) => a.record.repo)).size;
   return (
@@ -47,6 +49,11 @@ export function AgentsView({ agents, showCosts, onOpen }: AgentsViewProps) {
         <div className="empty">
           <h2>{SECTIONS.agents.title}</h2>
           <p>{SECTIONS.agents.body}</p>
+          {onNew && (
+            <button type="button" className="btn sm" onClick={onNew}>
+              Start a task
+            </button>
+          )}
         </div>
       ) : (
         <div className="agents">

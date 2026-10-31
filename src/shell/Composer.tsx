@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { draftFor, keepDraft } from "./drafts";
 import { commandAt, matchCommands, matchFiles, mentionAt, type SlashCommand } from "./mention";
 
 interface ComposerProps {
@@ -28,6 +29,8 @@ interface ComposerProps {
   stopping?: boolean;
   /** Text to start with, such as a task brought back to edit. */
   initial?: string;
+  /** Where the composer is, such as "task" or a thread, to keep what's written there and not sent. */
+  draft?: string;
 }
 
 /** One line of the list under the text: a file after @, or a command after a leading /. */
@@ -57,8 +60,12 @@ export function Composer({
   onStop,
   stopping,
   initial = "",
+  draft,
 }: ComposerProps) {
-  const [text, setText] = useState(initial);
+  const [text, setText] = useState(() => initial || (draft ? draftFor(draft) : ""));
+  useEffect(() => {
+    if (draft) keepDraft(draft, text);
+  }, [draft, text]);
   const ready = text.trim() !== "" && !blocked && !onStop;
   const box = useRef<HTMLTextAreaElement>(null);
   const listId = useId();

@@ -6,6 +6,8 @@ export const SHORTCUTS: { group: string; keys: string[]; what: string }[] = [
   { group: "Writing a task", keys: ["@"], what: "Mention a file of the project" },
   { group: "Writing a task", keys: ["/"], what: "Start with one of the project's commands" },
   { group: "Writing a task", keys: ["Tab"], what: "Take the file or command picked in the list" },
+  { group: "In Threads", keys: ["mod", "B"], what: "Hide or show the thread list" },
+  { group: "In Threads", keys: ["F2"], what: "Rename the thread picked in the list" },
   { group: "In a thread", keys: ["mod", "1"], what: "Close the side panel" },
   { group: "In a thread", keys: ["mod", "2"], what: "Code, in the side panel" },
   { group: "In a thread", keys: ["mod", "3"], what: "Preview, in the side panel" },
