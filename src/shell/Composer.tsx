@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { draftFor, keepDraft } from "./drafts";
-import { commandAt, matchCommands, matchFiles, mentionAt, type SlashCommand } from "./mention";
+import { commandAt, matchCommands, matchFiles, matchThreads, mentionAt, type SlashCommand } from "./mention";
 
 interface ComposerProps {
   label: string;
@@ -23,6 +23,8 @@ interface ComposerProps {
   files?: string[];
   /** The commands a task can start with. Typing / first offers them, and a picked one starts the text. */
   commands?: SlashCommand[];
+  /** Earlier threads, which typing @ offers after the files. A picked one goes into the text as @“its title”. */
+  threads?: { id: number; title: string }[];
   /** Set while a run works: Stop takes Send's place, and what's written waits until the run ends. */
   onStop?: () => void;
   /** The run was asked to stop and hasn't yet. */
@@ -63,6 +65,7 @@ export function Composer({
   above,
   files,
   commands,
+  threads,
   onStop,
   stopping,
   initial = "",
@@ -83,7 +86,7 @@ export function Composer({
   // Escape closes the list for the @ or / it was open on; typing another opens it again.
   const [dismissed, setDismissed] = useState<number | null>(null);
   const command = commands?.length ? commandAt(text, caret) : null;
-  const mention = !command && files?.length ? mentionAt(text, caret) : null;
+  const mention = !command && (files?.length || threads?.length) ? mentionAt(text, caret) : null;
   const typed = command ? { start: 0, query: command.query } : mention;
   const matches: Offer[] =
     !typed || typed.start === dismissed
@@ -95,15 +98,23 @@ export function Composer({
             detail: c.description,
             insert: `/${c.name} `,
           }))
-        : matchFiles(files!, mention!.query).map((file) => {
-            const cut = file.lastIndexOf("/") + 1;
-            return {
-              key: file,
-              name: file.slice(cut),
-              detail: cut > 0 ? file.slice(0, cut - 1) : "",
-              insert: `@${file} `,
-            };
-          });
+        : [
+            ...matchFiles(files ?? [], mention!.query).map((file) => {
+              const cut = file.lastIndexOf("/") + 1;
+              return {
+                key: file,
+                name: file.slice(cut),
+                detail: cut > 0 ? file.slice(0, cut - 1) : "",
+                insert: `@${file} `,
+              };
+            }),
+            ...matchThreads(threads ?? [], mention!.query).map((t) => ({
+              key: `thread-${t.id}`,
+              name: t.title,
+              detail: "Thread",
+              insert: `@“${t.title}” `,
+            })),
+          ];
   const open = matches.length > 0;
   const picked = Math.min(active, matches.length - 1);
   const moveTo = useRef<number | null>(null);

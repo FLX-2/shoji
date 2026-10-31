@@ -29,7 +29,7 @@ import { SEPARATOR, type MenuEntry } from "./shell/Menu";
 import { useStack } from "./stack/useStack";
 import { trialProgress, useTrial } from "./stack/useTrial";
 import { Mark } from "./shell/Mark";
-import type { SlashCommand } from "./shell/mention";
+import { threadsMentioned, type SlashCommand } from "./shell/mention";
 import { Rail } from "./shell/Rail";
 import { WindowControls } from "./shell/WindowControls";
 import { Search, type SearchItem } from "./shell/Search";
@@ -37,7 +37,7 @@ import { Toast, type Note } from "./shell/Toast";
 import { threadMenu, type ThreadActions } from "./thread/actions";
 import { liveTitle, threadTitle } from "./thread/title";
 import { SECTIONS, type SectionId } from "./shell/sections";
-import { foldRun, formatCost } from "./thread/fold";
+import { foldRun, formatCost, reviewNotes } from "./thread/fold";
 import { seenMark, useNotify, useWaitingBadge } from "./thread/notify";
 import { DEFAULT_PREVIEW } from "./thread/PreviewView";
 import { reopen, workThreads } from "./thread/reopen";
@@ -268,6 +268,21 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     },
   );
 
+  // The queue: once nothing runs, the first task in line starts, unless it would take the day past its limit,
+  // when it waits and says so.
+  const idle = live.length === 0 && !trialRunning && !notesRunning;
+  useEffect(() => {
+    const next = prefs.queue[0];
+    if (!idle || !next || !hasKey || !ledgerRead) return;
+    if (spentToday + prefs.cap > prefs.dailyLimit) {
+      const held = `Waiting: it could take today past your ${formatCost(prefs.dailyLimit)} limit`;
+      if (next.held !== held) setPrefs((now) => ({ queue: now.queue.map((q, i) => (i ? q : { ...q, held })) }));
+      return;
+    }
+    setPrefs((now) => ({ queue: now.queue.filter((q) => q.id !== next.id) }));
+    start(next.task, next.repo, tierStack(stack.stack, next.tier), prefs.cap, false, [], true);
+  }, [idle, prefs.queue, hasKey, ledgerRead, spentToday]);
+
   const [startProblem, setStartProblem] = useState<string | null>(null);
   // A task brought back to Home to edit, or a new one carrying on a committed thread. `n` makes Home take it afresh.
   const [homeDraft, setHomeDraft] = useState<(HomeDraft & { n: number }) | null>(null);
@@ -477,6 +492,26 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   // The project the status bar names: the thread's, while one is on show in Threads.
   const place = section === "threads" && thread ? thread.repo : prefs.repo;
 
+  // Earlier threads a new task can name with @, and what they planned and heard back, for the task's context.
+  const mentionable = useMemo(() => keptThreads.map((t) => ({ id: t.id, title: threadTitle(t) })), [keptThreads]);
+  const mentionedContext = async (task: string) => {
+    const named = threadsMentioned(task);
+    const found = keptThreads.filter((t) => named.includes(threadTitle(t)));
+    const parts: string[] = [];
+    for (const t of found) {
+      const run = t.runs.at(-1);
+      if (!run) continue;
+      const result = foldRun(await bridge.runEvents(run.id).catch(() => [])).result;
+      if (!result) continue;
+      const said = [
+        result.plan && `Its plan:\n${result.plan}`,
+        reviewNotes(result.review) && `Its review said:\n${reviewNotes(result.review)}`,
+      ].filter(Boolean);
+      if (said.length) parts.push(`From “${threadTitle(t)}”:\n\n${said.join("\n\n")}`);
+    }
+    return parts.length ? `The task names earlier threads. What they planned and what their reviews said:\n\n${parts.join("\n\n")}` : undefined;
+  };
+
   // The box a new task is written in, on Home and in Threads when no thread is on show.
   const taskProps: ComponentProps<typeof HomeView> = {
     draft: homeDraft,
@@ -501,7 +536,13 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       bridge.saveAttachment(image.name || "pasted.png", Array.from(new Uint8Array(await image.arrayBuffer()))),
     files: projectFiles,
     commands: projectCommands,
+    threads: mentionable,
     showCosts: prefs.showCosts,
+    onQueue: (task) => {
+      if (!prefs.repo) return;
+      setPrefs({ queue: [...prefs.queue, { id: crypto.randomUUID(), task, repo: prefs.repo, tier }] });
+      setSection("threads");
+    },
     onSchedule: (task, when) => {
       if (!prefs.repo) return;
       const schedule = { id: crypto.randomUUID(), task, repo: prefs.repo, tier, created: Date.now(), ...when };
@@ -515,10 +556,11 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       const problem = await folderProblem(bridge, repo);
       setStartProblem(problem);
       if (problem) return false;
+      const context = await mentionedContext(task);
       return withinDay("This thread", prefs.cap, () => {
         setSection("threads");
         setHomeDraft(null);
-        start(task, repo, tierStack(stack.stack, tier), prefs.cap, prefs.planFirst, attachments, false, from);
+        start(task, repo, tierStack(stack.stack, tier), prefs.cap, prefs.planFirst, attachments, false, from, context);
       });
     },
   };
@@ -765,9 +807,12 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
               />
             ) : section === "threads" ? (
               <div className="threads">
-                {(pastThreads.length > 0 || prefs.schedules.length > 0) && !prefs.listHidden && (
+                {(pastThreads.length > 0 || prefs.schedules.length > 0 || prefs.queue.length > 0) &&
+                  !prefs.listHidden && (
                   <ThreadList
                     schedules={prefs.schedules}
+                    queue={prefs.queue}
+                    onUnqueue={(id) => setPrefs({ queue: prefs.queue.filter((q) => q.id !== id) })}
                     onPause={(id) =>
                       setPrefs({
                         // Times missed while paused stay missed.

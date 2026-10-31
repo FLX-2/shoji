@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { LedgerThread } from "../bridge";
 import { folderName } from "../home/HomeView";
-import { describeRepeat, describeWhen, nextDue, type Schedule } from "../schedule/schedule";
+import { describeRepeat, describeWhen, nextDue, type Queued, type Schedule } from "../schedule/schedule";
 import { Menu, SEPARATOR, under, type MenuEntry } from "../shell/Menu";
 import { formatCost } from "./fold";
 import { threadTitle } from "./title";
@@ -78,6 +78,9 @@ interface ThreadListProps {
   onNew: () => void;
   /** Tasks Shoji starts by itself, which their own runs list below once they've run. */
   schedules?: Schedule[];
+  /** Tasks waiting their turn, first in line first. */
+  queue?: Queued[];
+  onUnqueue?: (id: string) => void;
   onPause?: (id: string) => void;
   onRemove?: (id: string) => void;
   /** The actions on a thread's ⋯ menu and right-click. */
@@ -132,6 +135,8 @@ export function ThreadList({
   onOpen,
   onNew,
   schedules = [],
+  queue = [],
+  onUnqueue,
   onPause,
   onRemove,
   menuFor,
@@ -151,6 +156,7 @@ export function ThreadList({
   if (only) {
     threads = threads.filter((t) => t.repo === only);
     schedules = schedules.filter((s) => s.repo === only);
+    queue = queue.filter((q) => q.repo === only);
   }
   const [picking, setPicking] = useState<{ x: number; y: number } | null>(null);
   const listed = threads.map((thread) => ({ thread, ...threadState(thread, running) }));
@@ -262,6 +268,38 @@ export function ThreadList({
           </svg>
         </button>
       </div>
+      {queue.length > 0 && (
+        <section className="sched queue" aria-labelledby="queue-h">
+          <h3 id="queue-h" className="k">
+            Next in line
+          </h3>
+          <ol>
+            {queue.map((q) => {
+              const name = q.task.split("\n")[0];
+              return (
+                <li key={q.id}>
+                  <div>
+                    <b title={q.task}>{name}</b>
+                    <span className="meta">
+                      {projects > 1 && <span>{folderName(q.repo)}</span>}
+                      <span>{q.held ?? "Starts when nothing else runs"}</span>
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="x"
+                    aria-label={`Take "${name}" out of line`}
+                    title="Take it out of line"
+                    onClick={() => onUnqueue?.(q.id)}
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
       {schedules.length > 0 && (
         <section className="sched" aria-labelledby="sched-h">
           <h3 id="sched-h" className="k">

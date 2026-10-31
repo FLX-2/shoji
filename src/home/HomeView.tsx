@@ -48,10 +48,14 @@ interface HomeViewProps {
   draft?: HomeDraft | null;
   /** Saves the task to run by itself on a schedule. */
   onSchedule: (task: string, when: Pick<Schedule, "repeat" | "time" | "day">) => void;
+  /** Puts the task in line, to start once nothing else runs. */
+  onQueue?: (task: string) => void;
   /** The project's files, which the task can mention with @. */
   files: string[];
   /** The commands a task can start with, after a /. */
   commands: SlashCommand[];
+  /** Earlier threads a task can mention with @, to carry their plan and review into it. */
+  threads?: { id: number; title: string }[];
   /** The project's threads that are running or wait for the person, latest first. */
   recent?: { thread: LedgerThread; status: string }[];
   /** No thread has run yet, so Home says how Shoji works. */
@@ -82,8 +86,10 @@ export function HomeView({
   onSavePasted,
   onStart,
   onSchedule,
+  onQueue,
   files,
   commands,
+  threads,
   recent = [],
   firstRun = false,
   onOpenThread = () => {},
@@ -114,7 +120,7 @@ export function HomeView({
   };
   const shown = problem ?? attachProblem;
   // Set while the task is to repeat rather than run once.
-  const [repeat, setRepeat] = useState<Repeat | null>(null);
+  const [repeat, setRepeat] = useState<Repeat | "next" | null>(null);
   const [time, setTime] = useState("09:00");
   const [day, setDay] = useState(() => new Date().getDay());
 
@@ -134,7 +140,13 @@ export function HomeView({
           blocked={!repo || !hasKey}
           files={files}
           commands={commands}
+          {...(threads && { threads })}
           onSend={async (task) => {
+            if (repeat === "next") {
+              onQueue?.(task);
+              setRepeat(null);
+              return;
+            }
             if (repeat) {
               onSchedule(task, { repeat, time, day });
               setRepeat(null);
@@ -148,7 +160,7 @@ export function HomeView({
             return started;
           }}
           onPasteImages={(images) => attach(Promise.all(images.map(onSavePasted)))}
-          sendLabel={repeat ? "Save to the schedule" : "Start now"}
+          sendLabel={repeat === "next" ? "Put it in line" : repeat ? "Save to the schedule" : "Start now"}
           sendAlso={
             <button
               type="button"
@@ -168,6 +180,17 @@ export function HomeView({
             repeat ? (
               <div className="repeat">
                 <div className="seg" role="radiogroup" aria-label="Repeat">
+                  {onQueue && (
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={repeat === "next"}
+                      title="Once, when no other thread is running"
+                      onClick={() => setRepeat("next")}
+                    >
+                      Next in line
+                    </button>
+                  )}
                   {(Object.keys(REPEATS) as Repeat[]).map((id) => (
                     <button
                       key={id}
@@ -180,23 +203,29 @@ export function HomeView({
                     </button>
                   ))}
                 </div>
-                {repeat === "week" && (
-                  <select aria-label="Day" value={day} onChange={(e) => setDay(Number(e.target.value))}>
-                    {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((name, i) => (
-                      <option key={name} value={i}>
-                        {name}
-                      </option>
-                    ))}
-                  </select>
+                {repeat === "next" ? (
+                  <span className="est">Starts when nothing else runs, within today's limit</span>
+                ) : (
+                  <>
+                    {repeat === "week" && (
+                      <select aria-label="Day" value={day} onChange={(e) => setDay(Number(e.target.value))}>
+                        {["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((name, i) => (
+                          <option key={name} value={i}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <input
+                      type="time"
+                      aria-label="Time"
+                      value={time}
+                      required
+                      onChange={(e) => e.target.value && setTime(e.target.value)}
+                    />
+                    <span className="est">Runs by itself while Shoji is open</span>
+                  </>
                 )}
-                <input
-                  type="time"
-                  aria-label="Time"
-                  value={time}
-                  required
-                  onChange={(e) => e.target.value && setTime(e.target.value)}
-                />
-                <span className="est">Runs by itself while Shoji is open</span>
               </div>
             ) : (
               (attached.length > 0 || from) && (

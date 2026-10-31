@@ -3919,6 +3919,15 @@ button.rrow:focus-visible {
   overflow: visible;
 }
 
+/* Tasks waiting their turn, in the order they'll start. */
+.tlist .queue ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
 .tlist .sched li {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;

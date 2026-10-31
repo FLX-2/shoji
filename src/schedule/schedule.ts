@@ -10,6 +10,16 @@ export const REPEATS: Record<Repeat, string> = {
   week: "Every week",
 };
 
+/** A task waiting its turn: it starts once no other thread is running, within the day's limit. */
+export interface Queued {
+  id: string;
+  task: string;
+  repo: string;
+  tier: Tier;
+  /** Why it's still waiting, when the day's limit holds it back. */
+  held?: string;
+}
+
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 /** A task Shoji starts by itself at a set time, in a project, while it's open. */

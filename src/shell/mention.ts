@@ -52,3 +52,19 @@ export function matchCommands(commands: SlashCommand[], query: string): SlashCom
     .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
     .slice(0, SHOWN);
 }
+
+/** Earlier threads whose title has what was typed after the @, the ones that start with it first. A few at most,
+ *  listed after the files. */
+export function matchThreads<T extends { title: string }>(threads: T[], query: string): T[] {
+  const q = query.toLowerCase();
+  const scored = threads
+    .map((t) => ({ t, title: t.title.toLowerCase() }))
+    .filter(({ title }) => title.includes(q))
+    .sort((a, b) => Number(!a.title.startsWith(q)) - Number(!b.title.startsWith(q)));
+  return scored.slice(0, 3).map(({ t }) => t);
+}
+
+/** The titles of the earlier threads a task mentions, as @“title”. */
+export function threadsMentioned(text: string): string[] {
+  return [...text.matchAll(/@“([^”]+)”/g)].map((m) => m[1]);
+}
