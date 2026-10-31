@@ -105,10 +105,8 @@ describe("the daily limit", () => {
     // The runtime's call is in the ledger by the time the app hears of it.
     fake.ledger.push(spent(Date.now(), 0.05));
     await act(async () => {
-      fake.emit({
-        type: "call",
-        call: { ...spent(0, 0.05).runs[0].calls[0], at: Date.now() },
-      });
+      const { at: _, ...call } = spent(0, 0.05).runs[0].calls[0];
+      fake.emit({ type: "call", call });
     });
     expect(status()).toContain("today $0.25 of $1.00");
   });
