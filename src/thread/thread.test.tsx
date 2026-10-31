@@ -269,9 +269,11 @@ describe("a thread in the app", () => {
       },
     ]);
     expect(document.querySelector(".review")?.textContent).toBe(
-      "Push and open PRCommitted a1b2c3d on shoji/thread$0.12 in all",
+      "Push and open PRCommitted a1b2c3d on shoji/threadCarry on in a new thread$0.12 in all",
     );
     expect(screen.queryByRole("radio", { name: "Request changes" })).toBeNull();
+    // Committed work still takes questions.
+    expect(screen.getByRole("textbox", { name: "Question" })).toBeTruthy();
     // Nothing is pushed until the person presses the button.
     expect(fake.calls.pushes).toEqual([]);
 

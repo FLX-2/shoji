@@ -37,12 +37,22 @@ fn ignored(dir: &str) -> Result<Vec<String>, String> {
 }
 
 /// Makes a copy of the project on a new branch named after the task, under `root`. It starts
-/// from the project's last commit, so changes the person hasn't committed stay where they are.
+/// from the project's last commit, so changes the person hasn't committed stay where they are, or
+/// from the tip of `from`, a branch an earlier thread committed to, to carry that work on.
 /// Returns the branch and the copy's folder.
-pub fn create(repo: &str, root: &Path, task: &str) -> Result<(String, PathBuf), String> {
+pub fn create(repo: &str, root: &Path, task: &str, from: Option<&str>) -> Result<(String, PathBuf), String> {
     if git(repo, &["rev-parse", "--verify", "--quiet", "HEAD"]).is_err() {
         return Err("The project has no commits yet. Commit once, then start the thread again.".into());
     }
+    let base = match from {
+        Some(branch) => {
+            if git(repo, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{branch}")]).is_err() {
+                return Err(format!("The branch {branch} isn't in the project any more, so there's nothing to carry on from."));
+            }
+            branch
+        }
+        None => "HEAD",
+    };
     let project = Path::new(repo)
         .file_name()
         .and_then(|name| name.to_str())
@@ -61,7 +71,7 @@ pub fn create(repo: &str, root: &Path, task: &str) -> Result<(String, PathBuf), 
     let dir = root.join(&project).join(&name);
     fs::create_dir_all(dir.parent().unwrap()).map_err(|e| e.to_string())?;
     let path = dir.display().to_string();
-    git(repo, &["worktree", "add", "--quiet", "-b", &branch, &path, "HEAD"])?;
+    git(repo, &["worktree", "add", "--quiet", "-b", &branch, &path, base])?;
     if let Err(e) = furnish(repo, &dir) {
         remove(repo, &path);
         let _ = git(repo, &["branch", "--quiet", "-D", &branch]);
@@ -232,11 +242,25 @@ mod tests {
     }
 
     #[test]
+    fn carries_on_from_a_branch_an_earlier_thread_committed_to() {
+        let (repo, root) = project("from");
+        let (branch, dir) = create(&repo, &root, "Add a FAQ page", None).unwrap();
+        let first = dir.display().to_string();
+        fs::write(dir.join("faq.html"), "faq\n").unwrap();
+        git(&first, &["add", "faq.html"]).unwrap();
+        git(&first, &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "--quiet", "-m", "faq"]).unwrap();
+        let (next_branch, next) = create(&repo, &root, "Style the FAQ", Some(&branch)).unwrap();
+        assert_eq!(next_branch, "shoji/style-the-faq");
+        assert!(next.join("faq.html").exists());
+        assert!(create(&repo, &root, "Again", Some("shoji/gone")).unwrap_err().contains("isn't in the project"));
+    }
+
+    #[test]
     fn copies_the_project_with_its_packages_linked_and_env_files_copied() {
         let (repo, root) = project("create");
         // Changes the person hasn't committed stay in the project, out of the thread's way.
         fs::write(Path::new(&repo).join("web/index.html"), "<p>mine</p>\n").unwrap();
-        let (branch, dir) = create(&repo, &root, "Add a FAQ page").unwrap();
+        let (branch, dir) = create(&repo, &root, "Add a FAQ page", None).unwrap();
         assert_eq!(branch, "shoji/add-a-faq-page");
         assert_eq!(dir, root.join("app").join("add-a-faq-page"));
         let path = dir.display().to_string();
@@ -256,7 +280,7 @@ mod tests {
         assert_eq!(git(&path, &["status", "--porcelain"]).unwrap(), "");
 
         // A second thread with the same task gets its own branch and folder.
-        let (second, other) = create(&repo, &root, "Add a FAQ page").unwrap();
+        let (second, other) = create(&repo, &root, "Add a FAQ page", None).unwrap();
         assert_eq!(second, "shoji/add-a-faq-page-2");
         assert_ne!(other, dir);
     }
@@ -264,7 +288,7 @@ mod tests {
     #[test]
     fn removes_the_copy_without_touching_the_project_s_packages() {
         let (repo, root) = project("remove");
-        let (branch, dir) = create(&repo, &root, "Tidy up").unwrap();
+        let (branch, dir) = create(&repo, &root, "Tidy up", None).unwrap();
         remove(&repo, &dir.display().to_string());
         assert!(!dir.exists());
         assert!(Path::new(&repo).join("node_modules/left-pad/index.js").exists());
@@ -276,7 +300,7 @@ mod tests {
     #[test]
     fn brings_a_put_away_copy_back_on_its_branch() {
         let (repo, root) = project("restore");
-        let (branch, dir) = create(&repo, &root, "Tidy up").unwrap();
+        let (branch, dir) = create(&repo, &root, "Tidy up", None).unwrap();
         let path = dir.display().to_string();
         remove(&repo, &path);
         restore(&repo, &dir, &branch).unwrap();
@@ -297,7 +321,7 @@ mod tests {
         let skill = Path::new(&repo).join(".claude/skills/migrations");
         fs::create_dir_all(&skill).unwrap();
         fs::write(skill.join("SKILL.md"), "Add a migration.\n").unwrap();
-        let (_, dir) = create(&repo, &root, "Use a command").unwrap();
+        let (_, dir) = create(&repo, &root, "Use a command", None).unwrap();
         assert_eq!(fs::read_to_string(dir.join(".claude/commands/review/pair.md")).unwrap(), "Review $1.\n");
         assert!(dir.join(".claude/skills/migrations/SKILL.md").exists());
         assert_eq!(git(&dir.display().to_string(), &["status", "--porcelain"]).unwrap(), "");
@@ -310,6 +334,6 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let repo = dir.display().to_string();
         git(&repo, &["init", "--quiet"]).unwrap();
-        assert!(create(&repo, &dir.join("worktrees"), "Anything").unwrap_err().contains("no commits"));
+        assert!(create(&repo, &dir.join("worktrees"), "Anything", None).unwrap_err().contains("no commits"));
     }
 }

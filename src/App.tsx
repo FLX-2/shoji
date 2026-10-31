@@ -10,7 +10,7 @@ import {
   type KeyStatus,
   type LedgerThread,
 } from "./bridge";
-import { folderName, HomeView } from "./home/HomeView";
+import { folderName, type HomeDraft, HomeView } from "./home/HomeView";
 import { Field } from "./look/Field";
 import { lookStyle } from "./look/LookRows";
 import { ReceiptsView } from "./receipts/ReceiptsView";
@@ -31,7 +31,7 @@ import { WindowControls } from "./shell/WindowControls";
 import { Search, type SearchItem } from "./shell/Search";
 import { Toast, type Note } from "./shell/Toast";
 import { threadMenu, type ThreadActions } from "./thread/actions";
-import { threadTitle } from "./thread/title";
+import { liveTitle, threadTitle } from "./thread/title";
 import { SECTIONS, type SectionId } from "./shell/sections";
 import { formatCost } from "./thread/fold";
 import { DEFAULT_PREVIEW } from "./thread/PreviewView";
@@ -96,6 +96,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     requestChanges,
     keepGoing,
     fix,
+    resume,
     build,
     replan,
     question,
@@ -214,6 +215,14 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   );
 
   const [startProblem, setStartProblem] = useState<string | null>(null);
+  // A task brought back to Home to edit, or a new one carrying on a committed thread. `n` makes Home take it afresh.
+  const [homeDraft, setHomeDraft] = useState<(HomeDraft & { n: number }) | null>(null);
+  const bringHome = (repo: string, draft: HomeDraft) => {
+    setPrefs({ repo });
+    setStartProblem(null);
+    setHomeDraft((now) => ({ ...draft, n: (now?.n ?? 0) + 1 }));
+    setSection("home");
+  };
   const openRecord = async (record: LedgerThread) => {
     if (!showId(record.id)) open(await reopen(bridge, record, prefs.cap));
     setSection("threads");
@@ -421,6 +430,8 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                   />
                 )}
                 <HomeView
+                  key={homeDraft?.n ?? 0}
+                  draft={homeDraft}
                   repo={prefs.repo}
                   hasKey={hasKey}
                   onPickProject={pickProject}
@@ -460,7 +471,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     setPrefs({ schedules: [...prefs.schedules, schedule] });
                     setSection("threads");
                   }}
-                  onStart={async (task, attachments) => {
+                  onStart={async (task, attachments, from) => {
                     const repo = prefs.repo;
                     if (!repo) return false;
                     // Checked here so the task stays in the composer while the person sorts the folder out.
@@ -469,7 +480,17 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     if (problem) return false;
                     return withinDay("This thread", prefs.cap, () => {
                       setSection("threads");
-                      start(task, repo, tierStack(stack.stack, tier), prefs.cap, prefs.planFirst, attachments);
+                      setHomeDraft(null);
+                      start(
+                        task,
+                        repo,
+                        tierStack(stack.stack, tier),
+                        prefs.cap,
+                        prefs.planFirst,
+                        attachments,
+                        false,
+                        from,
+                      );
                     });
                   }}
                 />
@@ -542,9 +563,24 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     onFix={() => withinDay("Fixing what the review found", prefs.cap, () => fix(prefs.cap))}
                     more={prefs.cap}
                     onRetry={() =>
-                      withinDay("This thread", thread.cap, () =>
-                        start(thread.task, thread.repo, thread.stack, thread.cap, prefs.planFirst, thread.attachments),
-                      )
+                      withinDay("This thread", thread.cap, () => {
+                        const first = thread.id;
+                        start(thread.task, thread.repo, thread.stack, thread.cap, prefs.planFirst, thread.attachments);
+                        // The first try ended before it had a plan, so it holds no work: its copy goes, and the
+                        // thread is put away, its costs kept for Receipts.
+                        if (first !== undefined) bridge.discardThread(first).then(reread, () => {});
+                      })
+                    }
+                    onEditTask={() =>
+                      bringHome(thread.repo, { task: thread.task, attachments: thread.attachments ?? [] })
+                    }
+                    onResume={resume}
+                    onContinue={() =>
+                      bringHome(thread.repo, {
+                        task: "",
+                        attachments: [],
+                        ...(thread.branch && { from: { branch: thread.branch, title: liveTitle(thread) } }),
+                      })
                     }
                     onBuild={build}
                     onReplan={replan}

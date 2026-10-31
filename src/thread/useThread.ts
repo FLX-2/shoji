@@ -40,6 +40,8 @@ export interface Thread {
   title?: string;
   /** The thread's work was thrown away: its copy and branch are gone, and it can only be read. */
   discarded?: boolean;
+  /** The branch of a committed thread this one carries on from, which its copy starts from. */
+  from?: string;
   turns: Turn[];
 }
 
@@ -72,6 +74,9 @@ const KEEP_GOING =
   "The last run stopped at its spending limit before it finished. Carry on from where it stopped and finish the task.";
 
 const FIX = "The last run ended with work left to do. Fix what the review asked for.";
+
+const RESUME =
+  "The last run was stopped before it finished. Carry on from where it stopped and finish the task, keeping the work that's already done.";
 
 /** A thread the app holds, under a key of its own, since a new thread has no ledger id until its run starts. */
 export interface Held {
@@ -141,6 +146,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
           ask: turn.ask,
           ...(planOnly && { planOnly }),
           ...(next.attachments?.length && { attachments: next.attachments }),
+          ...(!changes && next.from && { from: next.from }),
           ...(allowedIn(next.repo).length && { allowedCommands: allowedIn(next.repo) }),
         });
         const caught = early.current.get(started.run);
@@ -182,9 +188,18 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
       planFirst = false,
       attachments: string[] = [],
       background = false,
+      from?: string,
     ) => {
       const key = ++keys.current;
-      const thread: Thread = { task, repo, stack, cap, turns: [], ...(attachments.length && { attachments }) };
+      const thread: Thread = {
+        task,
+        repo,
+        stack,
+        cap,
+        turns: [],
+        ...(attachments.length && { attachments }),
+        ...(from && { from }),
+      };
       if (background) {
         setHeld((all) => [...all, { key, thread }]);
         setShownKey((shown) => shown ?? key);
@@ -255,6 +270,9 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
     },
     [thread, carryOn],
   );
+
+  /** Picks the work up where a run stopped or broke off, within what's left of the thread's limit. */
+  const resume = useCallback(() => carryOn("Pick up where it stopped", RESUME, "changes"), [carryOn]);
 
   /** Builds the plan the person read and approved. */
   const build = useCallback(() => carryOn("Build it", "", "build"), [carryOn]);
@@ -327,6 +345,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
     requestChanges,
     keepGoing,
     fix,
+    resume,
     build,
     replan,
     question,
