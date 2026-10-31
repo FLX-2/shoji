@@ -117,8 +117,15 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     // Only at launch: forgetting the key later in Settings shouldn't pull the person into setup.
   }, [bridge]);
 
-  // Changes whenever a thread gets its ledger id, starts or ends a run, or is committed.
-  const activity = threads.map((t) => `${t.id}:${t.turns.length}:${isRunning(t.turns.at(-1))}:${t.committed}`).join();
+  // Changes whenever a thread gets its ledger id, starts or ends a run, is committed, or a running thread or trial
+  // pays for a call, so today's spend keeps up with the work.
+  const activity = [
+    ...threads.map((t) => {
+      const running = isRunning(t.turns.at(-1));
+      return `${t.id}:${t.turns.length}:${running}:${t.committed}:${running ? threadCost(t) : ""}`;
+    }),
+    trials.trial && trialRunning ? trialProgress(trials.trial).spent : "",
+  ].join();
   // The ledger, read again whenever a run starts or ends: the thread list, today's spend for the daily limit,
   // recent tasks for Home's estimate, and Stack's Watching row.
   const [ledger, setLedger] = useState<LedgerThread[]>([]);
@@ -412,8 +419,15 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       {prefs.statusBar && (
         <footer className="status solid">
           <span title={prefs.repo ?? undefined}>{prefs.repo ? folderName(prefs.repo) : "No project open"}</span>
+          {thread?.branch && thread.repo === prefs.repo && (
+            <span className="branch">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M5 2.5v11M5 10.5c0-3 6-2 6-5.5M11 5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+              </svg>
+              {thread.branch}
+            </span>
+          )}
           <span className="r">
-            {thread?.branch && thread.repo === prefs.repo && <span>{thread.branch}</span>}
             {live.length > 1 && <span>{live.length} threads running</span>}
             {thread && threadRunning && prefs.showCosts && (
               <span>
@@ -423,6 +437,11 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
             {trials.trial && trialRunning && prefs.showCosts && (
               <span>
                 this trial <b>{formatCost(trialProgress(trials.trial).spent)}</b>
+              </span>
+            )}
+            {prefs.showCosts && (
+              <span title="Spent today across every thread and trial, against your daily limit">
+                today <b>{formatCost(spentToday)}</b> of {formatCost(prefs.dailyLimit)}
               </span>
             )}
           </span>

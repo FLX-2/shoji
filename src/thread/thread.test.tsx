@@ -247,7 +247,7 @@ describe("a thread in the app", () => {
     fake.emit(running("review", "review", HAIKU), done("review", "review", HAIKU, "VERDICT: APPROVE"));
     fake.emit(result("ready", 0.12));
     await act(async () => fake.exit(0));
-    expect(document.querySelector(".status .r")?.textContent).toBe("shoji/thread");
+    expect(document.querySelector(".status .branch")?.textContent).toBe("shoji/thread");
 
     await act(async () => {
       fireEvent.click(await screen.findByRole("button", { name: "Accept and commit" }));
