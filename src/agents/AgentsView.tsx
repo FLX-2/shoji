@@ -21,6 +21,10 @@ interface AgentsViewProps {
   onOpen: (record: LedgerThread) => void;
   /** Opens the box for a new task, from the empty state. */
   onNew?: () => void;
+  /** Acting on a card, without opening its thread. Accepting stays in the thread, where the changes are read. */
+  onStop?: (record: LedgerThread) => void;
+  onAnswer?: (record: LedgerThread, allow: boolean) => void;
+  onBuild?: (record: LedgerThread) => void;
 }
 
 /** What a live thread is doing now, and the last file or command it touched. */
@@ -36,7 +40,7 @@ function doing(thread: Thread): { stage: string; target?: string } {
 }
 
 /** Every thread that's running or needs the person, side by side, to follow several at once. */
-export function AgentsView({ agents, showCosts, onOpen, onNew }: AgentsViewProps) {
+export function AgentsView({ agents, showCosts, onOpen, onNew, onStop, onAnswer, onBuild }: AgentsViewProps) {
   const waiting = agents.filter((a) => a.status !== "Running").length;
   const projects = new Set(agents.map((a) => a.record.repo)).size;
   return (
@@ -61,6 +65,8 @@ export function AgentsView({ agents, showCosts, onOpen, onNew }: AgentsViewProps
             {agents.map(({ record, status, live }) => {
               const running = status === "Running";
               const now = running && live ? doing(live) : null;
+              const asking = running && live ? foldRun(live.turns.at(-1)?.events ?? []) : null;
+              const name = threadTitle(record);
               const cost = live
                 ? threadCost(live)
                 : record.runs.reduce((sum, run) => sum + run.calls.reduce((s, c) => s + c.cost, 0), 0);
@@ -81,13 +87,52 @@ export function AgentsView({ agents, showCosts, onOpen, onNew }: AgentsViewProps
                     <p className="stage">{now ? now.stage : status}</p>
                     {now?.target && <p className="target">{now.target}</p>}
                     <footer>
+                      {asking?.asking !== undefined && onAnswer ? (
+                        <>
+                          <button
+                            type="button"
+                            className="btn sm solid"
+                            aria-label={`Allow "${asking.asking}" for "${name}"`}
+                            onClick={() => onAnswer(record, true)}
+                          >
+                            Allow
+                          </button>
+                          <button
+                            type="button"
+                            className="btn sm"
+                            aria-label={`Don't allow "${asking.asking}" for "${name}"`}
+                            onClick={() => onAnswer(record, false)}
+                          >
+                            Don't allow
+                          </button>
+                        </>
+                      ) : status === "Plan ready" && onBuild ? (
+                        <button
+                          type="button"
+                          className="btn sm solid"
+                          aria-label={`Build the plan of "${name}"`}
+                          onClick={() => onBuild(record)}
+                        >
+                          Build it
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        className={running ? "btn sm" : "btn sm solid"}
+                        className={running || (status === "Plan ready" && onBuild) ? "btn sm" : "btn sm solid"}
                         onClick={() => onOpen(record)}
                       >
                         {running ? "Follow along" : status === "Plan ready" ? "Check the plan" : "Review changes"}
                       </button>
+                      {running && live && onStop && (
+                        <button
+                          type="button"
+                          className="btn sm ghost"
+                          aria-label={`Stop "${name}"`}
+                          onClick={() => onStop(record)}
+                        >
+                          Stop
+                        </button>
+                      )}
                       <span className="meta">
                         {projects > 1 && <span>{folderName(record.repo)}</span>}
                         {showCosts && cost > 0 && <span>{formatCost(cost)}</span>}

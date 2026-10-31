@@ -65,12 +65,14 @@ describe("Home", () => {
 
     fireEvent.click(within(list).getByRole("button", { name: /^docs-site/ }));
     expect(JSON.parse(localStorage.getItem("shoji.prefs")!).repo).toBe("/work/docs-site");
+    // Several threads waiting are one line, which opens Agents to look after them.
     const recent = screen.getByRole("region", { name: "Pick up where you left off" });
-    expect(
-      within(recent)
-        .getAllByRole("button")
-        .map((b) => b.querySelector("b")!.textContent),
-    ).toEqual(["Fix the build", "Tidy the nav"]);
+    const line = within(recent).getByRole("button");
+    expect(line.querySelector("b")!.textContent).toBe("2 threads need you");
+    await act(async () => {
+      fireEvent.click(line);
+    });
+    expect(screen.getByRole("button", { name: "Agents" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("has no projects list for one project, and opens a thread to pick up", async () => {
