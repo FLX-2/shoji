@@ -11,6 +11,8 @@ import { MoneyRow } from "./MoneyRow";
 import type { Prefs } from "./prefs";
 
 interface SettingsViewProps {
+  page: SettingsPage;
+  onPage: (page: SettingsPage) => void;
   prefs: Prefs;
   onChange: (change: Partial<Prefs>) => void;
   stack: Stack;
@@ -21,7 +23,23 @@ interface SettingsViewProps {
   onRunSetup: () => void;
 }
 
+/** The pages of Settings, in the order the side lists them, under their groups. */
+export const SETTINGS_PAGES = [
+  { id: "look", group: "App", label: "Look", note: "Changes apply at once" },
+  { id: "interface", group: "App", label: "Interface" },
+  { id: "models", group: "Models", label: "Models and keys", note: "Changes apply to the next thread" },
+  { id: "spending", group: "Models", label: "Spending" },
+  { id: "tools", group: "Workspace", label: "Tools and commands" },
+  { id: "data", group: "Workspace", label: "Data" },
+] as const;
+
+export type SettingsPage = (typeof SETTINGS_PAGES)[number]["id"];
+
+const GROUPS = [...new Set(SETTINGS_PAGES.map((p) => p.group))];
+
 export function SettingsView({
+  page,
+  onPage,
   prefs,
   onChange,
   stack,
@@ -31,134 +49,149 @@ export function SettingsView({
   onForgetKey,
   onRunSetup,
 }: SettingsViewProps) {
+  const shown = SETTINGS_PAGES.find((p) => p.id === page) ?? SETTINGS_PAGES[0];
   return (
-    <div className="settings">
-      <div className="swrap">
-        <section className="sg" aria-labelledby="s-models">
-          <h2 id="s-models" className="k">
-            Models
-          </h2>
-          <div className="card">
-            <KeyRow status={keyStatus} onSave={onSaveKey} onForget={onForgetKey} />
-            <div className="srow">
-              <div>
-                <b>Stack</b>
-                <span className="d">{describeStack(stack)}</span>
-              </div>
-              <button type="button" className="btn sm" onClick={onOpenStack}>
-                Change in Stack
-              </button>
+    <div className="split">
+      <nav className="side" aria-label="Settings pages">
+        <div className="mh">
+          <h1>Settings</h1>
+        </div>
+        <div className="groups">
+          {GROUPS.map((group) => (
+            <section key={group} aria-label={group}>
+              <h2 className="k">{group}</h2>
+              <ul>
+                {SETTINGS_PAGES.filter((p) => p.group === group).map((p) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      aria-current={p.id === shown.id ? "page" : undefined}
+                      onClick={() => onPage(p.id)}
+                    >
+                      {p.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+        <div className="foot">
+          <button
+            type="button"
+            className="btn sm"
+            onClick={onRunSetup}
+            title="Walk through models, stack, project and look again"
+          >
+            Run setup again
+          </button>
+        </div>
+      </nav>
+
+      <div className="spage">
+        <div className="mh">
+          <h1>{shown.label}</h1>
+          {"note" in shown && <span className="note">{shown.note}</span>}
+        </div>
+        <div className="settings">
+          <div className="swrap">
+            <div className="card">
+              {shown.id === "look" && (
+                <>
+                  <BackgroundRow prefs={prefs} onChange={onChange} />
+                  <FrostRow prefs={prefs} onChange={onChange} />
+                  <OpaqueRow prefs={prefs} onChange={onChange} />
+                  <MotionRow prefs={prefs} onChange={onChange} />
+                  <AccentRow prefs={prefs} onChange={onChange} />
+                  <DensityRow prefs={prefs} onChange={onChange} />
+                </>
+              )}
+              {shown.id === "interface" && (
+                <>
+                  <SwitchRow
+                    label="Costs"
+                    description="What a thread or trial has spent, while it runs and on the review bar. Receipts always shows them."
+                    on={prefs.showCosts}
+                    onToggle={() => onChange({ showCosts: !prefs.showCosts })}
+                  />
+                  <SwitchRow
+                    label="Model names"
+                    description="Which model takes each step of a thread, beside the step."
+                    on={prefs.showModels}
+                    onToggle={() => onChange({ showModels: !prefs.showModels })}
+                  />
+                  <SwitchRow
+                    label="Status bar"
+                    description="The project, branch and running cost along the bottom of the window."
+                    on={prefs.statusBar}
+                    onToggle={() => onChange({ statusBar: !prefs.statusBar })}
+                  />
+                </>
+              )}
+              {shown.id === "models" && (
+                <>
+                  <KeyRow status={keyStatus} onSave={onSaveKey} onForget={onForgetKey} />
+                  <div className="srow">
+                    <div>
+                      <b>Stack</b>
+                      <span className="d">{describeStack(stack)}</span>
+                    </div>
+                    <button type="button" className="btn sm" onClick={onOpenStack}>
+                      Change in Stack
+                    </button>
+                  </div>
+                  <SwitchRow
+                    label="Check the plan first"
+                    description="Each thread pauses once its plan is written, so you can build it or change it first."
+                    on={prefs.planFirst}
+                    onToggle={() => onChange({ planFirst: !prefs.planFirst })}
+                  />
+                </>
+              )}
+              {shown.id === "spending" && (
+                <>
+                  <MoneyRow
+                    id="s-cap"
+                    label="Limit per thread"
+                    description="Shoji stops a thread before any call that could take it past this."
+                    value={prefs.cap}
+                    onChange={(cap) => onChange({ cap })}
+                  />
+                  <MoneyRow
+                    id="s-daily"
+                    label="Daily limit"
+                    description="Shoji asks before a thread or trial could take the day's spend past this. Scheduled tasks that would go past it are skipped."
+                    value={prefs.dailyLimit}
+                    onChange={(dailyLimit) => onChange({ dailyLimit })}
+                  />
+                </>
+              )}
+              {shown.id === "tools" && (
+                <>
+                  <McpRow prefs={prefs} onChange={onChange} />
+                  <SwitchRow
+                    label="Let Build look at pages"
+                    description="Build can start the project's dev server in its copy and open a page in a headless browser, to see a change it made. It needs Chrome, Edge, Chromium or Brave on this computer. Each look adds a screenshot to the call's cost."
+                    on={prefs.lookAtPages}
+                    onToggle={() => onChange({ lookAtPages: !prefs.lookAtPages })}
+                  />
+                  <AllowedRows prefs={prefs} onChange={onChange} />
+                </>
+              )}
+              {shown.id === "data" && (
+                <>
+                  <PrivateRow prefs={prefs} onChange={onChange} />
+                  <SwitchRow
+                    label="Keep models current"
+                    description={`Once a day Shoji downloads the list of models and their prices from its GitHub repository, so a new model or price needs no update. It sends nothing about you or your work. Prices as listed on ${listedDay()}.`}
+                    on={prefs.updateModels}
+                    onToggle={() => onChange({ updateModels: !prefs.updateModels })}
+                  />
+                </>
+              )}
             </div>
-            <MoneyRow
-              id="s-cap"
-              label="Limit per thread"
-              description="Shoji stops a thread before any call that could take it past this."
-              value={prefs.cap}
-              onChange={(cap) => onChange({ cap })}
-            />
-            <MoneyRow
-              id="s-daily"
-              label="Daily limit"
-              description="Shoji asks before a thread or trial could take the day's spend past this."
-              value={prefs.dailyLimit}
-              onChange={(dailyLimit) => onChange({ dailyLimit })}
-            />
-            <SwitchRow
-              label="Check the plan first"
-              description="Each thread pauses once its plan is written, so you can build it or change it first."
-              on={prefs.planFirst}
-              onToggle={() => onChange({ planFirst: !prefs.planFirst })}
-            />
-            <AllowedRows prefs={prefs} onChange={onChange} />
           </div>
-        </section>
-
-        <section className="sg" aria-labelledby="s-data">
-          <h2 id="s-data" className="k">
-            Data
-          </h2>
-          <div className="card">
-            <PrivateRow prefs={prefs} onChange={onChange} />
-            <SwitchRow
-              label="Keep models current"
-              description={`Once a day Shoji downloads the list of models and their prices from its GitHub repository, so a new model or price needs no update. It sends nothing about you or your work. Prices as listed on ${listedDay()}.`}
-              on={prefs.updateModels}
-              onToggle={() => onChange({ updateModels: !prefs.updateModels })}
-            />
-          </div>
-        </section>
-
-        <section className="sg" aria-labelledby="s-tools">
-          <h2 id="s-tools" className="k">
-            Tools
-          </h2>
-          <div className="card">
-            <McpRow prefs={prefs} onChange={onChange} />
-            <SwitchRow
-              label="Let Build look at pages"
-              description="Build can start the project's dev server in its copy and open a page in a headless browser, to see a change it made. It needs Chrome, Edge, Chromium or Brave on this computer. Each look adds a screenshot to the call's cost."
-              on={prefs.lookAtPages}
-              onToggle={() => onChange({ lookAtPages: !prefs.lookAtPages })}
-            />
-          </div>
-        </section>
-
-        <section className="sg" aria-labelledby="s-look">
-          <h2 id="s-look" className="k">
-            Look
-          </h2>
-          <div className="card">
-            <BackgroundRow prefs={prefs} onChange={onChange} />
-            <FrostRow prefs={prefs} onChange={onChange} />
-            <OpaqueRow prefs={prefs} onChange={onChange} />
-            <MotionRow prefs={prefs} onChange={onChange} />
-            <AccentRow prefs={prefs} onChange={onChange} />
-            <DensityRow prefs={prefs} onChange={onChange} />
-          </div>
-        </section>
-
-        <section className="sg" aria-labelledby="s-show">
-          <h2 id="s-show" className="k">
-            Show
-          </h2>
-          <div className="card">
-            <SwitchRow
-              label="Costs"
-              description="What a thread or trial has spent, while it runs and on the review bar. Receipts always shows them."
-              on={prefs.showCosts}
-              onToggle={() => onChange({ showCosts: !prefs.showCosts })}
-            />
-            <SwitchRow
-              label="Model names"
-              description="Which model takes each step of a thread, beside the step."
-              on={prefs.showModels}
-              onToggle={() => onChange({ showModels: !prefs.showModels })}
-            />
-            <SwitchRow
-              label="Status bar"
-              description="The project, branch and running cost along the bottom of the window."
-              on={prefs.statusBar}
-              onToggle={() => onChange({ statusBar: !prefs.statusBar })}
-            />
-          </div>
-        </section>
-
-        <section className="sg" aria-labelledby="s-setup">
-          <h2 id="s-setup" className="k">
-            Setup
-          </h2>
-          <div className="card">
-            <div className="srow">
-              <div>
-                <b>First-run setup</b>
-                <span className="d">Walk through models, stack, project and look again.</span>
-              </div>
-              <button type="button" className="btn sm" onClick={onRunSetup}>
-                Run setup again
-              </button>
-            </div>
-          </div>
-        </section>
+        </div>
       </div>
     </div>
   );

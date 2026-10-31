@@ -150,6 +150,7 @@ describe("the Stack view", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     });
+    fireEvent.click(screen.getByRole("button", { name: "Models and keys" }));
     expect(screen.getByText(describeStack(STACKS.balanced))).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Change in Stack" }));
     expect(screen.getByRole("heading", { level: 2, name: "Which model takes each step" })).toBeTruthy();

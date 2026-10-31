@@ -80,6 +80,7 @@ describe("keeping models current", () => {
     const fake = await launch();
     expect(MODELS["claude-sonnet-6"]).toBeUndefined();
     await open("Settings");
+    fireEvent.click(screen.getByRole("button", { name: "Data" }));
     expect(
       screen.getByText(/It sends nothing about you or your work\. Prices as listed on 28 Oct 2026\./),
     ).toBeTruthy();
