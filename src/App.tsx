@@ -112,6 +112,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     showId,
     patch,
     close,
+    elsewhere,
   } = useThreads(bridge, allowedIn);
   const servers = useServers(bridge);
   const terminals = useTerminals(bridge);
@@ -279,6 +280,19 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     if (!showId(record.id)) open(await reopen(bridge, record, prefs.cap));
     if (!stay) setSection("threads");
   };
+  // Builds a plan from Agents. A thread from before Shoji opened is read back first, then built.
+  const [toBuild, setToBuild] = useState<number | null>(null);
+  useEffect(() => {
+    if (toBuild === null || !elsewhere.holds(toBuild)) return;
+    elsewhere.build(toBuild);
+    setToBuild(null);
+  }, [toBuild, elsewhere]);
+  const buildFrom = async (record: LedgerThread) => {
+    if (elsewhere.holds(record.id)) return elsewhere.build(record.id);
+    setToBuild(record.id);
+    open(await reopen(bridge, record, prefs.cap));
+  };
+
   // The box for a new task, in Threads with no thread on show.
   const newTask = () => {
     close();
@@ -329,8 +343,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       keptThreads
         .filter((t) => t.repo === prefs.repo)
         .map((thread) => ({ thread, ...threadState(thread, liveIds) }))
-        .filter((t) => t.group !== "Earlier")
-        .slice(0, 3),
+        .filter((t) => t.group !== "Earlier"),
     [keptThreads, liveIdsKey, prefs.repo],
   );
 
@@ -703,6 +716,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                   recent={recent}
                   firstRun={pastThreads.length === 0 && threads.length === 0}
                   onOpenThread={openRecord}
+                  onOpenAgents={() => setSection("agents")}
                 />
               </div>
             ) : section === "receipts" ? (
@@ -847,7 +861,15 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 )}
               </div>
             ) : section === "agents" ? (
-              <AgentsView agents={agents} showCosts={prefs.showCosts} onOpen={openRecord} onNew={newTask} />
+              <AgentsView
+                agents={agents}
+                showCosts={prefs.showCosts}
+                onOpen={openRecord}
+                onNew={newTask}
+                onStop={(r) => elsewhere.stop(r.id)}
+                onAnswer={(r, allow) => elsewhere.answer(r.id, allow)}
+                onBuild={buildFrom}
+              />
             ) : section === "settings" ? (
               <SettingsView
                 page={settingsPage}

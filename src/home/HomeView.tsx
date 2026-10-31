@@ -57,6 +57,8 @@ interface HomeViewProps {
   /** No thread has run yet, so Home says how Shoji works. */
   firstRun?: boolean;
   onOpenThread?: (thread: LedgerThread) => void;
+  /** Opens Agents, where several threads that run or wait are looked after. */
+  onOpenAgents?: () => void;
   showCosts?: boolean;
   /** What the page says above the box: Home's tagline, or what the Threads pane is for. */
   heading?: string;
@@ -85,6 +87,7 @@ export function HomeView({
   recent = [],
   firstRun = false,
   onOpenThread = () => {},
+  onOpenAgents,
   showCosts = true,
   draft,
   heading = "The right model for every step.",
@@ -360,7 +363,16 @@ export function HomeView({
               Pick up where you left off
             </h2>
             <ul>
-              {recent.map(({ thread, status }) => {
+              {recent.length > 1 && onOpenAgents ? (
+                <li>
+                  <button type="button" onClick={onOpenAgents}>
+                    <b>{waitingLine(recent)}</b>
+                    <span className="meta">
+                      <span>Open Agents to look after them</span>
+                    </span>
+                  </button>
+                </li>
+              ) : recent.map(({ thread, status }) => {
                 const cost = thread.runs.reduce((sum, run) => sum + run.calls.reduce((s, c) => s + c.cost, 0), 0);
                 return (
                   <li key={thread.id}>
@@ -385,6 +397,18 @@ export function HomeView({
       </div>
     </div>
   );
+}
+
+/** How many of a project's threads wait for the person and how many run, in a few words. */
+function waitingLine(recent: { status: string }[]): string {
+  const running = recent.filter((r) => r.status === "Running").length;
+  const waiting = recent.length - running;
+  return [
+    waiting && (waiting === 1 ? "1 thread needs you" : `${waiting} threads need you`),
+    running && (waiting ? `${running} running` : running === 1 ? "1 thread running" : `${running} threads running`),
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 export function folderName(path: string): string {

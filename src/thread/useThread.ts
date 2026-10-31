@@ -218,17 +218,19 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
   const shown = held.find((h) => h.key === shownKey);
   const thread = shown?.thread ?? null;
 
-  /** The live run of the thread on show, if it has one. */
-  const liveRun = useCallback(() => {
-    for (const [run, key] of runs.current) if (key === shownKey) return run;
+  /** The live run of a held thread, by its key, if it has one. */
+  const liveRunOf = useCallback((key: number | null) => {
+    for (const [run, k] of runs.current) if (k === key) return run;
     return undefined;
-  }, [shownKey]);
+  }, []);
+  /** The live run of the thread on show, if it has one. */
+  const liveRun = useCallback(() => liveRunOf(shownKey), [liveRunOf, shownKey]);
 
-  /** Carries the thread on from its latest plan: changes to the work, building the plan, or a new plan. */
-  const carryOn = useCallback(
-    (ask: string, notes: string, kind: "changes" | "build" | "replan" | "question", extra = 0) => {
-      if (!shown || shown.thread.id === undefined) return;
-      const { key, thread } = shown;
+  /** Carries a held thread on from its latest plan: changes to the work, building the plan, or a new plan. */
+  const carryOnHeld = useCallback(
+    (held: Held | undefined, ask: string, notes: string, kind: "changes" | "build" | "replan" | "question", extra = 0) => {
+      if (!held || held.thread.id === undefined) return;
+      const { key, thread } = held;
       const results = thread.turns.map((t) => foldRun(t.events).result);
       const plan = results.map((r) => r?.plan).findLast(Boolean) ?? "";
       const failingBefore = [...new Set(results.flatMap((r) => r?.failingBefore ?? []))];
@@ -249,7 +251,13 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
         kind === "replan",
       );
     },
-    [shown, run],
+    [run],
+  );
+  /** Carries the thread on show on. */
+  const carryOn = useCallback(
+    (ask: string, notes: string, kind: "changes" | "build" | "replan" | "question", extra = 0) =>
+      carryOnHeld(shown, ask, notes, kind, extra),
+    [shown, carryOnHeld],
   );
 
   const requestChanges = useCallback((notes: string) => carryOn(notes, notes, "changes"), [carryOn]);
@@ -297,6 +305,28 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
       if (live !== undefined) await bridge.answerAsk(live, allow);
     },
     [bridge, liveRun],
+  );
+
+  /** The same moves for any thread the app holds, by ledger id, from outside it, as Agents does. */
+  const byId = useCallback((id: number) => held.find((h) => h.thread.id === id), [held]);
+  const elsewhere = useMemo(
+    () => ({
+      holds: (id: number) => !!byId(id),
+      stop: async (id: number) => {
+        const h = byId(id);
+        const live = h && liveRunOf(h.key);
+        if (!h || live === undefined) return;
+        updateLast(h.key, (turn) => ({ ...turn, stoppedByYou: true }));
+        await bridge.stopRun(live);
+      },
+      answer: async (id: number, allow: boolean) => {
+        const live = liveRunOf(byId(id)?.key ?? null);
+        if (live !== undefined) await bridge.answerAsk(live, allow);
+      },
+      build: (id: number) => carryOnHeld(byId(id), "Build it", "", "build"),
+      keepGoing: (id: number, extra: number) => carryOnHeld(byId(id), "Keep going", KEEP_GOING, "changes", extra),
+    }),
+    [bridge, byId, liveRunOf, updateLast, carryOnHeld],
   );
 
   /** Accepts all of the thread's work as one commit on its branch. */
@@ -356,6 +386,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
     showId,
     patch,
     close,
+    elsewhere,
   };
 }
 

@@ -68,4 +68,59 @@ describe("Agents", () => {
     });
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Fix the footer");
   });
+
+  it("answers a command, stops a run and builds a plan from the cards", async () => {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", planFirst: false }));
+    const fake = fakeBridge();
+    const planned = thread(5, "Fix the footer", "planned");
+    fake.ledger.push(planned);
+    fake.logs[5] = [
+      {
+        type: "result",
+        result: {
+          status: "planned",
+          plan: "1. Fix the year.",
+          diff: "",
+          review: "",
+          checks: [],
+          escalated: false,
+          cost: 0.01,
+          costByRole: { scout: 0.01, plan: 0, build: 0, review: 0 },
+        },
+      },
+    ];
+    await act(async () => {
+      render(<App bridge={fake.bridge} />);
+    });
+    const task = screen.getByRole("textbox", { name: "Task" });
+    fireEvent.change(task, { target: { value: "Add a FAQ" } });
+    await act(async () => {
+      fireEvent.keyDown(task, { key: "Enter" });
+    });
+    fake.ledger.unshift(thread(1, "Add a FAQ", null));
+    await act(async () => {
+      fake.emit(
+        { type: "step", step: "build", role: "build", model: SONNET, status: "running" },
+        { type: "ask", step: "build", command: "pnpm add marked" },
+      );
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Agents" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: 'Allow "pnpm add marked" for "Add a FAQ"' }));
+    });
+    expect(fake.calls.answers).toEqual([true]);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: 'Stop "Add a FAQ"' }));
+    });
+    expect(fake.calls.stoppedRuns).toHaveLength(1);
+
+    // A plan from before Shoji opened is read back, then built, without leaving Agents.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: 'Build the plan of "Fix the footer"' }));
+    });
+    expect(fake.calls.starts.at(-1)).toMatchObject({ ask: "Build it", changes: { thread: 5, kind: "build" } });
+    expect(screen.getByRole("button", { name: "Agents" }).getAttribute("aria-current")).toBe("page");
+  });
 });
