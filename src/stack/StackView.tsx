@@ -14,6 +14,7 @@ import {
   type StackLock,
 } from "./lock";
 import { listedDay } from "./catalog";
+import { ModelPick, modelGroups } from "./ModelPick";
 import { TrialSection } from "./TrialSection";
 import type { Trial } from "./useTrial";
 import { watch } from "./watch";
@@ -108,19 +109,11 @@ export function StackView({
                     <b>{ROLE_NAMES[role].label}</b>
                     <span className="d">{ROLE_NAMES[role].does}</span>
                   </div>
-                  <div className="seg" role="radiogroup" aria-label={`${ROLE_NAMES[role].label} model`}>
-                    {Object.keys(MODELS).map((model) => (
-                      <button
-                        key={model}
-                        type="button"
-                        role="radio"
-                        aria-checked={shown[role].model === model}
-                        onClick={() => seat(role, { model })}
-                      >
-                        {MODELS[model].label.split(" ")[0]}
-                      </button>
-                    ))}
-                  </div>
+                  <ModelPick
+                    label={`${ROLE_NAMES[role].label} model`}
+                    value={shown[role].model}
+                    onPick={(model) => seat(role, { model })}
+                  />
                   <div className="seg" role="radiogroup" aria-label={`${ROLE_NAMES[role].label} effort`}>
                     {EFFORTS.map((effort) => (
                       <button
@@ -190,20 +183,22 @@ export function StackView({
                   Read from cache
                 </span>
               </div>
-              {Object.keys(MODELS).map((model) => (
-                <div key={model} className="prow" role="row">
-                  <span role="cell">{MODELS[model].label}</span>
-                  <span role="cell" className="n">
-                    ${MODELS[model].input.toFixed(2)}
-                  </span>
-                  <span role="cell" className="n">
-                    ${MODELS[model].output.toFixed(2)}
-                  </span>
-                  <span role="cell" className="n">
-                    ${MODELS[model].cacheRead.toFixed(2)}
-                  </span>
-                </div>
-              ))}
+              {modelGroups()
+                .flatMap((g) => g.ids)
+                .map((model) => (
+                  <div key={model} className="prow" role="row">
+                    <span role="cell">{MODELS[model].label}</span>
+                    <span role="cell" className="n">
+                      ${MODELS[model].input.toFixed(2)}
+                    </span>
+                    <span role="cell" className="n">
+                      ${MODELS[model].output.toFixed(2)}
+                    </span>
+                    <span role="cell" className="n">
+                      ${MODELS[model].cacheRead.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
             </div>
             <p className="d">Dollars per million tokens, as Anthropic listed them on {listedDay()}.</p>
           </section>

@@ -67,7 +67,11 @@ describe("the thread's Terminal", () => {
     await act(async () => {
       fireEvent.keyDown(task, { key: "Enter" });
     });
-    await view("Terminal");
+    // The side panel opens on its Terminal tab.
+    await view("Side panel");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("tab", { name: "Terminal" }));
+    });
     // The terminal loads the first time it opens.
     await waitFor(() => expect(fake.calls.terminals).toHaveLength(1));
     expect(fake.calls.terminals).toEqual([{ dir: "/data/worktrees/thread", cols: 80, rows: 24 }]);
@@ -79,9 +83,10 @@ describe("the thread's Terminal", () => {
     await fake.terminalSays(1, "src\r\n");
 
     // Closed and opened again, the same shell is drawn again with what it printed.
-    await view("Terminal");
-    expect(screen.queryByRole("complementary", { name: "Terminal" })).toBeNull();
-    await view("Terminal");
+    await view("Side panel");
+    expect(screen.queryByRole("tabpanel", { name: "Terminal" })).toBeNull();
+    await view("Side panel");
+    expect(screen.getByRole("tabpanel", { name: "Terminal" })).toBeTruthy();
     expect(fake.calls.terminals).toHaveLength(1);
     expect(shown().written.join("")).toBe("~/thread $ src\r\n");
 

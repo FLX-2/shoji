@@ -128,6 +128,12 @@ export function SettingsView({
                       onToggle={() => onChange({ showModels: !prefs.showModels })}
                     />
                     <SwitchRow
+                      label="Open the side panel by itself"
+                      description="In a thread, Code opens when Shoji edits a file, and Preview when it looks at a page or the dev server starts. Closing the panel keeps it closed until your next message."
+                      on={prefs.autoPanel}
+                      onToggle={() => onChange({ autoPanel: !prefs.autoPanel })}
+                    />
+                    <SwitchRow
                       label="Status bar"
                       description="The project, branch, running cost and today's spend along the bottom of the window."
                       on={prefs.statusBar}

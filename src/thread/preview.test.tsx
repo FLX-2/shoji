@@ -59,7 +59,7 @@ describe("Preview in a thread", () => {
       fireEvent.keyDown(task, { key: "Enter" });
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+      fireEvent.keyDown(window, { key: "3", ctrlKey: true });
     });
     return fake;
   }

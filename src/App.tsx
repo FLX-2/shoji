@@ -493,6 +493,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     onStopServer={servers.stop}
                     terminals={terminals}
                     still={!prefs.motion}
+                    autoPanel={prefs.autoPanel}
                   />
                 ) : (
                   <div className="empty">

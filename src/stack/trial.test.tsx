@@ -79,9 +79,8 @@ describe("trials in Stack", () => {
 
   it("replays the project's accepted tasks from where each started, on the stack on screen", async () => {
     const fake = await openStack();
-    fireEvent.click(
-      within(screen.getByRole("radiogroup", { name: "Review model" })).getByRole("radio", { name: "Sonnet" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Review model" }));
+    fireEvent.click(screen.getByRole("option", { name: /Sonnet 5\.5/ }));
     expect(screen.getByText("Trial: Review on Sonnet 5.5, low")).toBeTruthy();
     // Two accepted tasks in this project, so two is the most a trial can replay.
     const counts = screen.getByRole("radiogroup", { name: "Tasks to replay" });

@@ -60,7 +60,7 @@ describe("commenting on a thread's diff", () => {
     });
     await act(async () => fake.exit(0));
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /^Code/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Side panel" }));
     });
     return fake;
   }
@@ -96,7 +96,7 @@ describe("commenting on a thread's diff", () => {
       "Comments on the code:\n- src/Card.tsx, line 1 (`export const price = plan.annual / 12;`): Round it to whole dollars.\n- src/Card.tsx, line 2 (`export default price;`): Export it by name too.";
     expect(fake.calls.starts[1].changes?.notes).toBe(note);
     // The request shows up in the conversation, beside the code it's about.
-    expect(screen.getByRole("complementary", { name: "Code" })).toBeTruthy();
+    expect(screen.getByRole("tabpanel", { name: "Code" })).toBeTruthy();
   });
 
   it("takes no comments once the thread is committed", async () => {

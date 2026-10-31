@@ -6,7 +6,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type Dispatch,
   type ReactNode,
   type SetStateAction,
 } from "react";
@@ -35,7 +34,7 @@ import {
 import { Markdown } from "./Markdown";
 import { PreviewView } from "./PreviewView";
 import type { useTerminals } from "./useTerminals";
-import type { Server } from "./useServers";
+import { serverRunning, type Server } from "./useServers";
 import { fileName, isRunning, threadCost, type Thread, type Turn } from "./useThread";
 
 type Terminals = ReturnType<typeof useTerminals>;
@@ -82,10 +81,18 @@ interface ThreadViewProps {
   /** Motion is off. */
   still: boolean;
   onPreviewUrl: (url: string) => void;
+  /** The side panel opens by itself when Shoji edits a file or looks at a page, or a preview starts. */
+  autoPanel: boolean;
 }
 
-/** What opens beside the conversation. */
+/** The side panel's tabs. */
 type Pane = "code" | "preview" | "terminal";
+
+/** The side panel beside the conversation: whether it's open, and the tab it shows, kept while it's closed. */
+interface Panel {
+  open: boolean;
+  tab: Pane;
+}
 
 const PANES: { id: Pane; label: string; key: string }[] = [
   { id: "code", label: "Code", key: "2" },
@@ -131,6 +138,7 @@ export function ThreadView({
   onStopServer,
   terminals,
   still,
+  autoPanel,
 }: ThreadViewProps) {
   const last = thread.turns[thread.turns.length - 1];
   const running = isRunning(last);
@@ -175,14 +183,50 @@ export function ThreadView({
     };
   }, [talking, bridge, place, putAway, thread.repo]);
   const scroller = useFollow(thread);
-  // Code, Preview or Terminal, open beside the conversation, or nothing.
-  const [pane, setPane] = useState<Pane | null>(null);
-  usePaneKeys(setPane);
+  // The side panel with Code, Preview and Terminal. It opens on Code until another tab is picked.
+  const [panel, setPanel] = useState<Panel>({ open: false, tab: "code" });
+  // The turn in which the person last closed the panel: until the next turn, it doesn't open by itself.
+  const closedIn = useRef(-1);
+  const turnCount = thread.turns.length;
+  const changePanel = useCallback(
+    (change: SetStateAction<Panel>) =>
+      setPanel((now) => {
+        const next = typeof change === "function" ? change(now) : change;
+        if (now.open && !next.open) closedIn.current = turnCount;
+        return next;
+      }),
+    [turnCount],
+  );
+  usePanelKeys(changePanel);
   // Held here so the chosen file outlives closing Code.
   const [chosenFile, setChosenFile] = useState<string | null>(null);
-  // Read the project again whenever a run ends or Code opens.
+  const openFile = (path: string) => {
+    setChosenFile(path);
+    changePanel({ open: true, tab: "code" });
+  };
+  // What the run working now has edited and looked at, for the panel to follow.
+  const liveTools = running ? lastRun.steps.flatMap((s) => s.tools) : [];
+  const liveEdits = liveTools.filter((t) => EDITS.has(t.tool)).map((t) => t.target);
+  const liveLooks = liveTools.filter((t) => t.tool === "look_at_page").length;
+  // Opens by itself only while closed, so a tab the person is looking at is never pulled away, and not again
+  // in a turn where they closed it.
+  const follow = (tab: Pane, file?: string) => {
+    if (!autoPanel || panel.open || closedIn.current === turnCount) return;
+    if (file) setChosenFile(file);
+    setPanel({ open: true, tab });
+  };
+  useOnRise(liveEdits.length, () => follow("code", liveEdits[liveEdits.length - 1]));
+  useOnRise(liveLooks, () => follow("preview"));
+  // A preview starting is something the person asked for, so it shows even over another tab.
+  useOnRise(server?.url && serverRunning(server) ? 1 : 0, () => autoPanel && setPanel({ open: true, tab: "preview" }));
+  // Read the project again whenever a run ends or edits a file, or Code opens.
   const ended = thread.turns.filter((t) => t.exit || t.error).length;
-  const { changes, error, act } = useChanges(bridge, putAway ? null : place, `${ended}-${pane}-${thread.committed}`);
+  const codeOpen = panel.open && panel.tab === "code";
+  const { changes, error, act } = useChanges(
+    bridge,
+    putAway ? null : place,
+    `${ended}-${liveEdits.length}-${codeOpen}-${thread.committed}`,
+  );
   const fileCount = changes?.files.length ?? 0;
   // Comments on lines of the diff, kept across views until they go to Build.
   const [comments, setComments] = useState<LineComment[]>([]);
@@ -247,186 +291,205 @@ export function ThreadView({
 
   return (
     <section className="thread">
-      <div className="tbar solid">
-        <h1>{thread.task.split("\n")[0]}</h1>
-        <nav className="modes" aria-label="Beside the conversation">
-          {PANES.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              className="mode"
-              aria-pressed={pane === p.id}
-              title={`${pane === p.id ? "Close" : "Open"} ${p.label} beside the conversation (${SHORTCUT}${p.key})`}
-              onClick={() => setPane(pane === p.id ? null : p.id)}
-            >
-              {p.label}
-              {p.id === "code" && fileCount > 0 && <span className="cnt">{count(fileCount, "file")}</span>}
-            </button>
-          ))}
-        </nav>
-        <div className="tend">
+      <div className="convo">
+        <div className="tbar solid">
+          <h1>{thread.task.split("\n")[0]}</h1>
           <span className="stage" data-outcome={outcome}>
             <span className="dot live" aria-hidden="true" />
             {stage}
           </span>
         </div>
-      </div>
+        <div className="scroll" ref={scroller}>
+          <div className="tcol">
+            {thread.turns.map((turn, i) => (
+              <TurnView
+                key={i}
+                turn={turn}
+                run={runs[i]}
+                live={running && i === thread.turns.length - 1}
+                waiting={planned && i === thread.turns.length - 1}
+                onOpenFile={openFile}
+              />
+            ))}
+          </div>
+        </div>
 
-      <div className="tbody">
-        <div className="convo">
-          <div className="scroll" ref={scroller}>
-            <div className="tcol">
-              {thread.turns.map((turn, i) => (
-                <TurnView
-                  key={i}
-                  turn={turn}
-                  run={runs[i]}
-                  live={running && i === thread.turns.length - 1}
-                  waiting={planned && i === thread.turns.length - 1}
-                />
+        {running && lastRun.asking && (
+          <CommandAsk
+            key={lastRun.asking}
+            command={lastRun.asking}
+            tool={!!lastRun.askingTool}
+            step={now ? ROLE_NAMES[now.role].label : undefined}
+            project={fileName(thread.repo)}
+            onAnswer={(allow, always) => onAnswer(lastRun.asking!, allow, always)}
+          />
+        )}
+
+        {!running &&
+          (planned ? (
+            <div className="review">
+              <button type="button" className="btn solid" onClick={onBuild}>
+                Build it
+              </button>
+              <span className="sum">
+                {dotted([
+                  showCosts && (
+                    <>
+                      <b>{formatCost(spent)}</b> so far
+                    </>
+                  ),
+                ])}
+              </span>
+            </div>
+          ) : (
+            <div className="review">
+              {thread.committed ? (
+                <>
+                  {thread.branch && (
+                    <button
+                      type="button"
+                      className={push && "done" in push ? "btn" : "btn solid"}
+                      onClick={pushBranch}
+                      disabled={!!push && "pushing" in push}
+                    >
+                      {push && "pushing" in push ? "Pushing…" : "Push and open PR"}
+                    </button>
+                  )}
+                  <span className="done">
+                    {push && "done" in push ? (
+                      <>
+                        Pushed {thread.branch} to {push.done.remote}
+                        {!push.done.url && ". Open a pull request for it on your git host"}
+                      </>
+                    ) : (
+                      <>
+                        Committed <b>{thread.committed}</b> on {thread.branch}
+                      </>
+                    )}
+                  </span>
+                  {push && "error" in push && <span className="err">{push.error}</span>}
+                </>
+              ) : (
+                <>
+                  {thread.id === undefined && last.error && (
+                    <button type="button" className="btn solid" onClick={onRetry}>
+                      Try again
+                    </button>
+                  )}
+                  {stopped && (
+                    <button type="button" className="btn solid" onClick={onKeepGoing}>
+                      Keep going, up to {formatCost(more)} more
+                    </button>
+                  )}
+                  {fixable && (
+                    <button type="button" className="btn solid" onClick={onFix}>
+                      Fix it, up to {formatCost(more)} more
+                    </button>
+                  )}
+                  {thread.branch && fileCount > 0 && (
+                    <button
+                      type="button"
+                      className={stopped || fixable ? "btn" : "btn solid"}
+                      onClick={commit}
+                      disabled={committing}
+                    >
+                      Accept and commit
+                    </button>
+                  )}
+                  {commitError && <span className="err">{commitError}</span>}
+                </>
+              )}
+              <span className="sum">
+                {dotted([
+                  !thread.committed && checksSummary(lastWork.result?.checks),
+                  showCosts && (
+                    <>
+                      <b>{formatCost(spent)}</b> in all
+                    </>
+                  ),
+                  !thread.committed && spent >= thread.cap && `the ${formatCost(thread.cap)} limit is spent`,
+                ])}
+              </span>
+            </div>
+          ))}
+
+        {talking && (
+          <Composer
+            key={thread.id ?? "new"}
+            label={running ? "What's next" : say === "question" ? "Question" : planned ? "Plan changes" : "Changes"}
+            placeholder={
+              running
+                ? "Shoji is working. Write what's next, and send it when this run ends."
+                : say === "question"
+                  ? "Ask about this work. Nothing will change."
+                  : planned
+                    ? "What should the plan do differently?"
+                    : "Describe the changes you want…"
+            }
+            blocked={spent >= thread.cap}
+            onSend={(notes) => (say === "question" ? onQuestion : planned ? onReplan : onRequestChanges)(notes)}
+            files={files}
+            commands={commands}
+            {...(running && { onStop, stopping: last.stoppedByYou })}
+          >
+            {!running && (
+              <div className="seg" role="radiogroup" aria-label="What to send">
+                <button type="button" role="radio" aria-checked={say === "changes"} onClick={() => setSay("changes")}>
+                  {planned ? "Change the plan" : "Request changes"}
+                </button>
+                <button type="button" role="radio" aria-checked={say === "question"} onClick={() => setSay("question")}>
+                  Ask a question
+                </button>
+              </div>
+            )}
+          </Composer>
+        )}
+      </div>
+      <button
+        type="button"
+        className="ptoggle"
+        aria-label="Side panel"
+        aria-pressed={panel.open}
+        aria-controls="side-panel"
+        title={
+          panel.open
+            ? `Close the side panel (${SHORTCUT}1)`
+            : `Open the side panel: Code, Preview and Terminal (${SHORTCUT}2 to 4)`
+        }
+        onClick={() => changePanel((now) => ({ ...now, open: !now.open }))}
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="2" y="3" width="12" height="10" rx="1.5" />
+          <path d="M10 3v10" />
+        </svg>
+      </button>
+      {panel.open && (
+        <aside className="tpane" id="side-panel" aria-label="Side panel">
+          <div className="tph solid">
+            <div className="seg" role="tablist" aria-label="Side panel">
+              {PANES.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={panel.tab === p.id}
+                  aria-controls="side-panel-view"
+                  title={`${p.label} (${SHORTCUT}${p.key})`}
+                  onClick={() => changePanel({ open: true, tab: p.id })}
+                >
+                  {p.label}
+                  {p.id === "code" && fileCount > 0 && <span className="cnt">{count(fileCount, "file")}</span>}
+                </button>
               ))}
             </div>
           </div>
-
-          {running && lastRun.asking && (
-            <CommandAsk
-              key={lastRun.asking}
-              command={lastRun.asking}
-              tool={!!lastRun.askingTool}
-              step={now ? ROLE_NAMES[now.role].label : undefined}
-              project={fileName(thread.repo)}
-              onAnswer={(allow, always) => onAnswer(lastRun.asking!, allow, always)}
-            />
-          )}
-
-          {!running &&
-            (planned ? (
-              <div className="review">
-                <button type="button" className="btn solid" onClick={onBuild}>
-                  Build it
-                </button>
-                <span className="sum">
-                  {dotted([
-                    showCosts && (
-                      <>
-                        <b>{formatCost(spent)}</b> so far
-                      </>
-                    ),
-                  ])}
-                </span>
-              </div>
-            ) : (
-              <div className="review">
-                {thread.committed ? (
-                  <>
-                    {thread.branch && (
-                      <button
-                        type="button"
-                        className={push && "done" in push ? "btn" : "btn solid"}
-                        onClick={pushBranch}
-                        disabled={!!push && "pushing" in push}
-                      >
-                        {push && "pushing" in push ? "Pushing…" : "Push and open PR"}
-                      </button>
-                    )}
-                    <span className="done">
-                      {push && "done" in push ? (
-                        <>
-                          Pushed {thread.branch} to {push.done.remote}
-                          {!push.done.url && ". Open a pull request for it on your git host"}
-                        </>
-                      ) : (
-                        <>
-                          Committed <b>{thread.committed}</b> on {thread.branch}
-                        </>
-                      )}
-                    </span>
-                    {push && "error" in push && <span className="err">{push.error}</span>}
-                  </>
-                ) : (
-                  <>
-                    {thread.id === undefined && last.error && (
-                      <button type="button" className="btn solid" onClick={onRetry}>
-                        Try again
-                      </button>
-                    )}
-                    {stopped && (
-                      <button type="button" className="btn solid" onClick={onKeepGoing}>
-                        Keep going, up to {formatCost(more)} more
-                      </button>
-                    )}
-                    {fixable && (
-                      <button type="button" className="btn solid" onClick={onFix}>
-                        Fix it, up to {formatCost(more)} more
-                      </button>
-                    )}
-                    {thread.branch && fileCount > 0 && (
-                      <button
-                        type="button"
-                        className={stopped || fixable ? "btn" : "btn solid"}
-                        onClick={commit}
-                        disabled={committing}
-                      >
-                        Accept and commit
-                      </button>
-                    )}
-                    {commitError && <span className="err">{commitError}</span>}
-                  </>
-                )}
-                <span className="sum">
-                  {dotted([
-                    !thread.committed && checksSummary(lastWork.result?.checks),
-                    showCosts && (
-                      <>
-                        <b>{formatCost(spent)}</b> in all
-                      </>
-                    ),
-                    !thread.committed && spent >= thread.cap && `the ${formatCost(thread.cap)} limit is spent`,
-                  ])}
-                </span>
-              </div>
-            ))}
-
-          {talking && (
-            <Composer
-              key={thread.id ?? "new"}
-              label={running ? "What's next" : say === "question" ? "Question" : planned ? "Plan changes" : "Changes"}
-              placeholder={
-                running
-                  ? "Shoji is working. Write what's next, and send it when this run ends."
-                  : say === "question"
-                    ? "Ask about this work. Nothing will change."
-                    : planned
-                      ? "What should the plan do differently?"
-                      : "Describe the changes you want…"
-              }
-              blocked={spent >= thread.cap}
-              onSend={(notes) => (say === "question" ? onQuestion : planned ? onReplan : onRequestChanges)(notes)}
-              files={files}
-              commands={commands}
-              {...(running && { onStop, stopping: last.stoppedByYou })}
-            >
-              {!running && (
-                <div className="seg" role="radiogroup" aria-label="What to send">
-                  <button type="button" role="radio" aria-checked={say === "changes"} onClick={() => setSay("changes")}>
-                    {planned ? "Change the plan" : "Request changes"}
-                  </button>
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={say === "question"}
-                    onClick={() => setSay("question")}
-                  >
-                    Ask a question
-                  </button>
-                </div>
-              )}
-            </Composer>
-          )}
-        </div>
-        {pane && (
-          <aside className="tpane" aria-label={PANES.find((p) => p.id === pane)!.label}>
-            {pane === "code" && (
+          <div
+            className="tpv"
+            role="tabpanel"
+            id="side-panel-view"
+            aria-label={PANES.find((p) => p.id === panel.tab)!.label}
+          >
+            {panel.tab === "code" && (
               <CodeView
                 changes={changes}
                 error={error}
@@ -448,7 +511,7 @@ export function ThreadView({
               />
             )}
 
-            {pane === "terminal" && (
+            {panel.tab === "terminal" && (
               <Suspense fallback={<div className="terminal" />}>
                 <TerminalView
                   session={terminals.sessions[here]}
@@ -461,7 +524,7 @@ export function ThreadView({
                 />
               </Suspense>
             )}
-            {pane === "preview" && (
+            {panel.tab === "preview" && (
               <PreviewView
                 url={previewUrl}
                 onUrl={onPreviewUrl}
@@ -472,9 +535,9 @@ export function ThreadView({
                 onStopServer={() => onStopServer(here)}
               />
             )}
-          </aside>
-        )}
-      </div>
+          </div>
+        </aside>
+      )}
     </section>
   );
 }
@@ -525,7 +588,20 @@ function CommandAsk({
 }
 
 /** `waiting` marks the turn whose plan is waiting for the person, so the plan shows open. */
-function TurnView({ turn, run, live, waiting }: { turn: Turn; run: RunView; live: boolean; waiting: boolean }) {
+function TurnView({
+  turn,
+  run,
+  live,
+  waiting,
+  onOpenFile,
+}: {
+  turn: Turn;
+  run: RunView;
+  live: boolean;
+  waiting: boolean;
+  /** Opens the side panel on Code, at this file. */
+  onOpenFile: (path: string) => void;
+}) {
   return (
     <>
       <div className="umsg">
@@ -546,7 +622,7 @@ function TurnView({ turn, run, live, waiting }: { turn: Turn; run: RunView; live
           {run.steps.length > 0 && (
             <ol className="steps">
               {run.steps.map((_, i) => (
-                <StepRow key={i} steps={run.steps} index={i} live={live} showPlan={waiting} />
+                <StepRow key={i} steps={run.steps} index={i} live={live} showPlan={waiting} onOpenFile={onOpenFile} />
               ))}
             </ol>
           )}
@@ -567,11 +643,13 @@ function StepRow({
   index,
   live,
   showPlan,
+  onOpenFile,
 }: {
   steps: StepView[];
   index: number;
   live: boolean;
   showPlan: boolean;
+  onOpenFile: (path: string) => void;
 }) {
   const step = steps[index];
   const now = live && step.running;
@@ -601,7 +679,7 @@ function StepRow({
             Moved up to {MODELS[step.escalation.to].label}. {step.escalation.reason}
           </p>
         )}
-        <Work step={step} showPlan={showPlan} />
+        <Work step={step} showPlan={showPlan} onOpenFile={onOpenFile} />
       </div>
     </li>
   );
@@ -610,7 +688,15 @@ function StepRow({
 const READS = new Set(["read_file", "list_files", "search"]);
 const EDITS = new Set(["write_file", "replace_in_file"]);
 
-function Work({ step, showPlan }: { step: StepView; showPlan: boolean }) {
+function Work({
+  step,
+  showPlan,
+  onOpenFile,
+}: {
+  step: StepView;
+  showPlan: boolean;
+  onOpenFile: (path: string) => void;
+}) {
   const reads = step.tools.filter((t) => READS.has(t.tool));
   const edits = unique(step.tools.filter((t) => EDITS.has(t.tool)).map((t) => t.target));
   const commands = step.tools.filter((t) => t.tool === "run_command").map((t) => t.target);
@@ -635,7 +721,11 @@ function Work({ step, showPlan }: { step: StepView; showPlan: boolean }) {
       <Item key="edits" icon={ICONS.edit} summary={listSummary("Edited", edits)}>
         <ul className="files">
           {edits.map((path) => (
-            <li key={path}>{path}</li>
+            <li key={path}>
+              <button type="button" className="open" title="Open in Code" onClick={() => onOpenFile(path)}>
+                {path}
+              </button>
+            </li>
           ))}
         </ul>
       </Item>
@@ -786,21 +876,30 @@ function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean 
   return <p className={result?.status === "ready" ? "outcome" : "outcome warn"}>{text}</p>;
 }
 
-/** Ctrl+2, Ctrl+3 and Ctrl+4 (⌘ on a Mac) open or close Code, Preview and Terminal beside the
- *  conversation; Ctrl+1 closes whichever is open. */
-function usePaneKeys(setPane: Dispatch<SetStateAction<Pane | null>>) {
+/** Ctrl+2, Ctrl+3 and Ctrl+4 (⌘ on a Mac) open the side panel on Code, Preview or Terminal, or close it when
+ *  it already shows that tab; Ctrl+1 closes it. */
+function usePanelKeys(setPanel: (change: SetStateAction<Panel>) => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(MAC ? e.metaKey : e.ctrlKey) || e.altKey || e.shiftKey) return;
-      const opened = PANES.find((p) => p.key === e.key)?.id;
-      if (e.key === "1") setPane(null);
-      else if (opened) setPane((open) => (open === opened ? null : opened));
+      const tab = PANES.find((p) => p.key === e.key)?.id;
+      if (e.key === "1") setPanel((now) => ({ ...now, open: false }));
+      else if (tab) setPanel((now) => (now.open && now.tab === tab ? { ...now, open: false } : { open: true, tab }));
       else return;
       e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [setPane]);
+  }, [setPanel]);
+}
+
+/** Calls `onRise` after a draw in which `value` went up. */
+function useOnRise(value: number, onRise: () => void) {
+  const last = useRef(value);
+  useEffect(() => {
+    if (value > last.current) onRise();
+    last.current = value;
+  });
 }
 
 /** Keeps the conversation at its end while new work arrives, unless the person scrolled up. */

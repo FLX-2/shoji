@@ -38,14 +38,16 @@ describe("the thread's Code", () => {
     fake.project.diff = DIFF;
     await act(async () => fake.exit(0));
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /^Code/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Side panel" }));
     });
     return fake;
   }
 
   it("lists the changed files with their diff", async () => {
     await finishedThread();
-    expect(screen.getByRole("button", { name: /^Code/ }).textContent).toBe("Code2 files");
+    // The side panel opens on Code.
+    expect(screen.getByRole("tab", { name: /^Code/ }).textContent).toBe("Code2 files");
+    expect(screen.getByRole("tab", { name: /^Code/ }).getAttribute("aria-selected")).toBe("true");
     const list = screen.getByRole("navigation", { name: "Changed files" });
     expect(
       within(list)
@@ -79,16 +81,16 @@ describe("the thread's Code", () => {
     expect(screen.getByRole("region", { name: "src/Card.tsx" })).toBeTruthy();
   });
 
-  it("keeps the chosen file when Code is closed and opened again", async () => {
+  it("keeps the chosen file when the side panel is closed and opened again", async () => {
     await finishedThread();
     const list = screen.getByRole("navigation", { name: "Changed files" });
     fireEvent.click(within(list).getByRole("button", { name: /Badge\.tsx/ }));
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /^Code/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Side panel" }));
     });
-    expect(screen.queryByRole("complementary", { name: "Code" })).toBeNull();
+    expect(screen.queryByRole("tabpanel", { name: "Code" })).toBeNull();
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /^Code/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Side panel" }));
     });
     expect(screen.getByRole("region", { name: "src/Badge.tsx" })).toBeTruthy();
     const again = screen.getByRole("navigation", { name: "Changed files" });
@@ -99,9 +101,9 @@ describe("the thread's Code", () => {
     ).toBe("true");
   });
 
-  it("opens Code beside the conversation with Ctrl+2, and closes it with Ctrl+1", async () => {
+  it("opens the side panel on Code with Ctrl+2, and closes it with Ctrl+1", async () => {
     await finishedThread();
-    const code = screen.getByRole("button", { name: /^Code/ });
+    const code = screen.getByRole("button", { name: "Side panel" });
     expect(code.getAttribute("aria-pressed")).toBe("true");
     await act(async () => {
       fireEvent.keyDown(window, { key: "1", ctrlKey: true });
@@ -114,7 +116,7 @@ describe("the thread's Code", () => {
       fireEvent.keyDown(window, { key: "2", ctrlKey: true });
     });
     expect(
-      within(screen.getByRole("complementary", { name: "Code" })).getByRole("navigation", { name: "Changed files" }),
+      within(screen.getByRole("tabpanel", { name: "Code" })).getByRole("navigation", { name: "Changed files" }),
     ).toBeTruthy();
   });
 
@@ -175,7 +177,7 @@ describe("the thread's Code", () => {
     // The run has started editing.
     fake.project.diff = DIFF;
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /^Code/ }));
+      fireEvent.click(screen.getByRole("button", { name: "Side panel" }));
     });
     expect(screen.getByRole("button", { name: "Accept" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("button", { name: "Revert" }).hasAttribute("disabled")).toBe(true);
