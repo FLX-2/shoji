@@ -4,6 +4,7 @@ import { MODELS } from "../../runtime/src/models";
 import { SECTIONS } from "../shell/sections";
 import { foldRun, formatCost, stepLabel } from "../thread/fold";
 import { threadCost, type Thread } from "../thread/useThread";
+import { threadTitle } from "../thread/title";
 
 export interface Agent {
   /** The thread as the ledger has it. */
@@ -58,9 +59,9 @@ export function AgentsView({ agents, showCosts, onOpen }: AgentsViewProps) {
                 : record.runs.reduce((sum, run) => sum + run.calls.reduce((s, c) => s + c.cost, 0), 0);
               return (
                 <li key={record.id}>
-                  <article aria-label={record.task.split("\n")[0]}>
+                  <article aria-label={threadTitle(record)}>
                     <header>
-                      <h2>{record.task.split("\n")[0]}</h2>
+                      <h2>{threadTitle(record)}</h2>
                       <span className="pill">
                         <span
                           className={running ? "dot" : "dot ok"}

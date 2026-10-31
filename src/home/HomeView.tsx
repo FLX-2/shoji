@@ -8,6 +8,7 @@ import type { SlashCommand } from "../shell/mention";
 import { fileName } from "../thread/useThread";
 import { TIERS, type Tier } from "../stack/tier";
 import { formatCost } from "../thread/fold";
+import { threadTitle } from "../thread/title";
 
 interface HomeViewProps {
   repo: string | null;
@@ -269,7 +270,7 @@ export function HomeView({
                 return (
                   <li key={thread.id}>
                     <button type="button" onClick={() => onOpenThread(thread)}>
-                      <b>{thread.task.split("\n")[0]}</b>
+                      <b>{threadTitle(thread)}</b>
                       <span className="meta">
                         <span
                           className={status === "Running" ? "dot" : "dot ok"}

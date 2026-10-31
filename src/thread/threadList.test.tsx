@@ -196,7 +196,8 @@ describe("the thread list", () => {
     });
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Add a FAQ");
     expect(screen.getByText("Make it blue")).toBeTruthy();
-    expect(screen.getByRole("button", { name: /^Add a FAQ/ }).getAttribute("aria-current")).toBe("true");
+    const list = screen.getByRole("navigation", { name: "Threads" });
+    expect(within(list).getByRole("button", { name: /^Add a FAQ/ }).getAttribute("aria-current")).toBe("true");
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /^Fix the footer/ }));

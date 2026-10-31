@@ -757,6 +757,89 @@ async fn push_thread(app: AppHandle, repo: String, branch: String) -> Result<pus
     Ok(pushed)
 }
 
+/// Names a thread. An empty name gives it back the title Scout gave it, or its task.
+#[tauri::command]
+fn rename_thread(ledger: State<Ledger>, thread: i64, title: String) -> Result<(), String> {
+    let title = title.trim();
+    ledger
+        .set_title(thread, (!title.is_empty()).then_some(title))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn pin_thread(ledger: State<Ledger>, thread: i64, pinned: bool) -> Result<(), String> {
+    ledger.set_pinned(thread, pinned).map_err(|e| e.to_string())
+}
+
+/// Puts a thread away, or brings it back. Its copy, branch and costs all stay; the copy's dev server
+/// and terminals stop, since nobody is looking at them.
+#[tauri::command]
+fn archive_thread(
+    ledger: State<Ledger>,
+    servers: State<Servers>,
+    terminals: State<Terminals>,
+    thread: i64,
+    archived: bool,
+) -> Result<(), String> {
+    if archived {
+        if let Some(dir) = ledger.workdir_of(thread).map_err(|e| e.to_string())? {
+            servers.stop_in(&dir);
+            terminals.close_in(&dir);
+        }
+    }
+    ledger
+        .set_archived(thread, archived.then(now_ms))
+        .map_err(|e| e.to_string())
+}
+
+/// Throws away a thread's uncommitted work: its own copy of the project and its branch. The thread
+/// stays in the ledger, put away, so Receipts still count what it cost.
+#[tauri::command]
+async fn discard_thread(
+    ledger: State<'_, Ledger>,
+    servers: State<'_, Servers>,
+    terminals: State<'_, Terminals>,
+    thread: i64,
+) -> Result<(), String> {
+    let place = ledger
+        .place_of(thread)
+        .map_err(|e| e.to_string())?
+        .ok_or("Shoji has no record of this thread.")?;
+    if place.committed.is_some() {
+        return Err("This thread's work is committed, so its branch holds it. Archive the thread instead.".into());
+    }
+    let Some(dir) = place.workdir else {
+        return Err(format!(
+            "This thread worked in the project itself, so Shoji leaves {} for you to delete in git.",
+            place.branch
+        ));
+    };
+    servers.stop_in(&dir);
+    terminals.close_in(&dir);
+    worktree::remove(&place.repo, &dir);
+    // Only Shoji's own branches, never one the person made.
+    if place.branch.starts_with("shoji/") {
+        let _ = git(&place.repo, &["branch", "-D", &place.branch]);
+    }
+    ledger.discard(thread, now_ms()).map_err(|e| e.to_string())
+}
+
+/// Shows a folder in the system's file manager.
+#[tauri::command]
+fn reveal_folder(path: String) -> Result<(), String> {
+    if !Path::new(&path).is_dir() {
+        return Err("That folder isn't there any more.".into());
+    }
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else if cfg!(windows) {
+        "explorer"
+    } else {
+        "xdg-open"
+    };
+    Command::new(opener).arg(&path).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 /// Starts the project's dev server in a thread's copy, with the person's command. Returns its
 /// number; its output arrives as `server-output` and its end as `server-exit`.
 #[tauri::command]
@@ -1037,6 +1120,11 @@ pub fn run() {
             accept_file,
             revert_file,
             commit_thread,
+            rename_thread,
+            pin_thread,
+            archive_thread,
+            discard_thread,
+            reveal_folder,
             ledger_threads,
             run_events,
             export_csv,

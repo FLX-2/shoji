@@ -29,6 +29,9 @@ import type { SlashCommand } from "./shell/mention";
 import { Rail } from "./shell/Rail";
 import { WindowControls } from "./shell/WindowControls";
 import { Search, type SearchItem } from "./shell/Search";
+import { Toast, type Note } from "./shell/Toast";
+import { threadMenu, type ThreadActions } from "./thread/actions";
+import { threadTitle } from "./thread/title";
 import { SECTIONS, type SectionId } from "./shell/sections";
 import { formatCost } from "./thread/fold";
 import { DEFAULT_PREVIEW } from "./thread/PreviewView";
@@ -101,6 +104,8 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     commit,
     open,
     showId,
+    patch,
+    close,
   } = useThreads(bridge, allowedIn);
   const servers = useServers(bridge);
   const terminals = useTerminals(bridge);
@@ -140,14 +145,19 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   // The ledger, read again whenever a run starts or ends: the thread list, today's spend for the daily limit,
   // recent tasks for Home's estimate, and Stack's Watching row.
   const [ledger, setLedger] = useState<LedgerThread[]>([]);
+  // Moves on whenever the person renames, pins, archives or discards a thread, so the ledger is read again.
+  const [ledgerTick, setLedgerTick] = useState(0);
+  const reread = () => setLedgerTick((n) => n + 1);
   useEffect(() => {
     bridge
       .ledgerThreads()
       .then(setLedger)
       .catch(() => setLedger([]));
     // Read again on a commit or on opening Threads too, so each thread shows where it got to.
-  }, [bridge, activity, trialRunning, notesRunning, section]);
+  }, [bridge, activity, trialRunning, notesRunning, section, ledgerTick]);
   const pastThreads = useMemo(() => workThreads(ledger), [ledger]);
+  // Threads the person hasn't put away: what Home, Agents and the projects count.
+  const keptThreads = useMemo(() => pastThreads.filter((t) => !t.archivedAt), [pastThreads]);
   const liveIdsKey = live.map((t) => t.id).join();
   const liveIds = useMemo(() => new Set(live.flatMap((t) => (t.id === undefined ? [] : [t.id]))), [liveIdsKey]);
   // And the project's commands, for / at the start of a task.
@@ -208,16 +218,55 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     if (!showId(record.id)) open(await reopen(bridge, record, prefs.cap));
     setSection("threads");
   };
-  const projects = useMemo(() => projectsFrom(pastThreads, liveIds, prefs.repo), [pastThreads, liveIdsKey, prefs.repo]);
+  const projects = useMemo(() => projectsFrom(keptThreads, liveIds, prefs.repo), [keptThreads, liveIdsKey, prefs.repo]);
   const recent = useMemo(
     () =>
-      pastThreads
+      keptThreads
         .filter((t) => t.repo === prefs.repo)
         .map((thread) => ({ thread, ...threadState(thread, liveIds) }))
         .filter((t) => t.group !== "Earlier")
         .slice(0, 3),
-    [pastThreads, liveIdsKey, prefs.repo],
+    [keptThreads, liveIdsKey, prefs.repo],
   );
+
+  // A short note after an action, with Undo when it can be undone.
+  const [note, setNote] = useState<Note | null>(null);
+  const closeNote = useCallback(() => setNote(null), []);
+  const failed = (error: unknown) => setNote({ text: String(error).replace(/^Error: /, ""), problem: true });
+  // The thread whose name is being edited, in the list or the title bar.
+  const [renaming, setRenaming] = useState<number | null>(null);
+  const actions: ThreadActions = {
+    rename: (t) => setRenaming(t.id),
+    pin: (t, pinned) => bridge.pinThread(t.id, pinned).then(reread, failed),
+    archive: (t, archived) =>
+      bridge.archiveThread(t.id, archived).then(() => {
+        reread();
+        if (!archived) return setNote({ text: `Brought back "${threadTitle(t)}"` });
+        if (thread?.id === t.id) close();
+        setNote({
+          text: `Archived "${threadTitle(t)}"`,
+          undo: () => bridge.archiveThread(t.id, false).then(reread, failed),
+        });
+      }, failed),
+    discard: (t) =>
+      bridge.discardThread(t.id).then(() => {
+        reread();
+        patch(t.id, { discarded: true, workdir: undefined });
+        if (thread?.id === t.id) close();
+        setNote({ text: `Discarded the work of "${threadTitle(t)}"` });
+      }, failed),
+    reveal: (t) =>
+      bridge.revealFolder(t.workdir && !t.committed && !t.discardedAt ? t.workdir : t.repo).catch(failed),
+    copyBranch: (t) =>
+      navigator.clipboard.writeText(t.branch).then(() => setNote({ text: `Copied ${t.branch}` }), failed),
+  };
+  const menuFor = (t: LedgerThread) => threadMenu(t, actions, liveIds.has(t.id));
+  const renamed = (t: LedgerThread, title: string | null) => {
+    setRenaming(null);
+    if (title === null) return;
+    patch(t.id, { title });
+    bridge.renameThread(t.id, title).then(reread, failed);
+  };
 
   // Search, from the title bar or Ctrl+K (⌘K on a Mac), anywhere in the app.
   const [searching, setSearching] = useState(false);
@@ -234,8 +283,8 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     ...pastThreads.map((t) => ({
       id: `thread-${t.id}`,
       group: "Threads",
-      label: t.task.split("\n")[0],
-      detail: `${threadState(t, liveIds).status} · ${folderName(t.repo)}`,
+      label: threadTitle(t),
+      detail: `${t.archivedAt ? "Archived" : threadState(t, liveIds).status} · ${folderName(t.repo)}`,
       run: () => openRecord(t),
     })),
     ...projects.map((p) => ({
@@ -269,13 +318,16 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
 
   const agents = useMemo(
     () =>
-      pastThreads
+      keptThreads
         .map((record) => ({ record, ...threadState(record, liveIds) }))
         .filter((a) => a.group !== "Earlier")
         .sort((a, b) => (a.group === b.group ? 0 : a.group === "Running" ? -1 : 1))
         .map(({ record, status }) => ({ record, status, live: threads.find((t) => t.id === record.id) })),
-    [pastThreads, liveIdsKey, threads],
+    [keptThreads, liveIdsKey, threads],
   );
+
+  // The thread on show as the ledger has it, for its actions.
+  const shownRecord = thread?.id === undefined ? undefined : pastThreads.find((t) => t.id === thread.id);
 
   const pickProject = async () => {
     const repo = await bridge.pickProject();
@@ -454,13 +506,29 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                         ),
                       })
                     }
-                    onRemove={(id) => setPrefs({ schedules: prefs.schedules.filter((s) => s.id !== id) })}
+                    onRemove={(id) => {
+                      const at = prefs.schedules.findIndex((s) => s.id === id);
+                      const gone = prefs.schedules[at];
+                      if (!gone) return;
+                      setPrefs({ schedules: prefs.schedules.filter((s) => s.id !== id) });
+                      setNote({
+                        text: `Removed "${gone.task.split("\n")[0]}" from the schedule`,
+                        undo: () =>
+                          setPrefs((now) => ({
+                            schedules: [...now.schedules.slice(0, at), gone, ...now.schedules.slice(at)],
+                          })),
+                      });
+                    }}
                     threads={pastThreads}
                     running={liveIds}
                     current={thread?.id}
                     showCosts={prefs.showCosts}
                     onOpen={openRecord}
                     onNew={() => setSection("home")}
+                    menuFor={menuFor}
+                    renaming={renaming}
+                    onStartRename={actions.rename}
+                    onRenamed={renamed}
                   />
                 )}
                 {thread ? (
@@ -503,6 +571,12 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     terminals={terminals}
                     still={!prefs.motion}
                     autoPanel={prefs.autoPanel}
+                    {...(shownRecord && {
+                      menu: menuFor(shownRecord),
+                      renaming: renaming === shownRecord.id,
+                      onStartRename: () => setRenaming(shownRecord.id),
+                      onRenamed: (title: string | null) => renamed(shownRecord, title),
+                    })}
                   />
                 ) : (
                   <div className="empty">
@@ -543,6 +617,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
 
       {ask && <LimitAsk ask={ask} limit={prefs.dailyLimit} onClose={() => setAsk(null)} />}
       {searching && !inSetup && <Search items={searchItems()} onClose={() => setSearching(false)} />}
+      {note && <Toast note={note} onClose={closeNote} />}
 
       {prefs.statusBar && (
         <footer className="status solid">
