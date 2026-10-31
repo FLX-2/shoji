@@ -179,4 +179,16 @@ describe("Settings", () => {
     expect(screen.queryByPlaceholderText("sk-ant-…")).toBeNull();
     expect(within(pages).getByRole("button", { name: "Run setup again" })).toBeTruthy();
   });
+
+  it("lists every keyboard shortcut, with this computer's keys", async () => {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ setupDone: true }));
+    render(<App bridge={fakeBridge().bridge} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Shortcuts" }));
+    const anywhere = screen.getByRole("region", { name: "Anywhere" });
+    expect(anywhere.textContent).toBe("AnywhereSearch threads, projects, views and settingsCtrlK");
+    expect(screen.getByRole("region", { name: "In a thread" }).textContent).toContain("CodeCtrl2");
+  });
 });

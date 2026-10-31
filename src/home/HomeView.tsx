@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { LedgerThread } from "../bridge";
 import { REPEATS, type Repeat, type Schedule } from "../schedule/schedule";
 import { ClipIcon } from "../shell/ClipIcon";
+import { SECTIONS } from "../shell/sections";
 import { Composer } from "../shell/Composer";
 import type { SlashCommand } from "../shell/mention";
 import { fileName } from "../thread/useThread";
@@ -37,6 +38,8 @@ interface HomeViewProps {
   commands: SlashCommand[];
   /** The project's threads that are running or wait for the person, latest first. */
   recent?: { thread: LedgerThread; status: string }[];
+  /** No thread has run yet, so Home says how Shoji works. */
+  firstRun?: boolean;
   onOpenThread?: (thread: LedgerThread) => void;
   showCosts?: boolean;
 }
@@ -60,6 +63,7 @@ export function HomeView({
   files,
   commands,
   recent = [],
+  firstRun = false,
   onOpenThread = () => {},
   showCosts = true,
 }: HomeViewProps) {
@@ -237,6 +241,23 @@ export function HomeView({
         ) : !repo ? (
           <p className="hint">Choose a project folder. It must be a git repository.</p>
         ) : null}
+        {firstRun && repo && hasKey && !shown && (
+          <section className="firstrun" aria-label="How Shoji works">
+            <p>{SECTIONS.home.body}</p>
+            <ul>
+              <li>
+                <kbd>@</kbd> mentions a file, so the plan reads it in full.
+              </li>
+              <li>
+                <kbd>/</kbd> starts with one of the project's commands from <code>.claude/commands</code>.
+              </li>
+              <li>
+                <b>Check the plan first</b> stops after the plan, so you can change it before anything is built.
+              </li>
+              <li>Nothing is committed or pushed until you say so.</li>
+            </ul>
+          </section>
+        )}
         {recent.length > 0 && (
           <section className="recent" aria-labelledby="recent-h">
             <h2 id="recent-h" className="k">

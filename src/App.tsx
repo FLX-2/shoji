@@ -387,6 +387,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                   files={projectFiles}
                   commands={projectCommands}
                   recent={recent}
+                  firstRun={pastThreads.length === 0 && threads.length === 0}
                   onOpenThread={openRecord}
                   showCosts={prefs.showCosts}
                   onSchedule={(task, when) => {
