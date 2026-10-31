@@ -47,10 +47,11 @@ describe("the thread's Code", () => {
     await finishedThread();
     expect(screen.getByRole("button", { name: /^Code/ }).textContent).toBe("Code2 files");
     const list = screen.getByRole("navigation", { name: "Changed files" });
-    expect(within(list).getAllByRole("button").map((b) => b.textContent)).toEqual([
-      "Card.tsxsrc+1 −1",
-      "Badge.tsxsrc+1 −0",
-    ]);
+    expect(
+      within(list)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Card.tsxsrc+1 −1", "Badge.tsxsrc+1 −0"]);
     const pane = screen.getByRole("region", { name: "src/Card.tsx" });
     expect(pane.querySelector(".l.del .tx")?.textContent).toBe("export const price = plan.monthly;");
     expect(pane.querySelector(".l.add .tx")?.textContent).toBe("export const price = plan.annual / 12;");
@@ -90,7 +91,11 @@ describe("the thread's Code", () => {
     });
     expect(screen.getByRole("region", { name: "src/Badge.tsx" })).toBeTruthy();
     const again = screen.getByRole("navigation", { name: "Changed files" });
-    expect(within(again).getByRole("button", { name: /Badge\.tsx/ }).getAttribute("aria-current")).toBe("true");
+    expect(
+      within(again)
+        .getByRole("button", { name: /Badge\.tsx/ })
+        .getAttribute("aria-current"),
+    ).toBe("true");
   });
 
   it("switches views with Ctrl+1 and Ctrl+2", async () => {

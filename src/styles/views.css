@@ -1776,6 +1776,34 @@
   box-shadow: inset 2px 0 0 rgba(var(--bad-rgb), 0.55);
 }
 
+/* Code in the Zone greys: keywords lift, strings and comments sink. Removed lines stay one quiet grey. */
+.diff .sy-keyword {
+  font-weight: 500;
+  color: var(--z10);
+}
+
+.diff .sy-number {
+  color: var(--z9);
+}
+
+.diff .sy-string {
+  color: var(--z7);
+}
+
+.diff .l.add .sy-string {
+  color: var(--z8);
+}
+
+.diff .sy-comment {
+  color: var(--z6);
+  font-style: italic;
+}
+
+.diff .l.del [class^="sy-"] {
+  color: inherit;
+  font-weight: inherit;
+}
+
 /* Receipts: the month's figures and threads on the left, the chosen thread's receipt on the right. */
 .mh .period {
   display: flex;

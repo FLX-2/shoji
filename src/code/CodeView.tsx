@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { commentOn, isOn, type LineComment } from "./comments";
 import type { DiffLine, FileDiff, Hunk } from "./diff";
+import { highlight, languageOf } from "./syntax";
 import type { Changes } from "./useChanges";
 
 interface CodeViewProps {
@@ -257,6 +258,7 @@ function FilePane(props: {
                 hunk={hunk}
                 gap={i > 0}
                 notes={{ path: file.path, comments, ...(onComments && { onComments }) }}
+                language={languageOf(file.path)}
               />
             ))
           )}
@@ -275,7 +277,18 @@ interface Notes {
 
 /** One stretch of change. `gap` marks the unchanged lines skipped since the last one. With `notes`,
  *  a line's number opens a comment on it, and its comments show beneath it. */
-export function HunkView({ hunk, gap, notes }: { hunk: Hunk; gap: boolean; notes?: Notes }) {
+export function HunkView({
+  hunk,
+  gap,
+  notes,
+  language = null,
+}: {
+  hunk: Hunk;
+  gap: boolean;
+  notes?: Notes;
+  /** The language to colour the code as, from languageOf. */
+  language?: string | null;
+}) {
   const [drafting, setDrafting] = useState<DiffLine | null>(null);
   return (
     <div className="hunk">
@@ -299,7 +312,19 @@ export function HunkView({ hunk, gap, notes }: { hunk: Hunk; gap: boolean; notes
               ) : (
                 <span className="ln">{line.new ?? ""}</span>
               )}
-              <span className="tx">{line.text || " "}</span>
+              <span className="tx">
+                {line.text
+                  ? highlight(line.text, language).map((piece, n) =>
+                      piece.kind === "plain" ? (
+                        piece.text
+                      ) : (
+                        <span key={n} className={`sy-${piece.kind}`}>
+                          {piece.text}
+                        </span>
+                      ),
+                    )
+                  : " "}
+              </span>
             </div>
             {here.map((c, n) => (
               <div key={n} className="lc">
