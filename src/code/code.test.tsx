@@ -79,13 +79,14 @@ describe("the thread's Code", () => {
     expect(screen.getByRole("region", { name: "src/Card.tsx" })).toBeTruthy();
   });
 
-  it("keeps the chosen file when switching to Conversation and back", async () => {
+  it("keeps the chosen file when Code is closed and opened again", async () => {
     await finishedThread();
     const list = screen.getByRole("navigation", { name: "Changed files" });
     fireEvent.click(within(list).getByRole("button", { name: /Badge\.tsx/ }));
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Conversation" }));
+      fireEvent.click(screen.getByRole("button", { name: /^Code/ }));
     });
+    expect(screen.queryByRole("complementary", { name: "Code" })).toBeNull();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /^Code/ }));
     });
@@ -98,17 +99,23 @@ describe("the thread's Code", () => {
     ).toBe("true");
   });
 
-  it("switches views with Ctrl+1 and Ctrl+2", async () => {
+  it("opens Code beside the conversation with Ctrl+2, and closes it with Ctrl+1", async () => {
     await finishedThread();
+    const code = screen.getByRole("button", { name: /^Code/ });
+    expect(code.getAttribute("aria-pressed")).toBe("true");
     await act(async () => {
       fireEvent.keyDown(window, { key: "1", ctrlKey: true });
     });
     expect(screen.queryByRole("navigation", { name: "Changed files" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Conversation" }).getAttribute("aria-current")).toBe("page");
+    expect(code.getAttribute("aria-pressed")).toBe("false");
+    // The conversation stays where it was.
+    expect(screen.getByRole("button", { name: "Accept and commit" })).toBeTruthy();
     await act(async () => {
       fireEvent.keyDown(window, { key: "2", ctrlKey: true });
     });
-    expect(screen.getByRole("navigation", { name: "Changed files" })).toBeTruthy();
+    expect(
+      within(screen.getByRole("complementary", { name: "Code" })).getByRole("navigation", { name: "Changed files" }),
+    ).toBeTruthy();
   });
 
   it("accepts a file, and reverts one only after asking", async () => {

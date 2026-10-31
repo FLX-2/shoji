@@ -268,6 +268,31 @@
   stroke-linejoin: round;
 }
 
+/* Stop, in Send's place while a run works: a lifted tile, since it doesn't move the work on. */
+.send.stop {
+  box-sizing: border-box;
+  background: var(--z3);
+  border: 1px solid var(--hair);
+}
+
+.send.stop:hover:not(:disabled) {
+  background: var(--z4);
+}
+
+.send.stop svg {
+  fill: var(--z10);
+  stroke: none;
+}
+
+.send.stop:disabled svg {
+  fill: var(--z6);
+}
+
+.send:focus-visible {
+  outline: 2px solid var(--z10);
+  outline-offset: 2px;
+}
+
 /* Home */
 .home {
   flex: 1;
@@ -475,6 +500,35 @@
 
 .tbar .stage[data-outcome="failed"] .dot {
   background: var(--bad);
+}
+
+/* The conversation, and beside it whichever of Code, Preview and Terminal is open. */
+.tbody {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tbody:has(> .tpane) {
+  grid-template-columns: minmax(360px, 1fr) minmax(0, 1.2fr);
+}
+
+.convo {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tpane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--hair);
+  background: var(--pane);
+  container-type: inline-size;
 }
 
 .thread .scroll {
@@ -876,8 +930,8 @@
 }
 
 /* The review bar and the composer sit under the reading column, not across the window. */
-.thread > .review,
-.thread > .composer {
+.convo > .review,
+.convo > .composer {
   width: min(720px, 100% - 64px);
   margin-inline: auto;
 }
@@ -1326,7 +1380,7 @@
   color: var(--z9);
 }
 
-.mode[aria-current="page"] {
+.mode[aria-pressed="true"] {
   color: var(--z10);
   background: var(--z3);
 }
@@ -1342,7 +1396,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.mode[aria-current="page"] .cnt {
+.mode[aria-pressed="true"] .cnt {
   color: var(--z7);
 }
 
@@ -1515,6 +1569,20 @@
 
 .codeview > .empty {
   grid-column: 1 / -1;
+}
+
+/* In a narrow pane the changed files sit above the diff instead of beside it. */
+@container (max-width: 720px) {
+  .codeview {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .codeview .files-list {
+    max-height: 168px;
+    border-right: 0;
+    border-bottom: 1px solid var(--hair);
+  }
 }
 
 .files-list {

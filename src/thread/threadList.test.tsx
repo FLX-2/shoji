@@ -201,7 +201,7 @@ describe("the thread list", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /^Fix the footer/ }));
     });
-    fireEvent.click(screen.getByRole("button", { name: "Request changes" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Request changes" }));
     const notes = screen.getByRole("textbox", { name: "Changes" });
     fireEvent.change(notes, { target: { value: "Move it below the fold" } });
     await act(async () => {
