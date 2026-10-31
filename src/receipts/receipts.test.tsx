@@ -3,7 +3,18 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import App from "../App";
 import type { LedgerCall, LedgerRun, LedgerThread } from "../bridge";
 import { fakeBridge } from "../test/fakeBridge";
-import { firstTry, monthOf, oneModelCost, outcome, priceAs, receipt, summarize, toCsv } from "./receipts";
+import {
+  dailySpend,
+  firstTry,
+  monthOf,
+  oneModelCost,
+  outcome,
+  priceAs,
+  projectSpend,
+  receipt,
+  summarize,
+  toCsv,
+} from "./receipts";
 
 const OCT = new Date(2026, 9, 20, 14, 5).getTime();
 const SEP = new Date(2026, 8, 12, 9, 30).getTime();
@@ -128,6 +139,27 @@ describe("receipts", () => {
     expect(r.tokensOut).toBe(3000);
   });
 
+  it("sums each day of the month by when its calls were made, and each project", () => {
+    const early = new Date(2026, 9, 3, 23, 50).getTime();
+    const threads = [
+      thread(1, "A", [
+        run("task", "ready", [{ ...call("plan", "plan", "x"), at: early }, call("build", "build", "x")]),
+      ]),
+      thread(2, "B", [run("task", "ready", [call("build", "build", "x")])], { repo: "/work/docs" }),
+      thread(3, "C", [run("task", "ready", [{ ...call("build", "build", "x"), at: SEP }])], { startedAt: SEP }),
+    ];
+    const days = dailySpend(threads, "2026-10");
+    expect(days).toHaveLength(31);
+    expect(days[2]).toBeCloseTo(0.01);
+    expect(days[19]).toBeCloseTo(0.02);
+    expect(days.reduce((a, b) => a + b)).toBeCloseTo(0.03);
+    expect(dailySpend(threads, "2026-09")).toHaveLength(30);
+    expect(projectSpend(threads, "2026-10").map((p) => [p.repo, +p.spent.toFixed(2)])).toEqual([
+      ["/work/pricing-page", 0.02],
+      ["/work/docs", 0.01],
+    ]);
+  });
+
   it("names how a thread ended", () => {
     expect(outcome(thread(1, "t", [run("task", "ready", [])], { committed: "a1" }))).toBe("Accepted");
     expect(outcome(thread(1, "t", [run("task", "ready", [])]))).toBe("Not accepted");
@@ -179,6 +211,30 @@ describe("the Receipts view", () => {
     expect(within(pane).getByText("Add formatCost tests")).toBeTruthy();
     expect(within(pane).getByText("Stopped")).toBeTruthy();
     expect(within(pane).getByText("Scout")).toBeTruthy();
+  });
+
+  it("shows each day's spend, and one project at a time when there are several", async () => {
+    await openReceipts([
+      thread(2, "Fix the docs nav", [run("task", "ready", [call("build", "build", "x")])], { repo: "/work/docs" }),
+      thread(1, "Escape closes the box", [run("task", "ready", routed())]),
+    ]);
+    const chart = screen.getByRole("list", { name: "What each day of October 2026 cost" });
+    expect(within(chart).getAllByRole("listitem")).toHaveLength(31);
+    expect(within(chart).getByRole("listitem", { name: /^20 Oct: \$0\.\d+$/ })).toBeTruthy();
+
+    const projects = screen.getByRole("navigation", { name: "Projects" });
+    expect(
+      within(projects)
+        .getAllByRole("button")
+        .map((b) => b.querySelector("b")!.textContent),
+    ).toEqual(["All projects", "pricing-page", "docs"]);
+    expect(screen.getAllByRole("row")).toHaveLength(3);
+    fireEvent.click(within(projects).getByRole("button", { name: /^docs/ }));
+    expect(screen.getAllByRole("row").map((r) => r.textContent)).toEqual([
+      "TaskModelsOutcomeCost",
+      expect.stringMatching(/^Fix the docs nav/),
+    ]);
+    expect(within(screen.getByRole("complementary", { name: "Receipt" })).getByText("Fix the docs nav")).toBeTruthy();
   });
 
   it("says when a thread never reached a model", async () => {

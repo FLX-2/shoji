@@ -5,11 +5,14 @@ import { SECTIONS } from "../shell/sections";
 import { formatCost } from "../thread/fold";
 import {
   baselineModel,
+  dailySpend,
   modelLabel,
   modelsUsed,
   monthName,
+  monthOf,
   months,
   outcome,
+  projectSpend,
   receipt,
   summarize,
   threadSpend,
@@ -53,6 +56,8 @@ export function ReceiptsView({ bridge }: { bridge: Bridge }) {
   const [month, setMonth] = useState<string | null>(null);
   const [chosen, setChosen] = useState<number | null>(null);
   const [exported, setExported] = useState<string | null>(null);
+  // The project to show alone, or null for all of them.
+  const [project, setProject] = useState<string | null>(null);
 
   useEffect(() => {
     bridge
@@ -63,7 +68,14 @@ export function ReceiptsView({ bridge }: { bridge: Bridge }) {
 
   const all = useMemo(() => months(threads ?? []), [threads]);
   const shown = month ?? all[0];
-  const summary = useMemo(() => (threads && shown ? summarize(threads, shown) : null), [threads, shown]);
+  const byProject = useMemo(() => (threads && shown ? projectSpend(threads, shown) : []), [threads, shown]);
+  const picked = project && byProject.some((p) => p.repo === project) ? project : null;
+  const mine = useMemo(
+    () => (threads && picked ? threads.filter((t) => t.repo === picked) : threads),
+    [threads, picked],
+  );
+  const summary = useMemo(() => (mine && shown ? summarize(mine, shown) : null), [mine, shown]);
+  const days = useMemo(() => (mine && shown ? dailySpend(mine, shown) : []), [mine, shown]);
   const open = summary?.threads.find((t) => t.id === chosen) ?? summary?.threads[0];
 
   const header = (children?: ReactNode) => (
@@ -105,7 +117,7 @@ export function ReceiptsView({ bridge }: { bridge: Bridge }) {
       .catch((e) => setExported(String(e)));
   };
 
-  return (
+  const content = (
     <>
       {header(
         <>
@@ -176,6 +188,8 @@ export function ReceiptsView({ bridge }: { bridge: Bridge }) {
             </div>
           </dl>
 
+          <DailyChart days={days} month={shown} />
+
           <div
             className={projects ? "rtable" : "rtable one"}
             role="table"
@@ -220,6 +234,82 @@ export function ReceiptsView({ bridge }: { bridge: Bridge }) {
         {open && <ReceiptPane thread={open} />}
       </div>
     </>
+  );
+  if (byProject.length < 2) return content;
+  const total = byProject.reduce((sum, p) => sum + p.spent, 0);
+  return (
+    <div className="split">
+      <nav className="tlist" aria-label="Projects">
+        <div className="mh">
+          <h2 className="title">Projects</h2>
+        </div>
+        <div className="groups">
+          <ul>
+            {[{ repo: null, spent: total }, ...byProject].map((p) => (
+              <li key={p.repo ?? ""}>
+                <button
+                  type="button"
+                  className="spend"
+                  title={p.repo ?? undefined}
+                  aria-current={p.repo === picked || undefined}
+                  onClick={() => {
+                    setProject(p.repo);
+                    setChosen(null);
+                  }}
+                >
+                  <b>{p.repo ? folderName(p.repo) : "All projects"}</b>
+                  <span className="meta">{formatCost(p.spent)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </nav>
+      <div className="spage">{content}</div>
+    </div>
+  );
+}
+
+/** What each day of the month cost, as bars; pointing at one says its day and amount. */
+function DailyChart({ days, month }: { days: number[]; month: string }) {
+  const [pointed, setPointed] = useState<number | null>(null);
+  const most = Math.max(...days);
+  const now = new Date();
+  const today = monthOf(now.getTime()) === month ? now.getDate() - 1 : -1;
+  const [year, m] = month.split("-").map(Number);
+  const dayName = (i: number) =>
+    new Date(year, m - 1, i + 1).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  if (most <= 0) return null;
+  return (
+    <figure className="daily" onMouseLeave={() => setPointed(null)}>
+      <figcaption>
+        {pointed === null ? (
+          <>
+            Each day <span className="n">most {formatCost(most)}</span>
+          </>
+        ) : (
+          <>
+            {dayName(pointed)} <span className="n">{formatCost(days[pointed])}</span>
+          </>
+        )}
+      </figcaption>
+      <ol aria-label={`What each day of ${monthName(month)} cost`}>
+        {days.map((cost, i) => (
+          <li
+            key={i}
+            aria-label={`${dayName(i)}: ${formatCost(cost)}`}
+            data-today={i === today || undefined}
+            onMouseEnter={() => setPointed(i)}
+          >
+            <span style={{ height: `${(cost / most) * 100}%` }} />
+          </li>
+        ))}
+      </ol>
+      <div className="days" aria-hidden="true">
+        <span>1</span>
+        <span>{days.length}</span>
+      </div>
+    </figure>
   );
 }
 

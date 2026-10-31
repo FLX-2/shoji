@@ -1847,6 +1847,8 @@
   padding: 32px 32px 40px;
   display: grid;
   align-content: start;
+  /* Rows keep their height when the column scrolls; the clipped figures strip would shrink to nothing. */
+  grid-auto-rows: max-content;
   gap: 36px;
   scrollbar-width: thin;
   scrollbar-color: var(--z4) transparent;
@@ -1876,6 +1878,73 @@
   box-shadow:
     -1px 0 0 var(--hair),
     0 -1px 0 var(--hair);
+}
+
+/* What each day cost: one grey series, today a step brighter. */
+.daily {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.daily figcaption {
+  display: flex;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--z7);
+}
+
+.daily figcaption .n {
+  color: var(--z9);
+  font-variant-numeric: tabular-nums;
+}
+
+.daily ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  height: 96px;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  border-bottom: 1px solid var(--hair);
+}
+
+.daily li {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  cursor: default;
+}
+
+.daily li span {
+  width: 100%;
+  min-height: 1px;
+  border-radius: 2px 2px 0 0;
+  background: var(--z5);
+}
+
+.daily li[data-today] span {
+  background: var(--z9);
+}
+
+.daily li:hover span {
+  background: var(--z10);
+}
+
+.daily .days {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--z6);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A project and what it cost, on one line */
+.tlist .groups li button.spend {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
 }
 
 .figures dt {
