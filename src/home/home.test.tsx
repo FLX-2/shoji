@@ -52,7 +52,7 @@ describe("Home", () => {
     const list = screen.getByRole("navigation", { name: "Projects" });
     const rows = within(list)
       .getAllByRole("button")
-      .slice(1)
+      .filter((b) => !b.matches(".add, .more"))
       .map((b) => b.textContent);
     expect(rows[0]).toBe("pricing-page1 needs you");
     expect(rows[1]).toBe("docs-site2 need you");

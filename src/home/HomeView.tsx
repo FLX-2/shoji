@@ -4,6 +4,7 @@ import { REPEATS, type Repeat, type Schedule } from "../schedule/schedule";
 import { ClipIcon } from "../shell/ClipIcon";
 import { SECTIONS } from "../shell/sections";
 import { Composer } from "../shell/Composer";
+import { Menu, SEPARATOR, under } from "../shell/Menu";
 import type { SlashCommand } from "../shell/mention";
 import { fileName } from "../thread/useThread";
 import { TIERS, type Tier } from "../stack/tier";
@@ -22,6 +23,9 @@ interface HomeViewProps {
   repo: string | null;
   hasKey: boolean;
   onPickProject: () => void;
+  /** The projects Shoji knows, latest first, for the project chip's menu. */
+  projects?: string[];
+  onChooseProject?: (repo: string) => void;
   onOpenSettings: () => void;
   /** New threads pause after the plan. */
   planFirst: boolean;
@@ -56,6 +60,8 @@ interface HomeViewProps {
   showCosts?: boolean;
   /** What the page says above the box: Home's tagline, or what the Threads pane is for. */
   heading?: string;
+  /** Tasks Scout's notes suggest for a first try in this project. */
+  starters?: string[];
 }
 
 /** Start: pick a project and describe a change. */
@@ -82,7 +88,15 @@ export function HomeView({
   showCosts = true,
   draft,
   heading = "The right model for every step.",
+  projects = [],
+  onChooseProject,
+  starters = [],
 }: HomeViewProps) {
+  // A starter task the person picked, put in the box.
+  const [seed, setSeed] = useState<{ text: string; n: number } | null>(null);
+  const offer = firstRun && repo && hasKey ? starters : [];
+  const [choosing, setChoosing] = useState<{ x: number; y: number } | null>(null);
+  const others = projects.filter((p) => p !== repo);
   const [attached, setAttached] = useState<string[]>(draft?.attachments ?? []);
   const [from, setFrom] = useState(draft?.from);
   const [attachProblem, setAttachProblem] = useState<string | null>(null);
@@ -106,12 +120,14 @@ export function HomeView({
       <div className="hwrap">
         <h1 className="hello">{heading}</h1>
         <Composer
+          key={seed?.n ?? 0}
           hero
+          {...(offer[0] && { suggestion: offer[0] })}
           label="Task"
           placeholder={from ? "What should happen next?" : "Describe a change…"}
-          initial={draft?.task}
+          initial={seed?.text ?? draft?.task}
           draft="task"
-          autoFocus={!!draft}
+          autoFocus={!!draft || !!seed}
           blocked={!repo || !hasKey}
           files={files}
           commands={commands}
@@ -129,6 +145,22 @@ export function HomeView({
             return started;
           }}
           onPasteImages={(images) => attach(Promise.all(images.map(onSavePasted)))}
+          sendLabel={repeat ? "Save to the schedule" : "Start now"}
+          sendAlso={
+            <button
+              type="button"
+              className="also"
+              aria-label="Schedule"
+              aria-pressed={repeat !== null}
+              title={repeat ? "Start it now instead" : "Run this task by itself on a schedule"}
+              onClick={() => setRepeat(repeat ? null : "weekdays")}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="8" />
+                <path d="M12 8v4l3 2" />
+              </svg>
+            </button>
+          }
           above={
             repeat ? (
               <div className="repeat">
@@ -210,24 +242,21 @@ export function HomeView({
               <ClipIcon />
             </button>
           )}
-          <button type="button" className="chip" onClick={onPickProject} title={repo ?? undefined}>
+          <button
+            type="button"
+            className="chip"
+            title={repo ?? undefined}
+            {...(others.length > 0 && onChooseProject && { "aria-haspopup": "menu" as const, "aria-expanded": !!choosing })}
+            onClick={(e) =>
+              others.length > 0 && onChooseProject
+                ? setChoosing(choosing ? null : under(e.currentTarget))
+                : onPickProject()
+            }
+          >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M3 6h6l2 2h10v11H3z" />
             </svg>
             {repo ? folderName(repo) : "Choose a project"}
-          </button>
-          <button
-            type="button"
-            className="chip"
-            aria-pressed={repeat !== null}
-            onClick={() => setRepeat(repeat ? null : "weekdays")}
-            title="Run this task by itself on a schedule"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="12" r="8" />
-              <path d="M12 8v4l3 2" />
-            </svg>
-            Repeat
           </button>
           {!repeat && (
             <button
@@ -263,6 +292,22 @@ export function HomeView({
             </span>
           )}
         </Composer>
+        {choosing && onChooseProject && (
+          <Menu
+            at={choosing}
+            label="Project"
+            items={[
+              ...projects.map((p) => ({
+                label: folderName(p),
+                ...(p === repo && { hint: "✓" }),
+                run: () => onChooseProject(p),
+              })),
+              SEPARATOR,
+              { label: "Open another folder…", run: onPickProject },
+            ]}
+            onClose={() => setChoosing(null)}
+          />
+        )}
         {shown ? (
           <p className="hint" role="alert">
             {shown}
@@ -292,6 +337,21 @@ export function HomeView({
               </li>
               <li>Nothing is committed or pushed until you say so.</li>
             </ul>
+            {offer.length > 0 && (
+              <div className="starters">
+                <h2 className="k">From Scout's read of the project</h2>
+                {offer.map((task) => (
+                  <button
+                    key={task}
+                    type="button"
+                    className="chip"
+                    onClick={() => setSeed((now) => ({ text: task, n: (now?.n ?? 0) + 1 }))}
+                  >
+                    {task}
+                  </button>
+                ))}
+              </div>
+            )}
           </section>
         )}
         {recent.length > 0 && (

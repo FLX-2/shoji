@@ -611,7 +611,7 @@ describe("home", () => {
     localStorage.setItem("shoji.prefs", JSON.stringify({ setupDone: true }));
     render(<App bridge={fakeBridge({ saved: false, fromEnv: false }).bridge} />);
     expect(await screen.findByText("Add it in Settings")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Send" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Start now" }).hasAttribute("disabled")).toBe(true);
   });
 });
 

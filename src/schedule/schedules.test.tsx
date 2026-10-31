@@ -31,7 +31,7 @@ describe("scheduled tasks", () => {
     const fake = fakeBridge();
     render(<App bridge={fake.bridge} />);
     const task = await screen.findByRole("textbox", { name: "Task" });
-    fireEvent.click(screen.getByRole("button", { name: "Repeat" }));
+    fireEvent.click(screen.getByRole("button", { name: "Schedule" }));
     fireEvent.click(screen.getByRole("radio", { name: "Every week" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Day" }), { target: { value: "5" } });
     fireEvent.change(screen.getByLabelText("Time"), { target: { value: "17:30" } });

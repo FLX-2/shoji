@@ -31,6 +31,12 @@ interface ComposerProps {
   initial?: string;
   /** Where the composer is, such as "task" or a thread, to keep what's written there and not sent. */
   draft?: string;
+  /** A second way to send, joined to Send's side, such as scheduling the task instead. */
+  sendAlso?: ReactNode;
+  /** What Send says it does, when not just sending. */
+  sendLabel?: string;
+  /** A task to offer in the empty box, which Tab places. */
+  suggestion?: string;
 }
 
 /** One line of the list under the text: a file after @, or a command after a leading /. */
@@ -61,6 +67,9 @@ export function Composer({
   stopping,
   initial = "",
   draft,
+  sendAlso,
+  sendLabel = "Send",
+  suggestion,
 }: ComposerProps) {
   const [text, setText] = useState(() => initial || (draft ? draftFor(draft) : ""));
   useEffect(() => {
@@ -137,7 +146,7 @@ export function Composer({
       <textarea
         ref={box}
         aria-label={label}
-        placeholder={placeholder}
+        placeholder={suggestion ? `${suggestion}  (Tab to use it)` : placeholder}
         value={text}
         autoFocus={autoFocus}
         rows={hero ? 3 : 2}
@@ -174,7 +183,10 @@ export function Composer({
               return;
             }
           }
-          if (e.key === "ArrowUp" && text === "" && draft && draftFor(`last:${draft}`)) {
+          if (e.key === "Tab" && !e.shiftKey && text === "" && suggestion) {
+            e.preventDefault();
+            setText(suggestion);
+          } else if (e.key === "ArrowUp" && text === "" && draft && draftFor(`last:${draft}`)) {
             // An empty box brings back what was last sent from it.
             e.preventDefault();
             setText(draftFor(`last:${draft}`));
@@ -230,11 +242,14 @@ export function Composer({
             </svg>
           </button>
         ) : (
-          <button type="submit" className="send" aria-label="Send" disabled={!ready}>
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 19V5M5 12l7-7 7 7" />
-            </svg>
-          </button>
+          <div className={sendAlso ? "sends" : "sends solo"}>
+            {sendAlso}
+            <button type="submit" className="send" aria-label={sendLabel} title={sendLabel} disabled={!ready}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 19V5M5 12l7-7 7 7" />
+              </svg>
+            </button>
+          </div>
         )}
       </div>
     </form>

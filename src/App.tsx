@@ -11,6 +11,7 @@ import {
   type LedgerThread,
 } from "./bridge";
 import { folderName, type HomeDraft, HomeView } from "./home/HomeView";
+import { startersIn } from "./home/starters";
 import { Field } from "./look/Field";
 import { lookStyle } from "./look/LookRows";
 import { ReceiptsView } from "./receipts/ReceiptsView";
@@ -21,9 +22,9 @@ import { SetupView } from "./setup/SetupView";
 import { notesProgress, useNotes } from "./setup/useNotes";
 import { useModelCatalog } from "./stack/catalog";
 import { StackView } from "./stack/StackView";
-import { estimateCost, tierStack, TIERS, type Tier } from "./stack/tier";
+import { estimateCost, tierOf, tierStack, TIERS, type Tier } from "./stack/tier";
 import { keyLabel } from "./settings/shortcuts";
-import { SEPARATOR } from "./shell/Menu";
+import { SEPARATOR, type MenuEntry } from "./shell/Menu";
 import { useStack } from "./stack/useStack";
 import { trialProgress, useTrial } from "./stack/useTrial";
 import { Mark } from "./shell/Mark";
@@ -118,6 +119,14 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const trialRunning = !!trials.trial && trialProgress(trials.trial).running;
   const notes = useNotes(bridge);
   const notesRunning = !!notes.notes && notesProgress(notes.notes).running;
+  // Scout's notes end with a few first tasks, offered on Home until the first thread.
+  const notesResult = notes.notes && notesProgress(notes.notes).result;
+  useEffect(() => {
+    if (!notes.notes || notesResult?.status !== "ready") return;
+    const repo = notes.notes.repo;
+    const starters = startersIn(notesResult.notes);
+    if (starters.length) setPrefs((now) => ({ starters: { ...now.starters, [repo]: starters } }));
+  }, [notesResult]);
   const threadRunning = isRunning(thread?.turns.at(-1));
   const live = threads.filter((t) => isRunning(t.turns.at(-1)));
   const running = live.length > 0 || trialRunning || notesRunning;
@@ -285,7 +294,36 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   useEffect(() => {
     if (restored.current) setPrefs({ place: { section, ...(thread?.id !== undefined && { thread: thread.id }) } });
   }, [section, thread?.id, ledgerRead]);
-  const projects = useMemo(() => projectsFrom(keptThreads, liveIds, prefs.repo), [keptThreads, liveIdsKey, prefs.repo]);
+  // A project removed from the list stays away until it's open or a thread starts in it again.
+  const projects = useMemo(
+    () =>
+      projectsFrom(keptThreads, liveIds, prefs.repo).filter(
+        (p) => p.repo === prefs.repo || !(p.last <= (prefs.hiddenProjects[p.repo] ?? -1)),
+      ),
+    [keptThreads, liveIdsKey, prefs.repo, prefs.hiddenProjects],
+  );
+  const openProject = (repo: string) => {
+    setPrefs({ repo });
+    setStartProblem(null);
+  };
+  const projectMenu = (repo: string): MenuEntry[] => [
+    { label: "Open folder", run: () => bridge.revealFolder(repo).catch(failed) },
+    {
+      label: "Remove from list",
+      disabled: repo === prefs.repo,
+      run: () => {
+        setPrefs((now) => ({ hiddenProjects: { ...now.hiddenProjects, [repo]: Date.now() } }));
+        setNote({
+          text: `Removed ${folderName(repo)} from the list. Its threads stay.`,
+          undo: () =>
+            setPrefs((now) => {
+              const { [repo]: _, ...rest } = now.hiddenProjects;
+              return { hiddenProjects: rest };
+            }),
+        });
+      },
+    },
+  ];
   const recent = useMemo(
     () =>
       keptThreads
@@ -412,6 +450,9 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     repo: prefs.repo,
     hasKey,
     onPickProject: pickProject,
+    projects: projects.map((p) => p.repo),
+    starters: (prefs.repo && prefs.starters[prefs.repo]) || [],
+    onChooseProject: openProject,
     onOpenSettings: () => {
       setSettingsPage("models");
       setSection("settings");
@@ -646,6 +687,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
               <div className={projects.length > 1 ? "split" : "solo"}>
                 {projects.length > 1 && (
                   <ProjectList
+                    menuFor={projectMenu}
                     projects={projects}
                     open={prefs.repo}
                     onOpen={(repo) => {
@@ -762,6 +804,8 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                       })
                     }
                     onBuild={build}
+                    tier={tierOf(thread.stack, stack.stack)}
+                    onTier={(t) => thread.id !== undefined && patch(thread.id, { stack: tierStack(stack.stack, t) })}
                     onReplan={replan}
                     onQuestion={question}
                     onCommit={commit}
