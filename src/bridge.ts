@@ -243,6 +243,16 @@ export const bridge = {
   showWaiting: (count: number, before: number) => invoke<void>("show_waiting", { count, before }),
   /** A run's events as the runtime wrote them, for reopening a past thread. */
   runEvents: (run: number) => invoke<RuntimeEvent[]>("run_events", { run }),
+  /** A screenshot a run saved of a page before or after its work, as a data URL the page may show. */
+  readShot: async (path: string) => {
+    const bytes = await invoke<ArrayBuffer>("read_shot", { path });
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(new Blob([bytes], { type: "image/png" }));
+    });
+  },
   /** Every thread in the ledger with its runs and calls, newest first. */
   ledgerThreads: () => invoke<LedgerThread[]>("ledger_threads"),
   /** Asks where to save a CSV file and writes it there. Returns the path, or null if cancelled. */

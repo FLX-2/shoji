@@ -6,7 +6,7 @@ import { commandEnv } from "./commands";
 
 /** How long a dev server may take to print its address. */
 const SERVER_MS = 60_000;
-const WIDTHS = [360, 768, 1280];
+export const WIDTHS = [360, 768, 1280];
 
 const LOOK_AT_PAGE: Anthropic.Tool = {
   name: "look_at_page",
@@ -31,6 +31,10 @@ export interface Preview {
   tools: Anthropic.Tool[];
   owns(tool: string): boolean;
   look(path: string, width: string): Promise<Content>;
+  /** The paths looked at so far, each once, in the order first seen. */
+  looked(): string[];
+  /** A page at a width, as a PNG, for the person rather than a role. Throws when the page can't be shown. */
+  shoot(path: string, width: number): Promise<Look>;
   close(): Promise<void>;
 }
 
@@ -38,6 +42,10 @@ export const NO_PREVIEW: Preview = {
   tools: [],
   owns: () => false,
   look: async () => "Error: there is no preview.",
+  looked: () => [],
+  shoot: async () => {
+    throw new Error("There is no preview.");
+  },
   close: async () => {},
 };
 
@@ -144,23 +152,32 @@ export function previewFor(root: string, devCommand: string, launch: () => Promi
       throw error;
     }
   };
+  // A server that couldn't start is tried again next time, once Build may have fixed it.
+  const ready = () =>
+    (started ??= start().catch((error) => {
+      started = undefined;
+      throw error;
+    }));
+  const looked: string[] = [];
   return {
     tools: [LOOK_AT_PAGE],
     owns: (tool) => tool === LOOK_AT_PAGE.name,
     async look(path, width) {
       const px = WIDTHS.includes(Number(width)) ? Number(width) : 1280;
+      const wanted = path || "/";
+      if (!looked.includes(wanted)) looked.push(wanted);
       try {
-        // A server that couldn't start is tried again on the next look, once Build may have fixed it.
-        started ??= start().catch((error) => {
-          started = undefined;
-          throw error;
-        });
-        const { url, browser } = await started;
-        const page = new URL(path || "/", url).href;
+        const { url, browser } = await ready();
+        const page = new URL(wanted, url).href;
         return shown(page, px, await browser.look(page, px));
       } catch (error) {
         return `Error: ${error instanceof Error ? error.message : String(error)}`;
       }
+    },
+    looked: () => [...looked],
+    async shoot(path, width) {
+      const { url, browser } = await ready();
+      return browser.look(new URL(path || "/", url).href, width);
     },
     async close() {
       if (!started) return;

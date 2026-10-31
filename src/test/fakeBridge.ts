@@ -56,6 +56,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     typed: [] as { terminal: number; data: string }[],
     closedTerminals: [] as number[],
     stoppedServers: [] as number[],
+    shots: [] as string[],
     revealed: [] as string[],
     discarded: [] as number[],
     notified: [] as { title: string; body: string }[],
@@ -150,6 +151,10 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       calls.waiting.push(count);
     },
     runEvents: async (run) => logs[run] ?? [],
+    readShot: async (path) => {
+      calls.shots.push(path);
+      return `data:image/png;base64,${btoa(path)}`;
+    },
     readStackLock: async () => files.stackLock,
     writeStackLock: async (contents) => {
       calls.lockWrites.push(contents);
