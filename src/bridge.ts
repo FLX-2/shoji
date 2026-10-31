@@ -39,6 +39,8 @@ export interface RunRequest {
   devCommand?: string;
   /** What the person asked for, as the thread shows it, kept so a reopened thread shows it again. */
   ask?: string;
+  /** For a new thread that carries on a committed one: the branch its copy starts from. */
+  from?: string;
 }
 
 export interface ChangesRequest {

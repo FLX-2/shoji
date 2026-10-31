@@ -26,6 +26,8 @@ interface ComposerProps {
   onStop?: () => void;
   /** The run was asked to stop and hasn't yet. */
   stopping?: boolean;
+  /** Text to start with, such as a task brought back to edit. */
+  initial?: string;
 }
 
 /** One line of the list under the text: a file after @, or a command after a leading /. */
@@ -54,8 +56,9 @@ export function Composer({
   commands,
   onStop,
   stopping,
+  initial = "",
 }: ComposerProps) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initial);
   const ready = text.trim() !== "" && !blocked && !onStop;
   const box = useRef<HTMLTextAreaElement>(null);
   const listId = useId();

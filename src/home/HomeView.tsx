@@ -10,6 +10,14 @@ import { TIERS, type Tier } from "../stack/tier";
 import { formatCost } from "../thread/fold";
 import { threadTitle } from "../thread/title";
 
+/** A task brought back to Home: one to edit and start again, or a new one that carries on a committed thread. */
+export interface HomeDraft {
+  task: string;
+  attachments: string[];
+  /** The committed thread a new one carries on from: its branch, and its name to show. */
+  from?: { branch: string; title: string };
+}
+
 interface HomeViewProps {
   repo: string | null;
   hasKey: boolean;
@@ -29,8 +37,11 @@ interface HomeViewProps {
   onPickAttachments: () => Promise<string[]>;
   /** Keeps a pasted image as a file, and resolves to its path. */
   onSavePasted: (image: File) => Promise<string>;
-  /** Resolves to false when the task didn't start, so the composer keeps it and its files. */
-  onStart: (task: string, attachments: string[]) => void | boolean | Promise<void | boolean>;
+  /** Resolves to false when the task didn't start, so the composer keeps it and its files. With `from`, the new
+   *  thread starts from that branch. */
+  onStart: (task: string, attachments: string[], from?: string) => void | boolean | Promise<void | boolean>;
+  /** What the box starts with, when a task was brought back to it. */
+  draft?: HomeDraft | null;
   /** Saves the task to run by itself on a schedule. */
   onSchedule: (task: string, when: Pick<Schedule, "repeat" | "time" | "day">) => void;
   /** The project's files, which the task can mention with @. */
@@ -67,8 +78,10 @@ export function HomeView({
   firstRun = false,
   onOpenThread = () => {},
   showCosts = true,
+  draft,
 }: HomeViewProps) {
-  const [attached, setAttached] = useState<string[]>([]);
+  const [attached, setAttached] = useState<string[]>(draft?.attachments ?? []);
+  const [from, setFrom] = useState(draft?.from);
   const [attachProblem, setAttachProblem] = useState<string | null>(null);
   const attach = async (paths: Promise<string[]>) => {
     try {
@@ -92,7 +105,9 @@ export function HomeView({
         <Composer
           hero
           label="Task"
-          placeholder="Describe a change…"
+          placeholder={from ? "What should happen next?" : "Describe a change…"}
+          initial={draft?.task}
+          autoFocus={!!draft}
           blocked={!repo || !hasKey}
           files={files}
           commands={commands}
@@ -102,8 +117,11 @@ export function HomeView({
               setRepeat(null);
               return;
             }
-            const started = await onStart(task, attached);
-            if (started !== false) setAttached([]);
+            const started = await onStart(task, attached, from?.branch);
+            if (started !== false) {
+              setAttached([]);
+              setFrom(undefined);
+            }
             return started;
           }}
           onPasteImages={(images) => attach(Promise.all(images.map(onSavePasted)))}
@@ -142,8 +160,21 @@ export function HomeView({
                 <span className="est">Runs by itself while Shoji is open</span>
               </div>
             ) : (
-              attached.length > 0 && (
+              (attached.length > 0 || from) && (
                 <div className="attached">
+                  {from && (
+                    <button
+                      type="button"
+                      className="chip"
+                      title={`Starts from ${from.branch}. Remove to start from the project's last commit.`}
+                      onClick={() => setFrom(undefined)}
+                    >
+                      Carries on “{from.title}”
+                      <span className="x" aria-hidden="true">
+                        ×
+                      </span>
+                    </button>
+                  )}
                   {attached.map((path) => (
                     <button
                       key={path}

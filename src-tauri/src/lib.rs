@@ -198,6 +198,9 @@ struct RunRequest {
     mcp_servers: Option<serde_json::Value>,
     /// The project's dev command, which Build may start to look at pages. None or empty: Build doesn't look.
     dev_command: Option<String>,
+    /// For a new thread that carries on a committed one: the branch its copy starts from. None starts
+    /// from the project's last commit.
+    from: Option<String>,
 }
 
 /// The runtime's --private flags. An empty list is passed as one empty pattern, which keeps
@@ -322,7 +325,7 @@ fn start_run(
             None => (on_branch(&repo, &changes.branch)?, None, false),
         },
         None => {
-            let (branch, dir) = worktree::create(&repo, &data.join("worktrees"), &request.task)?;
+            let (branch, dir) = worktree::create(&repo, &data.join("worktrees"), &request.task, request.from.as_deref())?;
             (branch, Some(dir.display().to_string()), true)
         }
     };

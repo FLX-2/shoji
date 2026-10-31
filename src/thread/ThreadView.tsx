@@ -56,8 +56,14 @@ interface ThreadViewProps {
   onFix: () => void;
   /** How much more Keep going and Fix it allow, in dollars. */
   more: number;
-  /** Starts a thread that couldn't start over again. */
+  /** Starts the thread's task over again, as a new thread, when it ended before it had a plan. */
   onRetry: () => void;
+  /** Brings the task and its files back to the new-task box, to change before starting again. */
+  onEditTask: () => void;
+  /** Picks the work up where a run stopped or broke off. */
+  onResume: () => void;
+  /** Starts a new thread from this one's committed branch. */
+  onContinue: () => void;
   /** Builds the plan the person has read. */
   onBuild: () => void;
   /** Plans again from the person's notes on the plan. */
@@ -132,6 +138,9 @@ export function ThreadView({
   onFix,
   more,
   onRetry,
+  onEditTask,
+  onResume,
+  onContinue,
   onBuild,
   onReplan,
   onQuestion,
@@ -177,7 +186,9 @@ export function ThreadView({
   // The composer stays under the conversation: it takes changes to the work or a question about it, and
   // while a run works it holds what's next and Stop.
   const [say, setSay] = useState<"changes" | "question">("changes");
-  const talkable = !thread.committed && !thread.discarded && runs.some((run) => run.result?.plan);
+  const hasPlan = runs.some((run) => run.result?.plan);
+  // Committed work still takes questions; changes go to a new thread that carries it on.
+  const talkable = !thread.discarded && hasPlan;
   const talking = running || talkable;
   // The project's files and commands, for @ and / in the composer.
   const [files, setFiles] = useState<string[]>([]);
@@ -265,6 +276,20 @@ export function ThreadView({
       : workTurn.stoppedByYou
         ? "stopped"
         : "failed";
+
+  // Ended before there was a plan, so there's nothing to carry on: the task can only start again.
+  const retryable = !running && !thread.committed && !thread.discarded && !hasPlan && !stopped;
+  // Broke off or was stopped after the plan, with money left: the work so far can be picked up.
+  const resumable =
+    !running &&
+    !thread.committed &&
+    !thread.discarded &&
+    hasPlan &&
+    !planned &&
+    !stopped &&
+    !fixable &&
+    (outcome === "failed" || outcome === "stopped") &&
+    spent < thread.cap;
 
   const commit = () => {
     setCommitting(true);
@@ -413,13 +438,26 @@ export function ThreadView({
                       </>
                     )}
                   </span>
+                  <button type="button" className="btn" onClick={onContinue}>
+                    Carry on in a new thread
+                  </button>
                   {push && "error" in push && <span className="err">{push.error}</span>}
                 </>
               ) : (
                 <>
-                  {thread.id === undefined && last.error && (
-                    <button type="button" className="btn solid" onClick={onRetry}>
-                      Try again
+                  {retryable && (
+                    <>
+                      <button type="button" className="btn solid" onClick={onRetry}>
+                        Try again
+                      </button>
+                      <button type="button" className="btn" onClick={onEditTask}>
+                        Edit the task
+                      </button>
+                    </>
+                  )}
+                  {resumable && (
+                    <button type="button" className="btn solid" onClick={onResume}>
+                      Pick up where it stopped
                     </button>
                   )}
                   {stopped && (
@@ -462,23 +500,33 @@ export function ThreadView({
         {talking && (
           <Composer
             key={thread.id ?? "new"}
-            label={running ? "What's next" : say === "question" ? "Question" : planned ? "Plan changes" : "Changes"}
+            label={
+              running
+                ? "What's next"
+                : say === "question" || thread.committed
+                  ? "Question"
+                  : planned
+                    ? "Plan changes"
+                    : "Changes"
+            }
             placeholder={
               running
                 ? "Shoji is working. Write what's next, and send it when this run ends."
-                : say === "question"
+                : say === "question" || thread.committed
                   ? "Ask about this work. Nothing will change."
                   : planned
                     ? "What should the plan do differently?"
                     : "Describe the changes you want…"
             }
             blocked={spent >= thread.cap}
-            onSend={(notes) => (say === "question" ? onQuestion : planned ? onReplan : onRequestChanges)(notes)}
+            onSend={(notes) =>
+              (say === "question" || thread.committed ? onQuestion : planned ? onReplan : onRequestChanges)(notes)
+            }
             files={files}
             commands={commands}
             {...(running && { onStop, stopping: last.stoppedByYou })}
           >
-            {!running && (
+            {!running && !thread.committed && (
               <div className="seg" role="radiogroup" aria-label="What to send">
                 <button type="button" role="radio" aria-checked={say === "changes"} onClick={() => setSay("changes")}>
                   {planned ? "Change the plan" : "Request changes"}
