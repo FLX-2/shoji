@@ -1186,18 +1186,18 @@
 /* What routing did, over the review bar: the model behind each role, and what it saved. */
 .routed {
   margin-block: 10px -6px;
-  font-size: var(--t-md);
+  font-size: var(--t-sm);
   color: var(--z7);
 }
 
 .routed .link {
   margin-left: 10px;
-  font-size: var(--t-md);
+  font-size: var(--t-sm);
 }
 
 .review .sum {
   margin-left: auto;
-  font-size: var(--t-md);
+  font-size: var(--t-sm);
   color: var(--z6);
 }
 
