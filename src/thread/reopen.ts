@@ -53,6 +53,9 @@ export async function reopen(bridge: Bridge, record: LedgerThread, cap: number):
     stack: stackOf(record.stack),
     cap: Math.max(cap, spent),
     branch: record.branch,
+    ...(record.workdir && !record.discardedAt && { workdir: record.workdir }),
+    ...(record.title && { title: record.title }),
+    ...(record.discardedAt && { discarded: true }),
     ...(record.committed && { committed: record.committed }),
     turns,
   };

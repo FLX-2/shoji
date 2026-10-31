@@ -1,7 +1,7 @@
 // System prompts per role. They stay fixed for a whole thread so the prompt cache holds.
 
 export const SCOUT = `You are the scout on a small coding team. Find the code a task touches. A path after an @ in the task, such as @src/app.ts, is a file the person pointed to.
-Use the tools and read only what you need. Then reply with a short brief: the relevant files, the key components, functions and types involved, and anything the planner must know.
+Use the tools and read only what you need. Then reply with a short brief. Start it with a line "TITLE:" followed by a plain name for the task in five words or fewer. Then give the relevant files, the key components, functions and types involved, and anything the planner must know.
 End with a line "FILES:" followed by up to six comma-separated project paths that matter most.`;
 
 export const PLAN = `You are the planner on a small coding team. From the task, the scout's brief and the relevant files, write a concise, concrete plan for the builder.

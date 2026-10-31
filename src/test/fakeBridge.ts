@@ -56,6 +56,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     typed: [] as { terminal: number; data: string }[],
     closedTerminals: [] as number[],
     stoppedServers: [] as number[],
+    revealed: [] as string[],
+    discarded: [] as number[],
   };
   /** What the attach dialog answers with; tests fill it. */
   const picked: string[] = [];
@@ -114,7 +116,31 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       return [...project.files];
     },
     projectCommands: async () => [...project.commands],
-    ledgerThreads: async () => [...ledger],
+    ledgerThreads: async () => ledger.map((t) => ({ ...t })),
+    renameThread: async (id, title) => {
+      const t = ledger.find((t) => t.id === id);
+      if (t) t.title = title.trim() || null;
+    },
+    pinThread: async (id, pinned) => {
+      const t = ledger.find((t) => t.id === id);
+      if (t) t.pinned = pinned;
+    },
+    archiveThread: async (id, archived) => {
+      const t = ledger.find((t) => t.id === id);
+      if (t) t.archivedAt = archived ? Date.now() : null;
+    },
+    discardThread: async (id) => {
+      const t = ledger.find((t) => t.id === id);
+      if (!t) throw new Error("Shoji has no record of this thread.");
+      if (t.committed) throw new Error("This thread's work is committed, so its branch holds it. Archive the thread instead.");
+      calls.discarded.push(id);
+      t.discardedAt = Date.now();
+      t.archivedAt ??= t.discardedAt;
+      t.pinned = false;
+    },
+    revealFolder: async (path) => {
+      calls.revealed.push(path);
+    },
     runEvents: async (run) => logs[run] ?? [],
     readStackLock: async () => files.stackLock,
     writeStackLock: async (contents) => {
