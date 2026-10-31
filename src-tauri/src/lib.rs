@@ -195,6 +195,8 @@ struct RunRequest {
     ask: Option<String>,
     /// The person's MCP servers, as the runtime's --mcp-json takes them.
     mcp_servers: Option<serde_json::Value>,
+    /// The project's dev command, which Build may start to look at pages. None or empty: Build doesn't look.
+    dev_command: Option<String>,
 }
 
 /// The runtime's --private flags. An empty list is passed as one empty pattern, which keeps
@@ -349,6 +351,8 @@ fn start_run(
     args.extend(private_args(&request.private_files));
     args.extend(models_args(&request.models));
     args.extend(mcp_args(&request.mcp_servers));
+    // Joined with = so the command can't be read as a flag of its own.
+    args.extend(request.dev_command.iter().filter(|c| !c.trim().is_empty()).map(|c| format!("--dev-command={c}")));
     if let Some(changes) = request.changes {
         let plan = runs.join(format!("{stamp}-plan.md"));
         fs::write(&plan, &changes.plan).map_err(|e| e.to_string())?;

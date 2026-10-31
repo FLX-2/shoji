@@ -94,6 +94,12 @@ export function SettingsView({
           </h2>
           <div className="card">
             <McpRow prefs={prefs} onChange={onChange} />
+            <SwitchRow
+              label="Let Build look at pages"
+              description="Build can start the project's dev server in its copy and open a page in a headless browser, to see a change it made. It needs Chrome, Edge, Chromium or Brave on this computer. Each look adds a screenshot to the call's cost."
+              on={prefs.lookAtPages}
+              onToggle={() => onChange({ lookAtPages: !prefs.lookAtPages })}
+            />
           </div>
         </section>
 

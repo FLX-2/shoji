@@ -441,6 +441,17 @@ describe("a thread in the app", () => {
     expect(screen.getByText("Used the migrations skill and 1 more")).toBeTruthy();
   });
 
+  it("says which pages Build looked at", async () => {
+    const fake = await startThread();
+    fake.emit(running("build", "build", SONNET), {
+      type: "tool",
+      step: "build",
+      tool: "look_at_page",
+      target: "/pricing at 360px",
+    });
+    expect(screen.getByText("Looked at /pricing at 360px")).toBeTruthy();
+  });
+
   it("waits for the person before a command beyond the checks, and remembers one always allowed", async () => {
     const fake = await startThread();
     fake.emit(running("build", "build", SONNET), { type: "ask", step: "build", command: "npm install" });
