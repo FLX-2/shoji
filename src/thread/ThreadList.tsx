@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { LedgerThread } from "../bridge";
 import { folderName } from "../home/HomeView";
 import { describeRepeat, describeWhen, nextDue, type Schedule } from "../schedule/schedule";
-import { Menu, under, type MenuEntry } from "../shell/Menu";
+import { Menu, SEPARATOR, under, type MenuEntry } from "../shell/Menu";
 import { formatCost } from "./fold";
 import { threadTitle } from "./title";
 
@@ -75,6 +75,12 @@ interface ThreadListProps {
   onStartRename?: (thread: LedgerThread) => void;
   /** The new name, or null when the person let it be. */
   onRenamed?: (thread: LedgerThread, title: string | null) => void;
+  /** The project whose threads alone are listed, or null for every project. */
+  project?: string | null;
+  onProject?: (repo: string | null) => void;
+  /** The groups the person folded away, by name. */
+  folded?: string[];
+  onFold?: (group: string) => void;
 }
 
 /** A thread's name, edited in place: Enter keeps it, Escape or leaving lets it be. */
@@ -120,9 +126,21 @@ export function ThreadList({
   renaming = null,
   onStartRename,
   onRenamed,
+  project = null,
+  onProject,
+  folded = [],
+  onFold,
 }: ThreadListProps) {
   const now = new Date();
-  const projects = new Set([...threads, ...schedules].map((t) => t.repo)).size;
+  const repos = [...new Set([...threads, ...schedules].map((t) => t.repo))];
+  // A project that has no threads left lists every project again.
+  const only = project && repos.includes(project) ? project : null;
+  const projects = only ? 1 : repos.length;
+  if (only) {
+    threads = threads.filter((t) => t.repo === only);
+    schedules = schedules.filter((s) => s.repo === only);
+  }
+  const [picking, setPicking] = useState<{ x: number; y: number } | null>(null);
   const listed = threads.map((thread) => ({ thread, ...threadState(thread, running) }));
   const shownNow = listed.filter((t) => !t.thread.archivedAt);
   const archived = listed.filter((t) => t.thread.archivedAt);
@@ -196,6 +214,22 @@ export function ThreadList({
     <nav className="tlist" aria-label="Threads">
       <div className="mh">
         <h2 className="title">Threads</h2>
+        {repos.length > 1 && onProject && (
+          <button
+            type="button"
+            className="filter"
+            aria-label="Show threads of"
+            aria-haspopup="menu"
+            aria-expanded={!!picking}
+            title="Show one project's threads, or every project's"
+            onClick={(e) => setPicking(picking ? null : under(e.currentTarget))}
+          >
+            {only ? folderName(only) : "All projects"}
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M4.5 6.5 8 10l3.5-3.5" />
+            </svg>
+          </button>
+        )}
         <button type="button" className="add" aria-label="New task" title="New task" onClick={onNew}>
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path d="M8 3.5v9M3.5 8h9" />
@@ -250,10 +284,16 @@ export function ThreadList({
             group === "Pinned" ? !!t.thread.pinned : !t.thread.pinned && t.group === group,
           );
           if (!shown.length) return null;
+          const open = !folded.includes(group);
           return (
             <section key={group} aria-label={group}>
-              <h2 className="k">{group}</h2>
-              <ul>{shown.map(row)}</ul>
+              <h2 className="k">
+                <button type="button" className="fold" aria-expanded={open} onClick={() => onFold?.(group)}>
+                  {group}
+                  {!open && <span>{shown.length}</span>}
+                </button>
+              </h2>
+              {open && <ul>{shown.map(row)}</ul>}
             </section>
           );
         })}
@@ -271,6 +311,18 @@ export function ThreadList({
           </section>
         )}
       </div>
+      {picking && onProject && (
+        <Menu
+          at={picking}
+          label="Show threads of"
+          items={[
+            { label: "All projects", run: () => onProject(null) },
+            SEPARATOR,
+            ...repos.map((repo) => ({ label: folderName(repo), hint: repo === only ? "✓" : undefined, run: () => onProject(repo) })),
+          ]}
+          onClose={() => setPicking(null)}
+        />
+      )}
       {menu && menuThread && menuFor && (
         <Menu
           at={menu.at}

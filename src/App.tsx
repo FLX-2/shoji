@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { LimitAsk, type Ask } from "./budget/LimitAsk";
 import { spentOn } from "./budget/daily";
 import {
@@ -60,9 +60,10 @@ async function folderProblem(bridge: Bridge, repo: string): Promise<string | nul
 const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent);
 
 function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
-  const [section, setSection] = useState<SectionId>("home");
-  const [settingsPage, setSettingsPage] = useState<SettingsPage>("look");
   const [prefs, setPrefs] = usePrefs();
+  // Shoji opens where the person left it: the same place, and the thread that was on show.
+  const [section, setSection] = useState<SectionId>(() => prefs.place?.section ?? "home");
+  const [settingsPage, setSettingsPage] = useState<SettingsPage>("look");
   const catalog = useModelCatalog(prefs.updateModels);
   // The project's files, for @ in the task box, read again when the project changes. Threads work in their
   // own copies, so the project itself only changes in the person's hands.
@@ -258,10 +259,25 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     setHomeDraft((now) => ({ ...draft, n: (now?.n ?? 0) + 1 }));
     setSection("home");
   };
-  const openRecord = async (record: LedgerThread) => {
+  const openRecord = async (record: LedgerThread, stay = false) => {
     if (!showId(record.id)) open(await reopen(bridge, record, prefs.cap));
+    if (!stay) setSection("threads");
+  };
+  // The box for a new task, in Threads with no thread on show.
+  const newTask = () => {
+    close();
     setSection("threads");
   };
+  const restored = useRef(false);
+  useEffect(() => {
+    if (!ledgerRead || restored.current) return;
+    restored.current = true;
+    const left = keptThreads.find((t) => t.id === prefs.place?.thread);
+    if (left) openRecord(left, true).catch(() => {});
+  }, [ledgerRead]);
+  useEffect(() => {
+    if (restored.current) setPrefs({ place: { section, ...(thread?.id !== undefined && { thread: thread.id }) } });
+  }, [section, thread?.id, ledgerRead]);
   const projects = useMemo(() => projectsFrom(keptThreads, liveIds, prefs.repo), [keptThreads, liveIdsKey, prefs.repo]);
   const recent = useMemo(
     () =>
@@ -316,9 +332,16 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const [searching, setSearching] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() !== "k" || !(isMac ? e.metaKey : e.ctrlKey) || e.altKey || e.shiftKey) return;
-      e.preventDefault();
-      setSearching((open) => !open);
+      if (!(isMac ? e.metaKey : e.ctrlKey) || e.altKey || e.shiftKey) return;
+      const key = e.key.toLowerCase();
+      if (key === "k") {
+        e.preventDefault();
+        setSearching((open) => !open);
+      } else if (key === "b") {
+        // Hides the thread list, or shows it again, for more room for the thread.
+        e.preventDefault();
+        setPrefs((now) => ({ listHidden: !now.listHidden }));
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -379,6 +402,52 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       setPrefs({ repo });
       setStartProblem(null);
     }
+  };
+
+  // The project the status bar names: the thread's, while one is on show in Threads.
+  const place = section === "threads" && thread ? thread.repo : prefs.repo;
+
+  // The box a new task is written in, on Home and in Threads when no thread is on show.
+  const taskProps: ComponentProps<typeof HomeView> = {
+    draft: homeDraft,
+    repo: prefs.repo,
+    hasKey,
+    onPickProject: pickProject,
+    onOpenSettings: () => {
+      setSettingsPage("models");
+      setSection("settings");
+    },
+    problem: startProblem,
+    planFirst: prefs.planFirst,
+    onTogglePlanFirst: () => setPrefs({ planFirst: !prefs.planFirst }),
+    tier,
+    onTier: setTier,
+    estimate,
+    onPickAttachments: () => bridge.pickAttachments(),
+    onSavePasted: async (image) =>
+      bridge.saveAttachment(image.name || "pasted.png", Array.from(new Uint8Array(await image.arrayBuffer()))),
+    files: projectFiles,
+    commands: projectCommands,
+    showCosts: prefs.showCosts,
+    onSchedule: (task, when) => {
+      if (!prefs.repo) return;
+      const schedule = { id: crypto.randomUUID(), task, repo: prefs.repo, tier, created: Date.now(), ...when };
+      setPrefs({ schedules: [...prefs.schedules, schedule] });
+      setSection("threads");
+    },
+    onStart: async (task, attachments, from) => {
+      const repo = prefs.repo;
+      if (!repo) return false;
+      // Checked here so the task stays in the composer while the person sorts the folder out.
+      const problem = await folderProblem(bridge, repo);
+      setStartProblem(problem);
+      if (problem) return false;
+      return withinDay("This thread", prefs.cap, () => {
+        setSection("threads");
+        setHomeDraft(null);
+        start(task, repo, tierStack(stack.stack, tier), prefs.cap, prefs.planFirst, attachments, false, from);
+      });
+    },
   };
 
   return (
@@ -465,73 +534,15 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                   />
                 )}
                 <HomeView
+                  {...taskProps}
                   key={homeDraft?.n ?? 0}
-                  draft={homeDraft}
-                  repo={prefs.repo}
-                  hasKey={hasKey}
-                  onPickProject={pickProject}
-                  onOpenSettings={() => {
-                    setSettingsPage("models");
-                    setSection("settings");
-                  }}
-                  problem={startProblem}
-                  planFirst={prefs.planFirst}
-                  onTogglePlanFirst={() => setPrefs({ planFirst: !prefs.planFirst })}
-                  tier={tier}
-                  onTier={setTier}
-                  estimate={estimate}
-                  onPickAttachments={() => bridge.pickAttachments()}
-                  onSavePasted={async (image) =>
-                    bridge.saveAttachment(
-                      image.name || "pasted.png",
-                      Array.from(new Uint8Array(await image.arrayBuffer())),
-                    )
-                  }
-                  files={projectFiles}
-                  commands={projectCommands}
                   recent={recent}
                   firstRun={pastThreads.length === 0 && threads.length === 0}
                   onOpenThread={openRecord}
-                  showCosts={prefs.showCosts}
-                  onSchedule={(task, when) => {
-                    if (!prefs.repo) return;
-                    const schedule = {
-                      id: crypto.randomUUID(),
-                      task,
-                      repo: prefs.repo,
-                      tier,
-                      created: Date.now(),
-                      ...when,
-                    };
-                    setPrefs({ schedules: [...prefs.schedules, schedule] });
-                    setSection("threads");
-                  }}
-                  onStart={async (task, attachments, from) => {
-                    const repo = prefs.repo;
-                    if (!repo) return false;
-                    // Checked here so the task stays in the composer while the person sorts the folder out.
-                    const problem = await folderProblem(bridge, repo);
-                    setStartProblem(problem);
-                    if (problem) return false;
-                    return withinDay("This thread", prefs.cap, () => {
-                      setSection("threads");
-                      setHomeDraft(null);
-                      start(
-                        task,
-                        repo,
-                        tierStack(stack.stack, tier),
-                        prefs.cap,
-                        prefs.planFirst,
-                        attachments,
-                        false,
-                        from,
-                      );
-                    });
-                  }}
                 />
               </div>
             ) : section === "receipts" ? (
-              <ReceiptsView bridge={bridge} />
+              <ReceiptsView bridge={bridge} onNew={newTask} />
             ) : section === "stack" ? (
               <StackView
                 bridge={bridge}
@@ -545,9 +556,9 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 onSave={stack.save}
                 ledger={ledger}
               />
-            ) : section === "threads" && (thread || pastThreads.length > 0 || prefs.schedules.length > 0) ? (
+            ) : section === "threads" ? (
               <div className="threads">
-                {(pastThreads.length > 0 || prefs.schedules.length > 0) && (
+                {(pastThreads.length > 0 || prefs.schedules.length > 0) && !prefs.listHidden && (
                   <ThreadList
                     schedules={prefs.schedules}
                     onPause={(id) =>
@@ -577,11 +588,21 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     current={thread?.id}
                     showCosts={prefs.showCosts}
                     onOpen={openRecord}
-                    onNew={() => setSection("home")}
+                    onNew={newTask}
                     menuFor={menuFor}
                     renaming={renaming}
                     onStartRename={actions.rename}
                     onRenamed={renamed}
+                    project={prefs.listProject ?? null}
+                    onProject={(repo) => setPrefs({ listProject: repo })}
+                    folded={prefs.foldedGroups}
+                    onFold={(group) =>
+                      setPrefs((now) => ({
+                        foldedGroups: now.foldedGroups.includes(group)
+                          ? now.foldedGroups.filter((g) => g !== group)
+                          : [...now.foldedGroups, group],
+                      }))
+                    }
                   />
                 )}
                 {thread ? (
@@ -647,14 +668,16 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     })}
                   />
                 ) : (
-                  <div className="empty">
-                    <h2>Pick a thread</h2>
-                    <p>Read its plan, steps and review again, or carry it on where it stopped.</p>
-                  </div>
+                  <HomeView
+                    {...taskProps}
+                    key={homeDraft?.n ?? 0}
+                    heading="New thread"
+                    firstRun={pastThreads.length === 0 && threads.length === 0}
+                  />
                 )}
               </div>
             ) : section === "agents" ? (
-              <AgentsView agents={agents} showCosts={prefs.showCosts} onOpen={openRecord} />
+              <AgentsView agents={agents} showCosts={prefs.showCosts} onOpen={openRecord} onNew={newTask} />
             ) : section === "settings" ? (
               <SettingsView
                 page={settingsPage}
@@ -688,9 +711,10 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       {note && <Toast note={note} onClose={closeNote} />}
 
       {prefs.statusBar && (
+        // In Threads it tells of the thread on show, wherever its project is; elsewhere, of the open project.
         <footer className="status solid">
-          <span title={prefs.repo ?? undefined}>{prefs.repo ? folderName(prefs.repo) : "No project open"}</span>
-          {thread?.branch && thread.repo === prefs.repo && (
+          <span title={place ?? undefined}>{place ? folderName(place) : "No project open"}</span>
+          {thread?.branch && thread.repo === place && (
             <span className="branch">
               <svg viewBox="0 0 16 16" aria-hidden="true">
                 <path d="M5 2.5v11M5 10.5c0-3 6-2 6-5.5M11 5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
