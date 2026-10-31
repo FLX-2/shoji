@@ -14,6 +14,9 @@ const PACKAGES: &[&str] = &["node_modules", ".venv", "venv", "vendor", "bower_co
 /// Shoji's own notes on the project, which git ignores, so a copy needs them brought across.
 const NOTES: &str = "SHOJI.md";
 
+/// The project's commands and skills, which a person often keeps out of git. A copy without them gets the project's.
+const AGENT_FOLDERS: &[&str] = &[".claude/commands", ".claude/skills"];
+
 /// Whether an ignored file is one the copy needs: an env file or Shoji's notes.
 fn copied(name: &str) -> bool {
     name == ".env" || name.starts_with(".env.") || name == NOTES
@@ -85,7 +88,8 @@ pub fn restore(repo: &str, dir: &Path, branch: &str) -> Result<(), String> {
     furnish(repo, dir)
 }
 
-/// Links the project's installed packages into the copy and copies its env files across.
+/// Links the project's installed packages into the copy, and copies its env files and any commands and skills
+/// git doesn't have across.
 fn furnish(repo: &str, dir: &Path) -> Result<(), String> {
     let mut linked = Vec::new();
     for path in ignored(repo)? {
@@ -111,7 +115,29 @@ fn furnish(repo: &str, dir: &Path) -> Result<(), String> {
             fs::copy(&from, &to).map_err(|e| e.to_string())?;
         }
     }
+    for folder in AGENT_FOLDERS {
+        let (from, to) = (Path::new(repo).join(folder), dir.join(folder));
+        if from.is_dir() && !to.exists() {
+            copy_folder(&from, &to)?;
+            linked.push(folder.to_string());
+        }
+    }
     exclude(&dir.display().to_string(), &linked)
+}
+
+/// Copies a folder's files and subfolders, leaving out links.
+fn copy_folder(from: &Path, to: &Path) -> Result<(), String> {
+    fs::create_dir_all(to).map_err(|e| e.to_string())?;
+    for entry in fs::read_dir(from).map_err(|e| e.to_string())?.flatten() {
+        let Ok(kind) = entry.file_type() else { continue };
+        let target = to.join(entry.file_name());
+        if kind.is_dir() {
+            copy_folder(&entry.path(), &target)?;
+        } else if kind.is_file() {
+            fs::copy(entry.path(), &target).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
 }
 
 /// A link to a folder: a symlink, or on Windows a junction, which needs no special rights.
@@ -260,6 +286,21 @@ mod tests {
         remove(&repo, &path);
         git(&repo, &["switch", "--quiet", &branch]).unwrap();
         assert!(restore(&repo, &dir, &branch).unwrap_err().contains("checked out in the project"));
+    }
+
+    #[test]
+    fn brings_commands_and_skills_git_doesn_t_have() {
+        let (repo, root) = project("agent");
+        let commands = Path::new(&repo).join(".claude/commands/review");
+        fs::create_dir_all(&commands).unwrap();
+        fs::write(commands.join("pair.md"), "Review $1.\n").unwrap();
+        let skill = Path::new(&repo).join(".claude/skills/migrations");
+        fs::create_dir_all(&skill).unwrap();
+        fs::write(skill.join("SKILL.md"), "Add a migration.\n").unwrap();
+        let (_, dir) = create(&repo, &root, "Use a command").unwrap();
+        assert_eq!(fs::read_to_string(dir.join(".claude/commands/review/pair.md")).unwrap(), "Review $1.\n");
+        assert!(dir.join(".claude/skills/migrations/SKILL.md").exists());
+        assert_eq!(git(&dir.display().to_string(), &["status", "--porcelain"]).unwrap(), "");
     }
 
     #[test]

@@ -8,6 +8,7 @@ import { useChanges } from "../code/useChanges";
 import { ClipIcon } from "../shell/ClipIcon";
 import { ROLE_NAMES } from "../stack/lock";
 import { Composer } from "../shell/Composer";
+import type { SlashCommand } from "../shell/mention";
 import {
   approves,
   foldRun,
@@ -130,13 +131,18 @@ export function ThreadView({
   const termFollow = useCallback((listen: (data: string) => void) => followIn(here, listen), [followIn, here]);
   // The composer, open for changes to the work or for a question about it.
   const [asking, setAsking] = useState<false | "changes" | "question">(false);
-  // The project's files, for @ in the changes box, read each time it opens.
+  // The project's files and commands, for @ and / in the changes box, read each time it opens.
   const [files, setFiles] = useState<string[]>([]);
+  const [commands, setCommands] = useState<SlashCommand[]>([]);
   useEffect(() => {
     if (!asking) return;
     let current = true;
     bridge.projectFiles(putAway ? thread.repo : place).then(
       (list) => current && setFiles(list),
+      () => {},
+    );
+    bridge.projectCommands(putAway ? thread.repo : place).then(
+      (list) => current && setCommands(list),
       () => {},
     );
     return () => {
@@ -354,6 +360,7 @@ export function ThreadView({
               (asking === "question" ? onQuestion : planned ? onReplan : onRequestChanges)(notes);
             }}
             files={files}
+            commands={commands}
           />
         ) : planned ? (
           <div className="review">
@@ -590,6 +597,7 @@ function Work({ step, showPlan }: { step: StepView; showPlan: boolean }) {
   const commands = step.tools.filter((t) => t.tool === "run_command").map((t) => t.target);
   // MCP tools come named as "server: tool".
   const used = step.tools.filter((t) => t.tool.startsWith("mcp__")).map((t) => t.target);
+  const skills = unique(step.tools.filter((t) => t.tool === "read_skill").map((t) => t.target));
   const output = step.output?.trim();
 
   const items = [
@@ -625,6 +633,19 @@ function Work({ step, showPlan }: { step: StepView; showPlan: boolean }) {
         <ul className="files">
           {used.map((c, i) => (
             <li key={i}>{c}</li>
+          ))}
+        </ul>
+      </Item>
+    ),
+    skills.length > 0 && (
+      <Item
+        key="skills"
+        icon={ICONS.note}
+        summary={`Used the ${skills[0]} skill${skills.length > 1 ? ` and ${skills.length - 1} more` : ""}`}
+      >
+        <ul className="files">
+          {skills.map((name) => (
+            <li key={name}>{name}</li>
           ))}
         </ul>
       </Item>

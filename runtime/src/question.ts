@@ -6,6 +6,8 @@ import { type Mcp, NO_MCP } from "./mcp";
 import { BudgetExceeded, Meter, RefusedError } from "./meter";
 import * as prompts from "./prompts";
 import type { ModelProvider } from "./provider";
+import { findSkills } from "./skills";
+import { expandCommand } from "./slash";
 import { ROLES, type Role, type Seat } from "./stack";
 import { READ_TOOLS } from "./tools";
 import type { Workspace } from "./workspace";
@@ -34,7 +36,10 @@ export interface QuestionInput {
  * Ends with an "answered" result, which leaves the thread where it was.
  */
 export async function answerQuestion(input: QuestionInput): Promise<ThreadResult> {
-  const { task, plan, question, seat, workspace, emit } = input;
+  const { plan, seat, workspace, emit } = input;
+  const task = expandCommand(input.task, workspace);
+  const question = expandCommand(input.question, workspace);
+  const skills = findSkills(workspace);
   // Only the tools that look: an answer changes nothing.
   const mcp = input.mcp ?? NO_MCP;
   const meter = new Meter(input.provider, emit, input.cap);
@@ -71,16 +76,21 @@ export async function answerQuestion(input: QuestionInput): Promise<ThreadResult
       step,
       seat,
       system: prompts.QUESTION,
-      prompt: `Task: ${task}${projectInstructions(workspace)}\n\nPlan:\n${plan}\n\nThe work so far:\n${shown || "(no changes yet)"}\n\nThe person asks: ${question}`,
-      tools: [...READ_TOOLS, ...mcp.readOnly],
+      prompt: `Task: ${task}${projectInstructions(workspace)}\n\nPlan:\n${plan}\n\nThe work so far:\n${shown || "(no changes yet)"}\n\nThe person asks: ${question}${skills.note}`,
+      tools: [...READ_TOOLS, ...skills.tools, ...mcp.readOnly],
       mcp,
+      skills,
       maxTurns: 8,
       onTool: (tool, input) =>
         emit({
           type: "tool",
           step,
           tool,
-          target: mcp.owns(tool) ? mcp.label(tool) : (input.path ?? input.pattern ?? ""),
+          target: mcp.owns(tool)
+            ? mcp.label(tool)
+            : skills.owns(tool)
+              ? input.name
+              : (input.path ?? input.pattern ?? ""),
         }),
     });
     emit({ type: "step", step, role: "scout", model: seat.model, status: "done", output: answer });

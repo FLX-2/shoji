@@ -208,6 +208,11 @@
   white-space: nowrap;
 }
 
+.composer .mentions.commands li span {
+  font-family: inherit;
+  font-size: 13px;
+}
+
 .composer .mentions li[aria-selected="true"] {
   background: var(--z3);
 }

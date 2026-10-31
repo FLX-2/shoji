@@ -430,6 +430,17 @@ describe("a thread in the app", () => {
     ).toBeTruthy();
   });
 
+  it("says which skills a role read", async () => {
+    const fake = await startThread();
+    fake.emit(
+      running("build", "build", SONNET),
+      { type: "tool", step: "build", tool: "read_skill", target: "migrations" },
+      { type: "tool", step: "build", tool: "read_skill", target: "migrations" },
+      { type: "tool", step: "build", tool: "read_skill", target: "release-notes" },
+    );
+    expect(screen.getByText("Used the migrations skill and 1 more")).toBeTruthy();
+  });
+
   it("waits for the person before a command beyond the checks, and remembers one always allowed", async () => {
     const fake = await startThread();
     fake.emit(running("build", "build", SONNET), { type: "ask", step: "build", command: "npm install" });

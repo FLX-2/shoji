@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Mcp } from "./mcp";
 import type { Meter } from "./meter";
+import type { Skills } from "./skills";
 import type { Role, Seat } from "./stack";
 import { runTool } from "./tools";
 import type { Workspace } from "./workspace";
@@ -28,6 +29,8 @@ export interface AgentRun {
   ask?: (command: string, tool?: boolean) => Promise<boolean>;
   /** The MCP servers' tools, called here when a role uses one. */
   mcp?: Mcp;
+  /** The project's skills and the person's own, read here when a role asks for one. */
+  skills?: Skills;
 }
 
 export function textOf(message: Anthropic.Message): string {
@@ -53,8 +56,13 @@ export async function runAgent(run: AgentRun): Promise<string> {
     onTool,
     ask,
     mcp,
+    skills,
   } = run;
   const use = async (name: string, input: Record<string, string>) => {
+    if (skills?.owns(name)) {
+      onTool?.(name, input);
+      return skills.read(input.name, input.file);
+    }
     if (mcp?.owns(name)) {
       // A tool that only looks runs at once; one that may change something waits for the person, like a command.
       const label = mcp.label(name);

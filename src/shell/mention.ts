@@ -26,3 +26,29 @@ export function matchFiles(files: string[], query: string): string[] {
   scored.sort((a, b) => a.score - b.score || a.file.length - b.file.length || a.file.localeCompare(b.file));
   return scored.slice(0, SHOWN).map((s) => s.file);
 }
+
+/** A command the task can start with, from the project's .claude/commands or the person's own. */
+export interface SlashCommand {
+  name: string;
+  description: string;
+  /** What it takes, such as "<number>". */
+  hint: string;
+}
+
+/** The command being typed: a / that starts the text, with the caret still in its name. */
+export function commandAt(text: string, caret: number): { query: string } | null {
+  if (!text.startsWith("/") || caret < 1) return null;
+  const query = text.slice(1, caret);
+  return /\s/.test(query) ? null : { query };
+}
+
+/** Commands whose name starts with what was typed, then ones that have it. */
+export function matchCommands(commands: SlashCommand[], query: string): SlashCommand[] {
+  const q = query.toLowerCase();
+  const rank = (c: SlashCommand) =>
+    c.name.toLowerCase().startsWith(q) ? 0 : c.name.toLowerCase().includes(q) ? 1 : -1;
+  return commands
+    .filter((c) => rank(c) >= 0)
+    .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
+    .slice(0, SHOWN);
+}
