@@ -81,6 +81,27 @@ function ledger(now: number): LedgerThread[] {
   ];
 }
 
+const send = async (text: string) => {
+  const task = await screen.findByRole("textbox", { name: "Task" });
+  fireEvent.change(task, { target: { value: text } });
+  await act(async () => {
+    fireEvent.keyDown(task, { key: "Enter" });
+  });
+};
+
+const started = (id: number, task: string): LedgerThread => ({
+  id,
+  task,
+  repo: "/work/pricing-page",
+  branch: "shoji/thread",
+  workdir: "/data/worktrees/thread",
+  stack: "balanced",
+  startedAt: Date.now(),
+  committed: null,
+  committedAt: null,
+  runs: [{ id, kind: "task", startedAt: Date.now(), status: null, calls: [] }],
+});
+
 describe("the thread list", () => {
   beforeEach(() => {
     localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", planFirst: false }));
@@ -115,6 +136,57 @@ describe("the thread list", () => {
     expect(rows[0]).toMatch(/^Fix the footerNeeds work\$0\.020\d\d:\d\d$/);
     expect(rows[1]).toMatch(/^Add a FAQCommitted\$0\.030\d+ \w{3}$/);
     expect(screen.getByRole("heading", { name: "Pick a thread" })).toBeTruthy();
+  });
+
+  it("groups threads by what they need, and counts a run Shoji closed during as stopped", async () => {
+    const fake = fakeBridge();
+    const now = Date.now();
+    // Ids clear of the one the new thread gets.
+    const [trial, footer, faq] = ledger(now).map((t) => ({ ...t, id: t.id + 10 }));
+    fake.ledger.push(
+      trial,
+      footer,
+      {
+        id: 14,
+        task: "Tidy the header",
+        repo: "/work/pricing-page",
+        branch: "shoji/tidy-the-header",
+        stack: "balanced",
+        startedAt: now - 3000,
+        committed: null,
+        committedAt: null,
+        runs: [{ id: 40, kind: "task", startedAt: now - 3000, status: null, calls: [] }],
+      },
+      faq,
+    );
+    await act(async () => {
+      render(<App bridge={fake.bridge} />);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Threads" }));
+    });
+    const list = screen.getByRole("navigation", { name: "Threads" });
+    const group = (name: string) =>
+      within(within(screen.getByRole("navigation", { name: "Threads" })).getByRole("region", { name }))
+        .getAllByRole("listitem")
+        .map((row) => row.querySelector("b")!.textContent);
+    expect(within(list).queryByRole("region", { name: "Running" })).toBeNull();
+    expect(group("Needs you")).toEqual(["Fix the footer"]);
+    expect(group("Earlier")).toEqual(["Tidy the header", "Add a FAQ"]);
+    expect(within(list).getByText("Stopped")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(within(list).getByRole("button", { name: "New task" }));
+    });
+    await send("Fix the nav");
+    fake.ledger.unshift(started(1, "Fix the nav"));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Threads" }));
+    });
+    expect(group("Running")).toEqual(["Fix the nav"]);
   });
 
   it("reopens a thread from its logs, with what the person asked, and carries it on", async () => {
@@ -153,25 +225,6 @@ describe("the thread list", () => {
     const fake = fakeBridge();
     await act(async () => {
       render(<App bridge={fake.bridge} />);
-    });
-    const send = async (text: string) => {
-      const task = await screen.findByRole("textbox", { name: "Task" });
-      fireEvent.change(task, { target: { value: text } });
-      await act(async () => {
-        fireEvent.keyDown(task, { key: "Enter" });
-      });
-    };
-    const started = (id: number, task: string): LedgerThread => ({
-      id,
-      task,
-      repo: "/work/pricing-page",
-      branch: "shoji/thread",
-      workdir: "/data/worktrees/thread",
-      stack: "balanced",
-      startedAt: Date.now(),
-      committed: null,
-      committedAt: null,
-      runs: [{ id, kind: "task", startedAt: Date.now(), status: null, calls: [] }],
     });
 
     await send("Add a FAQ");

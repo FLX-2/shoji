@@ -2771,24 +2771,68 @@ button.rrow:focus-visible {
   background: var(--pane);
 }
 
-.tlist .thead {
-  display: flex;
-  justify-content: flex-end;
-  padding: 10px 10px 8px;
-  border-bottom: 1px solid var(--hair2);
+.tlist .mh {
+  justify-content: space-between;
+  padding-right: 10px;
+}
+
+.tlist .add {
+  all: unset;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  box-sizing: border-box;
+  border: 1px solid var(--hair);
+  border-radius: 5px;
+  color: var(--z8);
+  transition: border-color var(--d-quick) var(--e-out);
+}
+
+.tlist .add:hover {
+  border-color: var(--z5);
+  color: var(--z10);
+}
+
+.tlist .add:focus-visible {
+  outline: 2px solid var(--z10);
+  outline-offset: 1px;
+}
+
+.tlist .add svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.tlist .groups {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 6px;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.tlist .groups .k {
+  padding: 0 10px 4px;
 }
 
 .tlist ul {
   list-style: none;
   margin: 0;
-  padding: 6px;
-  overflow-y: auto;
+  padding: 0;
   display: grid;
   align-content: start;
   gap: 2px;
 }
 
-.tlist > ul li button {
+.tlist .groups li button {
   all: unset;
   box-sizing: border-box;
   width: 100%;
@@ -2799,20 +2843,20 @@ button.rrow:focus-visible {
   border-radius: 3px;
 }
 
-.tlist > ul li button:hover:not(:disabled) {
+.tlist .groups li button:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.tlist > ul li button[aria-current="true"] {
+.tlist .groups li button[aria-current="true"] {
   background: var(--z3);
 }
 
-.tlist > ul li button:disabled {
+.tlist .groups li button:disabled {
   cursor: default;
   opacity: 0.5;
 }
 
-.tlist > ul li button:focus-visible {
+.tlist .groups li button:focus-visible {
   outline: 2px solid var(--z10);
   outline-offset: -2px;
 }

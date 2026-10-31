@@ -130,6 +130,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     // Read again on a commit or on opening Threads too, so each thread shows where it got to.
   }, [bridge, activity, trialRunning, notesRunning, section]);
   const pastThreads = useMemo(() => workThreads(ledger), [ledger]);
+  const liveIds = new Set(live.flatMap((t) => (t.id === undefined ? [] : [t.id])));
   // And the project's commands, for / at the start of a task.
   const [projectCommands, setProjectCommands] = useState<SlashCommand[]>([]);
   useEffect(() => {
@@ -324,6 +325,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     }
                     onRemove={(id) => setPrefs({ schedules: prefs.schedules.filter((s) => s.id !== id) })}
                     threads={pastThreads}
+                    running={liveIds}
                     current={thread?.id}
                     showCosts={prefs.showCosts}
                     onOpen={async (record) => {

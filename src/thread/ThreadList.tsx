@@ -26,8 +26,20 @@ function when(at: number, now: Date): string {
     : day.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
+/** The thread list's groups: what's working, what's waiting for the person, and the rest. */
+const GROUPS = ["Running", "Needs you", "Earlier"] as const;
+
+function groupOf(status: string): (typeof GROUPS)[number] {
+  if (status === "Running") return "Running";
+  if (status === "Ready to accept" || status === "Plan ready" || status === "Needs work") return "Needs you";
+  return "Earlier";
+}
+
 interface ThreadListProps {
   threads: LedgerThread[];
+  /** The ledger ids of threads with a run going now. A run the ledger never saw end, as when Shoji closed during
+   *  it, isn't running any more. */
+  running?: Set<number>;
   /** The ledger id of the thread on show. */
   current?: number;
   showCosts: boolean;
@@ -42,6 +54,7 @@ interface ThreadListProps {
 /** Every thread the person has started, newest first, to read again or carry on. */
 export function ThreadList({
   threads,
+  running,
   current,
   showCosts,
   onOpen,
@@ -52,11 +65,20 @@ export function ThreadList({
 }: ThreadListProps) {
   const now = new Date();
   const projects = new Set([...threads, ...schedules].map((t) => t.repo)).size;
+  const listed = threads.map((thread) => {
+    let status = threadStatus(thread);
+    if (running && status === "Running" && !running.has(thread.id)) status = "Stopped";
+    if (running?.has(thread.id)) status = "Running";
+    return { thread, status, group: groupOf(status) };
+  });
   return (
     <nav className="tlist" aria-label="Threads">
-      <div className="thead">
-        <button type="button" className="btn sm ghost" onClick={onNew}>
-          New task
+      <div className="mh">
+        <h2 className="title">Threads</h2>
+        <button type="button" className="add" aria-label="New task" title="New task" onClick={onNew}>
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M8 3.5v9M3.5 8h9" />
+          </svg>
         </button>
       </div>
       {schedules.length > 0 && (
@@ -101,31 +123,41 @@ export function ThreadList({
           </ul>
         </section>
       )}
-      <ul>
-        {threads.map((t) => {
-          const status = threadStatus(t);
-          const cost = t.runs.reduce((sum, run) => sum + run.calls.reduce((s, c) => s + c.cost, 0), 0);
+      <div className="groups">
+        {GROUPS.map((group) => {
+          const shown = listed.filter((t) => t.group === group);
+          if (!shown.length) return null;
           return (
-            <li key={t.id}>
-              <button
-                type="button"
-                aria-current={t.id === current || undefined}
-                onClick={() => t.id !== current && onOpen(t)}
-              >
-                <b>{t.task.split("\n")[0]}</b>
-                <span className="meta">
-                  {projects > 1 && <span>{folderName(t.repo)}</span>}
-                  <span className={status === "Committed" ? "good" : status === "Failed" ? "bad" : undefined}>
-                    {status}
-                  </span>
-                  {showCosts && cost > 0 && <span>{formatCost(cost)}</span>}
-                  <span>{when(t.startedAt, now)}</span>
-                </span>
-              </button>
-            </li>
+            <section key={group} aria-label={group}>
+              <h2 className="k">{group}</h2>
+              <ul>
+                {shown.map(({ thread: t, status }) => {
+                  const cost = t.runs.reduce((sum, run) => sum + run.calls.reduce((s, c) => s + c.cost, 0), 0);
+                  return (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        aria-current={t.id === current || undefined}
+                        onClick={() => t.id !== current && onOpen(t)}
+                      >
+                        <b>{t.task.split("\n")[0]}</b>
+                        <span className="meta">
+                          {projects > 1 && <span>{folderName(t.repo)}</span>}
+                          <span className={status === "Committed" ? "good" : status === "Failed" ? "bad" : undefined}>
+                            {status}
+                          </span>
+                          {showCosts && cost > 0 && <span>{formatCost(cost)}</span>}
+                          <span>{when(t.startedAt, now)}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
           );
         })}
-      </ul>
+      </div>
     </nav>
   );
 }
