@@ -15,7 +15,7 @@ import { lookStyle } from "./look/LookRows";
 import { ReceiptsView } from "./receipts/ReceiptsView";
 import { useSchedules } from "./schedule/useSchedules";
 import { usePrefs } from "./settings/prefs";
-import { readMcpServers, SettingsView } from "./settings/SettingsView";
+import { readMcpServers, type SettingsPage, SettingsView } from "./settings/SettingsView";
 import { SetupView } from "./setup/SetupView";
 import { notesProgress, useNotes } from "./setup/useNotes";
 import { useModelCatalog } from "./stack/catalog";
@@ -55,6 +55,7 @@ const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent
 
 function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const [section, setSection] = useState<SectionId>("home");
+  const [settingsPage, setSettingsPage] = useState<SettingsPage>("look");
   const [prefs, setPrefs] = usePrefs();
   const catalog = useModelCatalog(prefs.updateModels);
   // The project's files, for @ in the task box, read again when the project changes. Threads work in their
@@ -284,7 +285,10 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                   repo={prefs.repo}
                   hasKey={hasKey}
                   onPickProject={pickProject}
-                  onOpenSettings={() => setSection("settings")}
+                  onOpenSettings={() => {
+                    setSettingsPage("models");
+                    setSection("settings");
+                  }}
                   problem={startProblem}
                   planFirst={prefs.planFirst}
                   onTogglePlanFirst={() => setPrefs({ planFirst: !prefs.planFirst })}
@@ -414,28 +418,28 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                   </div>
                 )}
               </div>
+            ) : section === "settings" ? (
+              <SettingsView
+                page={settingsPage}
+                onPage={setSettingsPage}
+                prefs={prefs}
+                onChange={setPrefs}
+                stack={stack.stack}
+                onOpenStack={() => setSection("stack")}
+                keyStatus={keyStatus}
+                onSaveKey={(key) => bridge.saveKey(key).then(refreshKey)}
+                onForgetKey={() => bridge.forgetKey().then(refreshKey)}
+                onRunSetup={() => setInSetup(true)}
+              />
             ) : (
               <>
                 <div className="mh">
                   <h1>{current.label}</h1>
                 </div>
-                {section === "settings" ? (
-                  <SettingsView
-                    prefs={prefs}
-                    onChange={setPrefs}
-                    stack={stack.stack}
-                    onOpenStack={() => setSection("stack")}
-                    keyStatus={keyStatus}
-                    onSaveKey={(key) => bridge.saveKey(key).then(refreshKey)}
-                    onForgetKey={() => bridge.forgetKey().then(refreshKey)}
-                    onRunSetup={() => setInSetup(true)}
-                  />
-                ) : (
-                  <div className="empty">
-                    <h2>{current.title}</h2>
-                    <p>{current.body}</p>
-                  </div>
-                )}
+                <div className="empty">
+                  <h2>{current.title}</h2>
+                  <p>{current.body}</p>
+                </div>
               </>
             )}
           </main>

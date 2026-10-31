@@ -100,6 +100,7 @@ describe("the daily limit", () => {
   it("is set in Settings", async () => {
     render(<App bridge={fakeBridge().bridge} />);
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Spending" }));
     fireEvent.change(screen.getByRole("spinbutton", { name: /Daily limit/ }), { target: { value: "40" } });
     expect(JSON.parse(localStorage.getItem("shoji.prefs")!).dailyLimit).toBe(40);
   });

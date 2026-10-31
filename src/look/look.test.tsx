@@ -18,6 +18,7 @@ describe("the Zone look", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     });
+    fireEvent.click(screen.getByRole("button", { name: "Look" }));
   }
 
   it("draws Code current behind frosted glass by default", async () => {
@@ -65,6 +66,7 @@ describe("what the app shows", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     });
+    fireEvent.click(screen.getByRole("button", { name: "Look" }));
   }
 
   it("takes the accent everywhere running or spending is shown", async () => {
@@ -80,6 +82,7 @@ describe("what the app shows", () => {
       within(screen.getByRole("radiogroup", { name: "Density" })).getByRole("radio", { name: "Compact" }),
     );
     expect(app().getAttribute("data-density")).toBe("compact");
+    fireEvent.click(screen.getByRole("button", { name: "Interface" }));
     fireEvent.click(screen.getByRole("switch", { name: "Status bar" }));
     expect(document.querySelector("footer.status")).toBeNull();
     fireEvent.click(screen.getByRole("switch", { name: "Model names" }));

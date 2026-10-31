@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import App from "../App";
 import { fakeBridge } from "../test/fakeBridge";
@@ -16,6 +16,7 @@ describe("Settings", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     });
+    fireEvent.click(screen.getByRole("button", { name: "Models and keys" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Forget" }));
     expect(fake.calls.forgot).toBe(0);
@@ -44,6 +45,7 @@ describe("Settings", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     });
+    fireEvent.click(screen.getByRole("button", { name: "Tools and commands" }));
     expect(screen.getByText("npm install")).toBeTruthy();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Ask again" })[0]);
@@ -62,6 +64,7 @@ describe("Settings", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     });
+    fireEvent.click(screen.getByRole("button", { name: "Data" }));
     const box = screen.getByRole("textbox", { name: /Private files/ });
     expect((box as HTMLTextAreaElement).value).toBe(DEFAULT_PRIVATE.join("\n"));
     expect(screen.queryByRole("button", { name: "Use the defaults" })).toBeNull();
@@ -82,6 +85,7 @@ describe("Settings", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     });
+    fireEvent.click(screen.getByRole("button", { name: "Data" }));
     fireEvent.click(screen.getByRole("button", { name: "Use the defaults" }));
     expect(JSON.parse(localStorage.getItem("shoji.prefs")!).privateFiles).toEqual(DEFAULT_PRIVATE);
   });
@@ -93,6 +97,7 @@ describe("Settings", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     });
+    fireEvent.click(screen.getByRole("button", { name: "Tools and commands" }));
     const box = screen.getByRole("textbox", { name: /^MCP servers/ });
     fireEvent.change(box, { target: { value: '{"mcpServers": {"github": {"command": "npx"' } });
     expect(screen.getByRole("alert").textContent).toMatch(/^That isn't valid JSON yet/);
@@ -147,11 +152,31 @@ describe("Settings", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     });
+    fireEvent.click(screen.getByRole("button", { name: "Tools and commands" }));
     fireEvent.click(screen.getByRole("switch", { name: "Let Build look at pages" }));
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Home" }));
     });
     await send("Restyle the footer");
     expect(fake.calls.starts[1].devCommand).toBeUndefined();
+  });
+
+  it("shows one page at a time, and the key's page when Home asks for a key", async () => {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ setupDone: true }));
+    render(<App bridge={fakeBridge({ saved: false, fromEnv: false }).bridge} />);
+    const add = await screen.findByRole("button", { name: "Add it in Settings" });
+    await act(async () => {
+      fireEvent.click(add);
+    });
+    const pages = screen.getByRole("navigation", { name: "Settings pages" });
+    expect(within(pages).getByRole("button", { current: "page" }).textContent).toBe("Models and keys");
+    expect(screen.getByRole("heading", { level: 1, name: "Models and keys" })).toBeTruthy();
+    expect(screen.getByPlaceholderText("sk-ant-…")).toBeTruthy();
+    expect(screen.queryByRole("switch", { name: "Status bar" })).toBeNull();
+
+    fireEvent.click(within(pages).getByRole("button", { name: "Interface" }));
+    expect(screen.getByRole("switch", { name: "Status bar" })).toBeTruthy();
+    expect(screen.queryByPlaceholderText("sk-ant-…")).toBeNull();
+    expect(within(pages).getByRole("button", { name: "Run setup again" })).toBeTruthy();
   });
 });
