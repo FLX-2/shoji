@@ -33,6 +33,7 @@ import { formatCost } from "./thread/fold";
 import { DEFAULT_PREVIEW } from "./thread/PreviewView";
 import { reopen, workThreads } from "./thread/reopen";
 import { threadState } from "./thread/ThreadList";
+import { AgentsView } from "./agents/AgentsView";
 import { ProjectList } from "./home/ProjectList";
 import { projectsFrom } from "./home/projects";
 import { ThreadList } from "./thread/ThreadList";
@@ -253,6 +254,16 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       },
     })),
   ];
+
+  const agents = useMemo(
+    () =>
+      pastThreads
+        .map((record) => ({ record, ...threadState(record, liveIds) }))
+        .filter((a) => a.group !== "Earlier")
+        .sort((a, b) => (a.group === b.group ? 0 : a.group === "Running" ? -1 : 1))
+        .map(({ record, status }) => ({ record, status, live: threads.find((t) => t.id === record.id) })),
+    [pastThreads, liveIdsKey, threads],
+  );
 
   const pickProject = async () => {
     const repo = await bridge.pickProject();
@@ -482,6 +493,8 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                   </div>
                 )}
               </div>
+            ) : section === "agents" ? (
+              <AgentsView agents={agents} showCosts={prefs.showCosts} onOpen={openRecord} />
             ) : section === "settings" ? (
               <SettingsView
                 page={settingsPage}
