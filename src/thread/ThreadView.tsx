@@ -598,6 +598,8 @@ function Work({ step, showPlan }: { step: StepView; showPlan: boolean }) {
   // MCP tools come named as "server: tool".
   const used = step.tools.filter((t) => t.tool.startsWith("mcp__")).map((t) => t.target);
   const skills = unique(step.tools.filter((t) => t.tool === "read_skill").map((t) => t.target));
+  // Pages seen in the headless browser, as "/pricing at 360px".
+  const looks = step.tools.filter((t) => t.tool === "look_at_page").map((t) => t.target);
   const output = step.output?.trim();
 
   const items = [
@@ -633,6 +635,19 @@ function Work({ step, showPlan }: { step: StepView; showPlan: boolean }) {
         <ul className="files">
           {used.map((c, i) => (
             <li key={i}>{c}</li>
+          ))}
+        </ul>
+      </Item>
+    ),
+    looks.length > 0 && (
+      <Item
+        key="looks"
+        icon={ICONS.file}
+        summary={`Looked at ${looks[0]}${looks.length > 1 ? ` and ${looks.length - 1} more` : ""}`}
+      >
+        <ul className="files">
+          {looks.map((page, i) => (
+            <li key={i}>{page}</li>
           ))}
         </ul>
       </Item>

@@ -7,6 +7,7 @@ import { projectInstructions, projectNotes } from "./instructions";
 import { BudgetExceeded, Meter, RefusedError } from "./meter";
 import * as prompts from "./prompts";
 import { type Mcp, NO_MCP } from "./mcp";
+import { NO_PREVIEW, type Preview } from "./preview";
 import type { ModelProvider } from "./provider";
 import { findSkills } from "./skills";
 import { expandCommand } from "./slash";
@@ -49,6 +50,8 @@ export interface ThreadInput {
   ask?: (command: string) => Promise<boolean>;
   /** The person's MCP servers' tools. Scout and Plan get the ones that only look; Build gets them all. */
   mcp?: Mcp;
+  /** The project's dev server in a headless browser, which Build can look at. */
+  preview?: Preview;
 }
 
 const MAX_FILES_CHARS = 60_000;
@@ -70,6 +73,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   const guide = projectInstructions(workspace);
   const mcp = input.mcp ?? NO_MCP;
   const skills = findSkills(workspace);
+  const preview = input.preview ?? NO_PREVIEW;
 
   const step = async (name: string, role: Role, seat: Seat, work: () => Promise<string>) => {
     emit({ type: "step", step: name, role, model: seat.model, status: "running" });
@@ -105,6 +109,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
         tools,
         mcp: input.mcp,
         skills,
+        preview,
         onTool: (tool, input) =>
           emit({
             type: "tool",
@@ -114,7 +119,9 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
               ? mcp.label(tool)
               : skills.owns(tool)
                 ? input.name
-                : (input.path ?? input.pattern ?? input.command ?? ""),
+                : preview.owns(tool)
+                  ? `${input.path} at ${input.width}px`
+                  : (input.path ?? input.pattern ?? input.command ?? ""),
           }),
       }),
     );
@@ -136,6 +143,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     ...WRITE_TOOLS,
     ...(checks.length ? COMMAND_TOOLS : []),
     ...skills.tools,
+    ...preview.tools,
     ...mcp.tools,
   ];
   const lookingTools = [...READ_TOOLS, ...skills.tools, ...mcp.readOnly];

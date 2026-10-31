@@ -46,6 +46,8 @@ export interface Prefs {
   updateModels: boolean;
   /** The MCP servers the person added, as the JSON they pasted, so it reads back as they wrote it. */
   mcpServers: string;
+  /** Let Build start the dev server in its copy and look at pages in a headless browser. */
+  lookAtPages: boolean;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -70,6 +72,7 @@ export const DEFAULT_PREFS: Prefs = {
   devCommands: {},
   updateModels: true,
   mcpServers: "",
+  lookAtPages: true,
 };
 
 const STORE = "shoji.prefs";

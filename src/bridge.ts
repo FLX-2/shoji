@@ -35,6 +35,8 @@ export interface RunRequest {
   models?: Catalog & { version: 1 };
   /** The person's MCP servers, as the runtime's --mcp-json reads them. */
   mcpServers?: { mcpServers: Record<string, Omit<McpServer, "name">> };
+  /** The project's dev command, when Build may start it to look at pages. */
+  devCommand?: string;
   /** What the person asked for, as the thread shows it, kept so a reopened thread shows it again. */
   ask?: string;
 }
@@ -86,6 +88,8 @@ export interface Carried {
   models?: Catalog;
   /** The person's MCP servers, for a thread's runs only. */
   mcpServers?: McpServer[];
+  /** The dev command Build may start in a project to look at its pages, or "" when it doesn't look. */
+  devCommandFor?: (repo: string) => string;
 }
 
 /** Servers in the shape the runtime's --mcp-json reads. */
@@ -102,8 +106,13 @@ export function carrying(bridge: Bridge, carried: () => Carried): Bridge {
   return {
     ...bridge,
     startRun: (request) => {
-      const { mcpServers } = carried();
-      return bridge.startRun({ ...add(request), ...(mcpServers?.length && { mcpServers: serversJson(mcpServers) }) });
+      const { mcpServers, devCommandFor } = carried();
+      const devCommand = devCommandFor?.(request.repo);
+      return bridge.startRun({
+        ...add(request),
+        ...(mcpServers?.length && { mcpServers: serversJson(mcpServers) }),
+        ...(devCommand && { devCommand }),
+      });
     },
     startTrial: (request) => bridge.startTrial(add(request)),
     startNotes: (request) => bridge.startNotes(add(request)),

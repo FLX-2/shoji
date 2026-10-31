@@ -122,4 +122,36 @@ describe("Settings", () => {
     });
     expect(fake.calls.starts[0].mcpServers).toEqual(pasted);
   });
+
+  it("lets Build look at pages with the project's dev command, until it's turned off", async () => {
+    localStorage.setItem(
+      "shoji.prefs",
+      JSON.stringify({
+        repo: "/work/pricing-page",
+        planFirst: false,
+        devCommands: { "/work/pricing-page": "pnpm dev" },
+      }),
+    );
+    const fake = fakeBridge();
+    render(<App bridge={fake.bridge} />);
+    const send = async (text: string) => {
+      const task = await screen.findByRole("textbox", { name: "Task" });
+      fireEvent.change(task, { target: { value: text } });
+      await act(async () => {
+        fireEvent.keyDown(task, { key: "Enter" });
+      });
+    };
+    await send("Restyle the pricing table");
+    expect(fake.calls.starts[0].devCommand).toBe("pnpm dev");
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    });
+    fireEvent.click(screen.getByRole("switch", { name: "Let Build look at pages" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    });
+    await send("Restyle the footer");
+    expect(fake.calls.starts[1].devCommand).toBeUndefined();
+  });
 });

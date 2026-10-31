@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Mcp } from "./mcp";
 import type { Meter } from "./meter";
+import type { Preview } from "./preview";
 import type { Skills } from "./skills";
 import type { Role, Seat } from "./stack";
 import { runTool } from "./tools";
@@ -31,7 +32,11 @@ export interface AgentRun {
   mcp?: Mcp;
   /** The project's skills and the person's own, read here when a role asks for one. */
   skills?: Skills;
+  /** The project's pages, which a role with the look_at_page tool can see. */
+  preview?: Preview;
 }
+
+type ToolContent = Exclude<Anthropic.ToolResultBlockParam["content"], undefined>;
 
 export function textOf(message: Anthropic.Message): string {
   return message.content
@@ -57,8 +62,13 @@ export async function runAgent(run: AgentRun): Promise<string> {
     ask,
     mcp,
     skills,
+    preview,
   } = run;
-  const use = async (name: string, input: Record<string, string>) => {
+  const use = async (name: string, input: Record<string, string>): Promise<ToolContent> => {
+    if (preview?.owns(name)) {
+      onTool?.(name, input);
+      return preview.look(input.path, input.width);
+    }
     if (skills?.owns(name)) {
       onTool?.(name, input);
       return skills.read(input.name, input.file);

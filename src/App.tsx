@@ -53,12 +53,19 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const [section, setSection] = useState<SectionId>("home");
   const [prefs, setPrefs] = usePrefs();
   const catalog = useModelCatalog(prefs.updateModels);
+  // The project's files, for @ in the task box, read again when the project changes. Threads work in their
+  // own copies, so the project itself only changes in the person's hands.
+  const [projectFiles, setProjectFiles] = useState<string[]>([]);
+  // A project's dev server: the command the person gave, or a guess for the open project.
+  const devCommandIn = (repo: string) =>
+    prefs.devCommands[repo] ?? (repo === prefs.repo ? guessCommand(projectFiles) : "");
   // Every run, trial and notes run carries the private files and the model list as they are when it starts.
   const carried = useRef<Carried>({ privateFiles: prefs.privateFiles });
   carried.current = {
     privateFiles: prefs.privateFiles,
     models: catalog ?? undefined,
     mcpServers: readMcpServers(prefs.mcpServers).servers,
+    ...(prefs.lookAtPages && { devCommandFor: devCommandIn }),
   };
   const bridge = useMemo(() => carrying(given, () => carried.current), [given]);
   const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
@@ -122,10 +129,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     // Read again on a commit or on opening Threads too, so each thread shows where it got to.
   }, [bridge, activity, trialRunning, notesRunning, section]);
   const pastThreads = useMemo(() => workThreads(ledger), [ledger]);
-  // The project's files, for @ in the task box, read again when the project changes. Threads work in their
-  // own copies, so the project itself only changes in the person's hands.
-  const [projectFiles, setProjectFiles] = useState<string[]>([]);
-  // And its commands, for / at the start of a task.
+  // And the project's commands, for / at the start of a task.
   const [projectCommands, setProjectCommands] = useState<SlashCommand[]>([]);
   useEffect(() => {
     setProjectFiles([]);
@@ -320,9 +324,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     previewUrl={prefs.previewUrls[thread.repo] ?? DEFAULT_PREVIEW}
                     onPreviewUrl={(url) => setPrefs({ previewUrls: { ...prefs.previewUrls, [thread.repo]: url } })}
                     server={servers.servers[thread.committed || !thread.workdir ? thread.repo : thread.workdir]}
-                    devCommand={
-                      prefs.devCommands[thread.repo] ?? (thread.repo === prefs.repo ? guessCommand(projectFiles) : "")
-                    }
+                    devCommand={devCommandIn(thread.repo)}
                     onStartServer={(dir, command) => {
                       setPrefs({ devCommands: { ...prefs.devCommands, [thread.repo]: command } });
                       servers.start(dir, command);

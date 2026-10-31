@@ -5,10 +5,12 @@ import { parseArgs } from "node:util";
 import { readAttachments } from "./attachments";
 import type { RuntimeEvent } from "./events";
 import { hasChanges, isGitRepo } from "./git";
+import { Browser, findBrowser } from "./browser";
 import { connectMcp, type Mcp, parseMcpServers, transportFor } from "./mcp";
 import { applyCatalog, MODELS, parseCatalog } from "./models";
 import { writeNotes, type NotesEvent } from "./notes";
 import { runThread } from "./pipeline";
+import { NO_PREVIEW, previewFor } from "./preview";
 import { defaultChecks } from "./project";
 import { AnthropicProvider } from "./provider";
 import { answerQuestion } from "./question";
@@ -69,6 +71,10 @@ Options:
   --mcp-json <json>   MCP servers whose tools the roles may use, as {"mcpServers":{"name":
                       {"command":…,"args":[…],"env":{…}} or {"url":…}}}. Tools that say they
                       only read run at once; any other asks first, as a command does
+  --dev-command <command>
+                      The project's dev server, such as "pnpm dev". With a Chrome, Edge,
+                      Chromium or Brave on this computer (or one SHOJI_BROWSER names), Build
+                      can start it and look at pages in a headless browser
   --log <file>        Append every event to a JSON lines file
   --json              Print events as JSON lines, for the app
   --allow-dirty       Run even if the project has uncommitted changes
@@ -189,6 +195,7 @@ async function main() {
       "stack-json": { type: "string" },
       "models-json": { type: "string" },
       "mcp-json": { type: "string" },
+      "dev-command": { type: "string" },
       cap: { type: "string", default: "0.50" },
       check: { type: "string", multiple: true },
       changes: { type: "string" },
@@ -308,6 +315,9 @@ async function main() {
   // Connected only for a task or a question, after every check that could stop the run first.
   const emit = (event: RuntimeEvent) => write(event, describe(event));
   const mcp: Mcp = await connectMcp(servers, emit, (server) => transportFor(server, root));
+  // Started only when Build first looks at a page.
+  const browser = values["dev-command"] ? findBrowser() : null;
+  const preview = browser ? previewFor(root, values["dev-command"]!, () => Browser.launch(browser)) : NO_PREVIEW;
   try {
     if (values.question !== undefined) {
       const result = await answerQuestion({
@@ -343,10 +353,11 @@ async function main() {
       ask: (command) => askPerson(command, values.json),
       emit,
       mcp,
+      preview,
     });
     process.exitCode = result.status === "ready" || result.status === "planned" ? 0 : 1;
   } finally {
-    await mcp.close();
+    await Promise.all([mcp.close(), preview.close()]);
   }
 }
 
