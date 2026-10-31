@@ -237,6 +237,10 @@ export const bridge = {
   discardThread: (thread: number) => invoke<void>("discard_thread", { thread }),
   /** Shows a folder in the system's file manager. */
   revealFolder: (path: string) => invoke<void>("reveal_folder", { path }),
+  /** A system notification, for a thread that needs the person while they look elsewhere. */
+  notify: (title: string, body: string) => invoke<void>("notify", { title, body }),
+  /** How many threads wait for the person, shown on the app's icon. Rising from `before` asks for attention. */
+  showWaiting: (count: number, before: number) => invoke<void>("show_waiting", { count, before }),
   /** A run's events as the runtime wrote them, for reopening a past thread. */
   runEvents: (run: number) => invoke<RuntimeEvent[]>("run_events", { run }),
   /** Every thread in the ledger with its runs and calls, newest first. */

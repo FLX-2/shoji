@@ -54,6 +54,12 @@ export interface Prefs {
   lookAtPages: boolean;
   /** Tasks Shoji starts by itself on a schedule. */
   schedules: Schedule[];
+  /** Tell the person through the system when a thread asks for them or ends, and count waiting threads on the
+   *  app's icon. */
+  notify: boolean;
+  /** How each thread stood when the person last looked at it, by ledger id, to mark the ones with news. Unset
+   *  until the ledger is first read, when every thread then counts as seen. */
+  seen?: Record<number, string>;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -81,6 +87,7 @@ export const DEFAULT_PREFS: Prefs = {
   mcpServers: "",
   lookAtPages: true,
   schedules: [],
+  notify: true,
 };
 
 const STORE = "shoji.prefs";

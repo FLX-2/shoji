@@ -827,6 +827,42 @@ async fn discard_thread(
     ledger.discard(thread, now_ms()).map_err(|e| e.to_string())
 }
 
+/// Tells the person, through the system, that a thread needs them, while they're looking elsewhere.
+#[tauri::command]
+fn notify(app: AppHandle, title: String, body: String) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification().builder().title(title).body(body).show().map_err(|e| e.to_string())
+}
+
+/// Shows how many threads wait for the person on the app's icon: a count on macOS and Linux, a dot on
+/// Windows' taskbar. Going from none to some also asks for attention, as a bounce or a flash.
+#[tauri::command]
+fn show_waiting(window: tauri::WebviewWindow, count: i64, before: i64) {
+    let count = count.max(0);
+    #[cfg(not(target_os = "windows"))]
+    let _ = window.set_badge_count((count > 0).then_some(count));
+    #[cfg(target_os = "windows")]
+    let _ = window.set_overlay_icon((count > 0).then(waiting_dot));
+    if count > before && !window.is_focused().unwrap_or(true) {
+        let _ = window.request_user_attention(Some(tauri::UserAttentionType::Informational));
+    }
+}
+
+/// Windows' taskbar has no count, so a waiting thread shows as a small light dot on the icon.
+#[cfg(target_os = "windows")]
+fn waiting_dot() -> tauri::image::Image<'static> {
+    const SIZE: u32 = 16;
+    let mut rgba = Vec::with_capacity((SIZE * SIZE * 4) as usize);
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            let (dx, dy) = (x as f32 - 7.5, y as f32 - 7.5);
+            let inside = dx * dx + dy * dy <= 6.5 * 6.5;
+            rgba.extend_from_slice(if inside { &[0xe3, 0xe0, 0xda, 0xff] } else { &[0, 0, 0, 0] });
+        }
+    }
+    tauri::image::Image::new_owned(rgba, SIZE, SIZE)
+}
+
 /// Shows a folder in the system's file manager.
 #[tauri::command]
 fn reveal_folder(path: String) -> Result<(), String> {
@@ -1082,6 +1118,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(Run::default())
         .manage(Servers::default())
         .manage(Terminals::default())
@@ -1128,6 +1165,8 @@ pub fn run() {
             archive_thread,
             discard_thread,
             reveal_folder,
+            notify,
+            show_waiting,
             ledger_threads,
             run_events,
             export_csv,
