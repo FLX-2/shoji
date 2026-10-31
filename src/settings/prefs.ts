@@ -48,6 +48,9 @@ export interface Prefs {
   devCommands: Record<string, string>;
   /** Download the current models and prices once a day. */
   updateModels: boolean;
+  /** Models the person has had the chance to try: those Shoji knew when this was first set, and each new one
+   *  once it's tried or set aside. Stack marks any other model the list brings Worth a trial. Null until then. */
+  seenModels: string[] | null;
   /** The MCP servers the person added, as the JSON they pasted, so it reads back as they wrote it. */
   mcpServers: string;
   /** Let Build start the dev server in its copy and look at pages in a headless browser. */
@@ -78,6 +81,7 @@ export const DEFAULT_PREFS: Prefs = {
   previewUrls: {},
   devCommands: {},
   updateModels: true,
+  seenModels: null,
   mcpServers: "",
   lookAtPages: true,
   schedules: [],
@@ -95,9 +99,10 @@ function load(): Prefs {
 
 export function usePrefs() {
   const [prefs, setPrefs] = useState(load);
-  const update = useCallback((change: Partial<Prefs>) => {
+  // A change can be worked out from the prefs as they are then, for an undo that lands after other changes.
+  const update = useCallback((change: Partial<Prefs> | ((current: Prefs) => Partial<Prefs>)) => {
     setPrefs((current) => {
-      const next = { ...current, ...change };
+      const next = { ...current, ...(typeof change === "function" ? change(current) : change) };
       try {
         localStorage.setItem(STORE, JSON.stringify(next));
       } catch {

@@ -49,6 +49,11 @@ const MIGRATIONS: &[&str] = &["
     ALTER TABLE runs ADD COLUMN ask TEXT;
 ", "
     ALTER TABLE threads ADD COLUMN workdir TEXT;
+", "
+    ALTER TABLE threads ADD COLUMN title TEXT;
+    ALTER TABLE threads ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE threads ADD COLUMN archived_at INTEGER;
+    ALTER TABLE threads ADD COLUMN discarded_at INTEGER;
 "];
 
 pub struct Ledger(Mutex<Connection>);
@@ -68,7 +73,29 @@ pub struct ThreadRecord {
     pub started_at: i64,
     pub committed: Option<String>,
     pub committed_at: Option<i64>,
+    /// A short name: the person's own, or the one Scout gave the task. None until either exists.
+    pub title: Option<String>,
+    pub pinned: bool,
+    /// When the person put the thread away. Its runs and costs stay, for Receipts.
+    pub archived_at: Option<i64>,
+    /// When the person threw the thread's work away: its copy and its branch are gone.
+    pub discarded_at: Option<i64>,
     pub runs: Vec<RunRecord>,
+}
+
+/// Where a thread's work is, for putting it away or throwing it out.
+pub struct Place {
+    pub repo: String,
+    pub branch: String,
+    pub workdir: Option<String>,
+    pub committed: Option<String>,
+}
+
+/// The title Scout gave a task on its brief's TITLE: line, if it gave one.
+pub fn title_in(brief: &str) -> Option<String> {
+    let line = brief.lines().find_map(|l| l.trim().strip_prefix("TITLE:"))?;
+    let title: String = line.trim().trim_matches(|c| c == '"' || c == '\'' || c == '*').trim_end_matches('.').trim().chars().take(80).collect();
+    (!title.is_empty()).then_some(title)
 }
 
 #[derive(Serialize)]
@@ -240,6 +267,16 @@ impl Ledger {
                     params![run, if finished { "ready" } else { "failed" }],
                 )?;
             }
+            // Scout names the task on its brief's first line, which titles the thread until the person renames it.
+            Some("step") if event["role"] == "scout" && event["status"] == "done" => {
+                if let Some(title) = event["output"].as_str().and_then(title_in) {
+                    self.0.lock().unwrap().execute(
+                        "UPDATE threads SET title = ?2
+                         WHERE id = (SELECT thread_id FROM runs WHERE id = ?1) AND title IS NULL",
+                        params![run, title],
+                    )?;
+                }
+            }
             // A thread ends with its result; project notes end with theirs, in the same shape.
             Some("result" | "notes") => {
                 if let Some(status) = event["result"]["status"].as_str() {
@@ -276,7 +313,8 @@ impl Ledger {
         let conn = self.0.lock().unwrap();
         let mut threads = conn
             .prepare(
-                "SELECT id, task, repo, branch, stack, started_at, committed, committed_at, workdir
+                "SELECT id, task, repo, branch, stack, started_at, committed, committed_at, workdir,
+                    title, pinned, archived_at, discarded_at
                  FROM threads ORDER BY started_at DESC, id DESC",
             )?
             .query_map([], |row| {
@@ -290,6 +328,10 @@ impl Ledger {
                     committed: row.get(6)?,
                     committed_at: row.get(7)?,
                     workdir: row.get(8)?,
+                    title: row.get(9)?,
+                    pinned: row.get::<_, i64>(10)? != 0,
+                    archived_at: row.get(11)?,
+                    discarded_at: row.get(12)?,
                     runs: Vec::new(),
                 })
             })?
@@ -336,6 +378,55 @@ impl Ledger {
             }
         }
         Ok(threads)
+    }
+
+    /// Names a thread, or with None lets Scout's title or the task name it again.
+    pub fn set_title(&self, thread: i64, title: Option<&str>) -> Result<()> {
+        self.0
+            .lock()
+            .unwrap()
+            .execute("UPDATE threads SET title = ?2 WHERE id = ?1", params![thread, title])?;
+        Ok(())
+    }
+
+    pub fn set_pinned(&self, thread: i64, pinned: bool) -> Result<()> {
+        self.0
+            .lock()
+            .unwrap()
+            .execute("UPDATE threads SET pinned = ?2 WHERE id = ?1", params![thread, pinned as i64])?;
+        Ok(())
+    }
+
+    /// Puts a thread away at `at`, or with None brings it back.
+    pub fn set_archived(&self, thread: i64, at: Option<i64>) -> Result<()> {
+        self.0
+            .lock()
+            .unwrap()
+            .execute("UPDATE threads SET archived_at = ?2 WHERE id = ?1", params![thread, at])?;
+        Ok(())
+    }
+
+    /// Notes that a thread's work was thrown away, which puts the thread away too.
+    pub fn discard(&self, thread: i64, at: i64) -> Result<()> {
+        self.0.lock().unwrap().execute(
+            "UPDATE threads SET discarded_at = ?2, archived_at = COALESCE(archived_at, ?2), pinned = 0 WHERE id = ?1",
+            params![thread, at],
+        )?;
+        Ok(())
+    }
+
+    pub fn place_of(&self, thread: i64) -> Result<Option<Place>> {
+        self.0
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT repo, branch, workdir, committed FROM threads WHERE id = ?1",
+                [thread],
+                |row| {
+                    Ok(Place { repo: row.get(0)?, branch: row.get(1)?, workdir: row.get(2)?, committed: row.get(3)? })
+                },
+            )
+            .optional()
     }
 
     /// The thread a run belongs to, for checking a request for changes names a real thread.
@@ -433,6 +524,33 @@ mod tests {
             ("plan", "claude-opus-5-5")
         );
         assert_eq!((calls[1].cache_read_tokens, calls[1].cost), (40, 0.02));
+    }
+
+    #[test]
+    fn titles_pins_archives_and_discards_a_thread() {
+        let ledger = Ledger::in_memory().unwrap();
+        let thread = ledger.start_thread("When a run fails, show why", "/r", "shoji/when-a-run", "{}", 1).unwrap();
+        let run = ledger.start_run(thread, "task", "/logs/1.jsonl", 2).unwrap();
+        let brief = |output: &str| json!({ "type": "step", "step": "scout", "role": "scout", "status": "done", "output": output });
+        ledger.record(run, &brief("TITLE: \"Explain failed runs.\"\nThe runner is in run.ts.\nFILES: run.ts"), 3).unwrap();
+        assert_eq!(ledger.threads().unwrap()[0].title.as_deref(), Some("Explain failed runs"));
+        // Scout's title never replaces the person's own.
+        ledger.set_title(thread, Some("Failed runs")).unwrap();
+        ledger.record(run, &brief("TITLE: Something else"), 4).unwrap();
+        assert_eq!(ledger.threads().unwrap()[0].title.as_deref(), Some("Failed runs"));
+        ledger.set_pinned(thread, true).unwrap();
+        ledger.set_archived(thread, Some(5)).unwrap();
+        let t = &ledger.threads().unwrap()[0];
+        assert!(t.pinned);
+        assert_eq!((t.archived_at, t.discarded_at), (Some(5), None));
+        ledger.set_archived(thread, None).unwrap();
+        ledger.discard(thread, 6).unwrap();
+        let t = &ledger.threads().unwrap()[0];
+        assert_eq!((t.pinned, t.archived_at, t.discarded_at), (false, Some(6), Some(6)));
+        let place = ledger.place_of(thread).unwrap().unwrap();
+        assert_eq!((place.repo.as_str(), place.branch.as_str()), ("/r", "shoji/when-a-run"));
+        assert!(ledger.place_of(99).unwrap().is_none());
+        assert_eq!(title_in("No title here"), None);
     }
 
     #[test]

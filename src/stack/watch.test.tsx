@@ -135,4 +135,15 @@ describe("the Watching row", () => {
     await openStack(before);
     expect(screen.queryByRole("heading", { name: "Watching" })).toBeNull();
   });
+
+  it("opens the list for a role whose model got worse, to pick another for a trial", async () => {
+    const now = Date.now();
+    await openStack([
+      ...BEFORE_DAYS.map((d) => task(d, { now })),
+      ...RECENT_DAYS.map((d) => task(d, { now, buildCost: 0.2 })),
+    ]);
+    expect(screen.queryByRole("listbox")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Try another model" }));
+    expect(screen.getByRole("listbox", { name: "Build model" })).toBeTruthy();
+  });
 });

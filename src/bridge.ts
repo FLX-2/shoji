@@ -164,6 +164,13 @@ export interface LedgerThread {
   startedAt: number;
   committed: string | null;
   committedAt: number | null;
+  /** The person's name for the thread, or the one Scout gave its task; missing or null until there is one. */
+  title?: string | null;
+  pinned?: boolean;
+  /** When the person put the thread away. */
+  archivedAt?: number | null;
+  /** When the person threw the thread's work away: its copy and branch are gone. */
+  discardedAt?: number | null;
   runs: LedgerRun[];
 }
 
@@ -219,7 +226,15 @@ export const bridge = {
   /** Pushes a committed thread's branch to the project's remote and opens the page for a pull request. Only the
    *  person's button calls it. */
   pushThread: (repo: string, branch: string) => invoke<Pushed>("push_thread", { repo, branch }),
-  /** Every thread in the ledger with its runs and calls, newest first. */
+  /** Names a thread; an empty name gives it back Scout's title or its task. */
+  renameThread: (thread: number, title: string) => invoke<void>("rename_thread", { thread, title }),
+  pinThread: (thread: number, pinned: boolean) => invoke<void>("pin_thread", { thread, pinned }),
+  /** Puts a thread away or brings it back. Its work and costs stay. */
+  archiveThread: (thread: number, archived: boolean) => invoke<void>("archive_thread", { thread, archived }),
+  /** Throws away an uncommitted thread's own copy of the project and its branch. */
+  discardThread: (thread: number) => invoke<void>("discard_thread", { thread }),
+  /** Shows a folder in the system's file manager. */
+  revealFolder: (path: string) => invoke<void>("reveal_folder", { path }),
   /** A run's events as the runtime wrote them, for reopening a past thread. */
   runEvents: (run: number) => invoke<RuntimeEvent[]>("run_events", { run }),
   /** A screenshot a run saved of a page before or after its work, as a data URL the page may show. */
@@ -232,6 +247,7 @@ export const bridge = {
       reader.readAsDataURL(new Blob([bytes], { type: "image/png" }));
     });
   },
+  /** Every thread in the ledger with its runs and calls, newest first. */
   ledgerThreads: () => invoke<LedgerThread[]>("ledger_threads"),
   /** Asks where to save a CSV file and writes it there. Returns the path, or null if cancelled. */
   exportCsv: (name: string, contents: string) => invoke<string | null>("export_csv", { name, contents }),

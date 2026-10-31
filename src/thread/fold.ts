@@ -37,7 +37,33 @@ export interface RunView {
   unreached?: { server: string; error: string }[];
   /** The pages Build looked at, before the work and after it, once the run has changed them. */
   compare?: { running: boolean; pages: ComparedPage[]; problem?: string };
+  /** The name Scout gave the task, on its brief's TITLE: line. */
+  title?: string;
 }
+
+/** The name on a brief's TITLE: line, as the ledger reads it too. */
+export function titleIn(brief: string): string | undefined {
+  const line = brief
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l.startsWith("TITLE:"));
+  const title = line
+    ?.slice(6)
+    .trim()
+    .replace(/^["'*]+|["'*]+$/g, "")
+    .replace(/\.+$/, "")
+    .trim()
+    .slice(0, 80);
+  return title || undefined;
+}
+
+/** A brief without its TITLE: line, which only names the thread. */
+const withoutTitle = (brief: string) =>
+  brief
+    .split("\n")
+    .filter((l) => !l.trim().startsWith("TITLE:"))
+    .join("\n")
+    .trim();
 
 /** Folds one run's events into its steps, in order. */
 export function foldRun(events: RuntimeEvent[]): RunView {
@@ -48,6 +74,7 @@ export function foldRun(events: RuntimeEvent[]): RunView {
   let cost = 0;
   let asking: string | undefined;
   let askingTool = false;
+  let title: string | undefined;
   const unreached: { server: string; error: string }[] = [];
   let compare: RunView["compare"];
 
@@ -66,7 +93,12 @@ export function foldRun(events: RuntimeEvent[]): RunView {
           });
         } else {
           const step = last(event.step);
-          if (step) Object.assign(step, { running: false, output: event.output });
+          let output = event.output;
+          if (event.role === "scout") {
+            title ??= titleIn(output);
+            output = withoutTitle(output);
+          }
+          if (step) Object.assign(step, { running: false, output });
         }
         break;
       case "tool":
@@ -121,6 +153,7 @@ export function foldRun(events: RuntimeEvent[]): RunView {
     ...(asking !== undefined && { asking, ...(askingTool && { askingTool }) }),
     ...(unreached.length && { unreached }),
     ...(compare && { compare }),
+    ...(title && { title }),
   };
 }
 

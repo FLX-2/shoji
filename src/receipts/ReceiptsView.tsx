@@ -18,6 +18,7 @@ import {
   threadSpend,
   toCsv,
 } from "./receipts";
+import { threadTitle } from "../thread/title";
 
 const STEPS: Record<string, string> = {
   scout: "Scout",
@@ -214,7 +215,7 @@ export function ReceiptsView({ bridge }: { bridge: Bridge }) {
                 onClick={() => setChosen(t.id)}
               >
                 <span role="cell" className="task">
-                  {t.task.split("\n")[0]}
+                  {threadTitle(t)}
                 </span>
                 {projects && (
                   <span role="cell" title={t.repo}>
@@ -318,7 +319,7 @@ function ReceiptPane({ thread }: { thread: LedgerThread }) {
   const changes = thread.runs.filter((run) => run.kind === "changes").length;
   return (
     <aside className="rpane" aria-label="Receipt">
-      <h2>{thread.task.split("\n")[0]}</h2>
+      <h2>{threadTitle(thread)}</h2>
       <p className="meta">
         {folderName(thread.repo)} · {when(thread.startedAt)}
       </p>

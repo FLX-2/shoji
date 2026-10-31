@@ -19,6 +19,7 @@ import { useChanges } from "../code/useChanges";
 import { ClipIcon } from "../shell/ClipIcon";
 import { ROLE_NAMES } from "../stack/lock";
 import { Composer } from "../shell/Composer";
+import { Menu, under, type MenuEntry } from "../shell/Menu";
 import { Working } from "../shell/Mark";
 import type { SlashCommand } from "../shell/mention";
 import {
@@ -36,6 +37,8 @@ import { Markdown } from "./Markdown";
 import { PreviewView } from "./PreviewView";
 import type { useTerminals } from "./useTerminals";
 import { serverRunning, type Server } from "./useServers";
+import { RenameField } from "./ThreadList";
+import { liveTitle } from "./title";
 import { fileName, isRunning, threadCost, type Thread, type Turn } from "./useThread";
 
 type Terminals = ReturnType<typeof useTerminals>;
@@ -84,6 +87,12 @@ interface ThreadViewProps {
   onPreviewUrl: (url: string) => void;
   /** The side panel opens by itself when Shoji edits a file or looks at a page, or a preview starts. */
   autoPanel: boolean;
+  /** The thread's actions, once it's in the ledger: the same list as its row's menu. */
+  menu?: MenuEntry[];
+  /** Set while the person edits the thread's name in the title bar. */
+  renaming?: boolean;
+  onStartRename?: () => void;
+  onRenamed?: (title: string | null) => void;
 }
 
 /** The side panel's tabs. */
@@ -140,7 +149,13 @@ export function ThreadView({
   terminals,
   still,
   autoPanel,
+  menu,
+  renaming,
+  onStartRename,
+  onRenamed,
 }: ThreadViewProps) {
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const title = liveTitle(thread);
   const last = thread.turns[thread.turns.length - 1];
   const running = isRunning(last);
   const runs = thread.turns.map((turn) => foldRun(turn.events));
@@ -153,7 +168,7 @@ export function ThreadView({
   // Where the thread's work is: its own copy of the project, or the project itself for an older thread. Once
   // the work is committed the copy is put away, and its branch holds the work.
   const place = thread.workdir ?? thread.repo;
-  const putAway = !!thread.workdir && !!thread.committed;
+  const putAway = (!!thread.workdir && !!thread.committed) || !!thread.discarded;
   // Where Preview's dev server and the terminal run: the thread's copy, or the project once the copy is put away.
   const here = putAway ? thread.repo : place;
   // Kept the same between draws, since the terminal is made again when they change.
@@ -163,7 +178,7 @@ export function ThreadView({
   // The composer stays under the conversation: it takes changes to the work or a question about it, and
   // while a run works it holds what's next and Stop.
   const [say, setSay] = useState<"changes" | "question">("changes");
-  const talkable = !thread.committed && runs.some((run) => run.result?.plan);
+  const talkable = !thread.committed && !thread.discarded && runs.some((run) => run.result?.plan);
   const talking = running || talkable;
   // The project's files and commands, for @ and / in the composer.
   const [files, setFiles] = useState<string[]>([]);
@@ -319,7 +334,34 @@ export function ThreadView({
     <section className="thread">
       <div className="convo">
         <div className="tbar solid">
-          <h1>{thread.task.split("\n")[0]}</h1>
+          {renaming && onRenamed ? (
+            <RenameField value={title} onDone={onRenamed} />
+          ) : (
+            <h1 title={thread.task}>
+              {onStartRename ? (
+                <button type="button" className="name" title="Rename (F2)" onClick={onStartRename}>
+                  {title}
+                </button>
+              ) : (
+                title
+              )}
+            </h1>
+          )}
+          {menu && !renaming && (
+            <button
+              type="button"
+              className="more"
+              aria-label="Thread actions"
+              aria-haspopup="menu"
+              aria-expanded={!!menuAt}
+              onClick={(e) => setMenuAt(menuAt ? null : under(e.currentTarget))}
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="m4.5 6.5 3.5 3.5 3.5-3.5" />
+              </svg>
+            </button>
+          )}
+          {menu && menuAt && <Menu at={menuAt} label="Thread actions" items={menu} onClose={() => setMenuAt(null)} />}
           <span className="stage" data-outcome={outcome}>
             <span className="dot live" aria-hidden="true" />
             {stage}
@@ -353,7 +395,11 @@ export function ThreadView({
         )}
 
         {!running &&
-          (planned ? (
+          (thread.discarded ? (
+            <div className="review">
+              <span className="done">This thread's work was discarded. What it cost stays in Receipts.</span>
+            </div>
+          ) : planned ? (
             <div className="review">
               <button type="button" className="btn solid" onClick={onBuild}>
                 Build it

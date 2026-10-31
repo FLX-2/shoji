@@ -36,6 +36,10 @@ export interface Thread {
   committed?: string;
   /** Screenshots and files attached to the task, as paths. Every run of the thread sees them. */
   attachments?: string[];
+  /** The person's name for the thread, or the title Scout gave it. */
+  title?: string;
+  /** The thread's work was thrown away: its copy and branch are gone, and it can only be read. */
+  discarded?: boolean;
   turns: Turn[];
 }
 
@@ -304,6 +308,16 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
     [show, showId],
   );
 
+  /** Changes a thread the app holds, by its ledger id, as when it's renamed or its work is thrown away. */
+  const patch = useCallback(
+    (id: number, change: Partial<Thread>) =>
+      setHeld((all) => all.map((h) => (h.thread.id === id ? { ...h, thread: { ...h.thread, ...change } } : h))),
+    [],
+  );
+
+  /** Shows no thread, as when the one on show is put away. */
+  const close = useCallback(() => setShownKey(null), []);
+
   const threads = useMemo(() => held.map((h) => h.thread), [held]);
 
   return {
@@ -321,6 +335,8 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
     commit,
     open,
     showId,
+    patch,
+    close,
   };
 }
 
