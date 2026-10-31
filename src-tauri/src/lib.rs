@@ -630,11 +630,45 @@ fn git(repo: &str, args: &[&str]) -> Result<String, String> {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         command.creation_flags(CREATE_NO_WINDOW);
     }
-    let out = command.output().map_err(|e| format!("Couldn't run git: {e}"))?;
+    let out = command.output().map_err(no_git)?;
     if out.status.success() {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     } else {
-        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+        Err(plain_git(&String::from_utf8_lossy(&out.stderr)))
+    }
+}
+
+/// Why git itself couldn't be started, most often because it isn't installed.
+fn no_git(e: std::io::Error) -> String {
+    if e.kind() == std::io::ErrorKind::NotFound {
+        "Shoji couldn't find git. Install it from git-scm.com, then open Shoji again.".into()
+    } else {
+        format!("Couldn't run git: {e}")
+    }
+}
+
+/// What git said when it failed, as the person can act on it: the usual snags in words, and anything
+/// else without git's "fatal:" or "error:" in front.
+fn plain_git(said: &str) -> String {
+    let said = said.trim();
+    if said.contains("index.lock") {
+        return "Another git command is busy in this project. Wait for it to finish, then try again. \
+                If nothing is running, delete .git/index.lock."
+            .into();
+    }
+    if said.contains("not a git repository") {
+        return "This folder isn't a git project. Run git init in it, or open one that is.".into();
+    }
+    if said.contains("dubious ownership") {
+        return "Git won't work in this folder because another user owns it. \
+                Add it as a safe.directory in git, then try again."
+            .into();
+    }
+    let bare = said.strip_prefix("fatal: ").or_else(|| said.strip_prefix("error: ")).unwrap_or(said);
+    let mut letters = bare.chars();
+    match letters.next() {
+        Some(first) => first.to_uppercase().chain(letters).collect(),
+        None => "Git stopped without saying why.".into(),
     }
 }
 
@@ -1044,6 +1078,22 @@ mod tests {
         git(&root, &["add", "."]).unwrap();
         git(&root, &["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "start"]).unwrap();
         root
+    }
+
+    #[test]
+    fn says_what_git_s_usual_failures_mean() {
+        let dir = std::env::temp_dir().join(format!("shoji-not-git-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let said = git(&dir.display().to_string(), &["status"]).unwrap_err();
+        if !said.contains("safe.directory") {
+            assert_eq!(said, "This folder isn't a git project. Run git init in it, or open one that is.");
+        }
+        let _ = fs::remove_dir_all(&dir);
+
+        let locked = plain_git("fatal: Unable to create '/p/.git/index.lock': File exists.");
+        assert!(locked.starts_with("Another git command is busy"));
+        assert_eq!(plain_git("fatal: pathspec 'x' did not match any files\n"), "Pathspec 'x' did not match any files");
+        assert_eq!(plain_git(""), "Git stopped without saying why.");
     }
 
     #[test]

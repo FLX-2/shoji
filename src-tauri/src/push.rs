@@ -5,7 +5,7 @@ use std::process::Command;
 
 use serde::Serialize;
 
-use super::git;
+use super::{git, no_git};
 
 #[derive(Serialize, Debug, PartialEq)]
 pub struct Pushed {
@@ -83,20 +83,55 @@ pub fn push(repo: &str, branch: &str) -> Result<Pushed, String> {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         command.creation_flags(CREATE_NO_WINDOW);
     }
-    let out = command.output().map_err(|e| format!("Couldn't run git: {e}"))?;
+    let out = command.output().map_err(no_git)?;
     let said = String::from_utf8_lossy(&out.stderr);
     if !out.status.success() {
-        return Err(said.trim().to_string());
+        return Err(refused(&said));
     }
     let address = git(repo, &["remote", "get-url", &remote]).unwrap_or_default();
     let url = printed_url(&said).or_else(|| new_pull_request(&address, branch));
     Ok(Pushed { remote, url })
 }
 
+/// Why the remote didn't take the push, in words, for the snags people meet most.
+fn refused(said: &str) -> String {
+    let said = said.trim();
+    let signing_in = ["terminal prompts disabled", "could not read Username", "Authentication failed"];
+    if signing_in.iter().any(|s| said.contains(s)) {
+        "Git couldn't sign in to the remote. Push once from a terminal so git saves your sign-in, then push again."
+            .into()
+    } else if said.contains("Permission denied (publickey)") {
+        "The remote didn't accept your SSH key. Check it's added to your account there, then push again.".into()
+    } else if ["[rejected]", "non-fast-forward", "fetch first"].iter().any(|s| said.contains(s)) {
+        "The remote has commits this branch doesn't. Pull them in first, then push again.".into()
+    } else if said.contains("Could not resolve host") || said.contains("Failed to connect") {
+        "Git couldn't reach the remote. Check your internet connection, then push again.".into()
+    } else {
+        super::plain_git(said)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn says_why_a_push_was_refused() {
+        let said = [
+            "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+            "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.",
+            " ! [rejected]        shoji/x -> shoji/x (fetch first)\nerror: failed to push some refs",
+            "fatal: unable to access 'https://github.com/a/b/': Could not resolve host: github.com",
+        ]
+        .map(refused);
+        assert!(said[0].starts_with("Git couldn't sign in"));
+        assert!(said[1].starts_with("The remote didn't accept your SSH key"));
+        assert!(said[2].starts_with("The remote has commits"));
+        assert!(said[3].starts_with("Git couldn't reach the remote"));
+        let other = refused("fatal: 'origin' does not appear to be a git repository");
+        assert_eq!(other, "'origin' does not appear to be a git repository");
+    }
 
     #[test]
     fn finds_the_pull_request_page_for_each_host() {
