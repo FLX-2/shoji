@@ -5,7 +5,9 @@ import App from "../App";
 import { fakeBridge } from "../test/fakeBridge";
 
 describe("attaching files to a task", () => {
-  beforeEach(() => localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", planFirst: false })));
+  beforeEach(() =>
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", planFirst: false })),
+  );
   afterEach(() => {
     cleanup();
     localStorage.clear();
@@ -43,7 +45,16 @@ describe("attaching files to a task", () => {
     expect(document.querySelector(".umsg .attached")?.textContent).toBe("mock.pngimage.png");
 
     const costByRole = { scout: 0, plan: 0, build: 0, review: 0 };
-    const stopped: ThreadResult = { status: "stopped", plan: "", diff: "", review: "", checks: [], escalated: false, cost: 0.5, costByRole };
+    const stopped: ThreadResult = {
+      status: "stopped",
+      plan: "",
+      diff: "",
+      review: "",
+      checks: [],
+      escalated: false,
+      cost: 0.5,
+      costByRole,
+    };
     fake.emit({ type: "result", result: stopped });
     fake.exit(1);
     await act(async () => {

@@ -19,7 +19,7 @@ export function threadStatus(thread: LedgerThread): string {
   return last && last !== "answered" ? STATUS[last] : "Running";
 }
 
-function when(at: number, now: Date): string {
+export function when(at: number, now: Date): string {
   const day = new Date(at);
   return day.toDateString() === now.toDateString()
     ? day.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
@@ -28,11 +28,23 @@ function when(at: number, now: Date): string {
 
 /** The thread list's groups: what's working, what's waiting for the person, and the rest. */
 const GROUPS = ["Running", "Needs you", "Earlier"] as const;
+export type ThreadGroup = (typeof GROUPS)[number];
 
-function groupOf(status: string): (typeof GROUPS)[number] {
+function groupOf(status: string): ThreadGroup {
   if (status === "Running") return "Running";
   if (status === "Ready to accept" || status === "Plan ready" || status === "Needs work") return "Needs you";
   return "Earlier";
+}
+
+/**
+ * Where a thread stands now, and so its group. With `running`, the ledger ids of threads with a run going, a run
+ * the ledger never saw end, as when Shoji closed during it, counts as stopped.
+ */
+export function threadState(thread: LedgerThread, running?: Set<number>): { status: string; group: ThreadGroup } {
+  let status = threadStatus(thread);
+  if (running && status === "Running" && !running.has(thread.id)) status = "Stopped";
+  if (running?.has(thread.id)) status = "Running";
+  return { status, group: groupOf(status) };
 }
 
 interface ThreadListProps {
@@ -65,12 +77,7 @@ export function ThreadList({
 }: ThreadListProps) {
   const now = new Date();
   const projects = new Set([...threads, ...schedules].map((t) => t.repo)).size;
-  const listed = threads.map((thread) => {
-    let status = threadStatus(thread);
-    if (running && status === "Running" && !running.has(thread.id)) status = "Stopped";
-    if (running?.has(thread.id)) status = "Running";
-    return { thread, status, group: groupOf(status) };
-  });
+  const listed = threads.map((thread) => ({ thread, ...threadState(thread, running) }));
   return (
     <nav className="tlist" aria-label="Threads">
       <div className="mh">
