@@ -9,6 +9,7 @@ A Tauri 2 desktop app: a React and TypeScript front end in `src/`, the Rust shel
 - `pnpm runtime --repo <path> --task "…" --stack haiku --cap 0.05` runs the runtime live on a git project.
 - `pnpm review-check` asks the review seat to judge diffs with planted bugs and clean controls (`runtime/eval/`). It calls a model, so run it on Haiku with a cap and keep its results in `runtime/eval/results/`.
 - `pnpm estimate-check` compares Receipts' one-model estimate with the routing spike's real Opus runs (`src/receipts/fixtures/spike.json`). It calls no model.
+- `site/` is the launch website, a static page with no dependencies. `node site/build.mjs` builds it into `site/dist`, and Vercel deploys it from `site/` when `main` changes it (see `site/README.md`).
 - Runtime tests use `ScriptedProvider` in `runtime/test/helpers.ts` to answer as each role. They never call a model.
 
 ## Design
