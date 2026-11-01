@@ -1169,8 +1169,10 @@
   color: var(--z8);
 }
 
+/* A long bar wraps onto a second line rather than squeezing the sum into a column. */
 .review {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s-2);
   align-items: center;
   flex: none;
@@ -1202,6 +1204,7 @@
   margin-left: auto;
   font-size: var(--t-sm);
   color: var(--z6);
+  white-space: nowrap;
 }
 
 .review .sum b,
@@ -1210,9 +1213,14 @@
   color: var(--z9);
 }
 
+/* What happened, in the bar's size beside its buttons. Alone in the bar, it reads at the conversation's size. */
 .review .done {
-  font-size: var(--t-lg);
+  font-size: var(--t-sm);
   color: var(--z8);
+}
+
+.review .done:only-child {
+  font-size: var(--t-lg);
 }
 
 .review .err {
@@ -4552,10 +4560,65 @@ input.rename {
 }
 
 .copy[data-done],
-.review .done:hover .copy,
 .wk:hover > .copy,
 .tout > span:hover .copy {
   opacity: 1;
+}
+
+/* Copy as the text it copies, inside a sentence: its tile reaches past the text, so the words keep their spacing. */
+.copy.as {
+  position: relative;
+  display: inline-block;
+  min-width: 0;
+  height: auto;
+  margin: -1px -3px;
+  padding: 1px 3px;
+  vertical-align: baseline;
+  font: inherit;
+  color: inherit;
+  opacity: 1;
+}
+
+.copy.as:hover {
+  background: rgba(var(--ink-rgb), 0.09);
+}
+
+.copy.as:hover b {
+  color: inherit;
+}
+
+/* Over the sentence, a faint tile shows which words copy. */
+.review .done:hover .copy.as:not(:hover) {
+  background: rgba(var(--ink-rgb), 0.045);
+}
+
+/* Copied, over the text for a moment, so the sentence stays as it was. */
+.copy .said {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 5px);
+  transform: translateX(-50%);
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: var(--lifted);
+  box-shadow: var(--lifted-edge);
+  font-family: var(--sans);
+  font-size: var(--t-xs);
+  font-weight: 400;
+  color: var(--z9);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.app[data-motion="on"] .copy .said {
+  animation: said-in var(--d-quick) var(--e-out);
+}
+
+@keyframes said-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 3px);
+  }
 }
 
 /* The plan's copy sits at its top right. */
