@@ -109,10 +109,10 @@ describe("a thread's small helps", () => {
       fireEvent.click(within(screen.getByRole("navigation", { name: "Threads" })).getByRole("button", { name: /^Add a FAQ/ }));
     });
     await act(async () => {
-      fireEvent.click(await screen.findByRole("button", { name: "Copy the commit id" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Copy the commit id, abc1234" }));
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Copy the branch name" }));
+      fireEvent.click(screen.getByRole("button", { name: "Copy the branch name, shoji/add-a-faq" }));
     });
     expect(copied).toEqual(["abc1234", "shoji/add-a-faq"]);
     expect(screen.getAllByRole("button", { name: "Copied" })).toHaveLength(2);

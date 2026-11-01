@@ -518,9 +518,16 @@ export function ThreadView({
                       </>
                     ) : (
                       <>
-                        Committed <b>{thread.committed}</b>
-                        <Copy text={thread.committed} what="the commit id" /> on {thread.branch}
-                        {thread.branch && <Copy text={thread.branch} what="the branch name" />}
+                        Committed{" "}
+                        <Copy text={thread.committed} what="the commit id">
+                          <b>{thread.committed}</b>
+                        </Copy>{" "}
+                        on{" "}
+                        {thread.branch && (
+                          <Copy text={thread.branch} what="the branch name">
+                            {thread.branch}
+                          </Copy>
+                        )}
                       </>
                     )}
                   </span>
