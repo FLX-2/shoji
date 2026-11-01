@@ -2,6 +2,8 @@
 
 **The right model for every step.**
 
+Website: [shoji-app.vercel.app](https://shoji-app.vercel.app/)
+
 Shoji is a free desktop app for building software with AI. You describe a change, and a small team of models plans it, builds it and checks it, each model chosen for its step. You bring your own API keys and pay providers directly. Every finished task leaves a receipt showing which model ran each step and what it cost.
 
 In a test on real tasks, routing each step to the right model cost 55% less per accepted change than running everything on one strong model, with the same acceptance rate.

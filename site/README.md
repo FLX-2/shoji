@@ -12,7 +12,7 @@ writes `dist/index.html` and copies the images and film next to it. No dependenc
 
 ## Hosting
 
-Vercel serves the site from this folder. `vercel.json` sets it up, so the project needs only its Root Directory set to `site`:
+The site is live at https://shoji-app.vercel.app/ (the Vercel project `shoji-app`). Vercel serves it from this folder. `vercel.json` sets it up, so the project needs only its Root Directory set to `site`:
 
 - Build: `node build.mjs`, no install step, and `dist/` is what's served.
 - `skip-build.sh` is the Ignored Build Step. A push that changes nothing in `site/` doesn't redeploy it.
@@ -24,7 +24,7 @@ The film is about 14 MB and only loads when someone presses play. Vercel's free 
 
 The page is written for after the release: every Download button leads to the download section, whose platform links open the latest GitHub release. `site.json` holds every word that changes: `name`, `word` (the lowercase wordmark), `tagline`, `url`, `github` and `download`. A rename is one edit here, then a rebuild.
 
-Link previews (LinkedIn, X, Slack, iMessage) need absolute addresses, so the build writes the site's own address into the canonical link, `og:url` and `og:image`. On Vercel it is the project's production domain (`VERCEL_PROJECT_PRODUCTION_URL`), which becomes the custom domain once one is added. Elsewhere it is `SITE_URL` if set, then `url` in `site.json`.
+Link previews (LinkedIn, X, Slack, iMessage) need absolute addresses, so the build writes the site's own address into the canonical link, `og:url` and `og:image`. On Vercel it is the project's production domain (`VERCEL_PROJECT_PRODUCTION_URL`), which becomes the custom domain once one is added. Elsewhere it is `SITE_URL` if set, then `url` in `site.json`, which holds the live address.
 
 ## Link card and icons
 
