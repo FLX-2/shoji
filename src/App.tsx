@@ -35,6 +35,7 @@ import { Rail } from "./shell/Rail";
 import { WindowControls } from "./shell/WindowControls";
 import { Search, type SearchItem } from "./shell/Search";
 import { Toast, type Note } from "./shell/Toast";
+import { useUpdate } from "./shell/useUpdate";
 import { threadMenu, type ThreadActions } from "./thread/actions";
 import { liveTitle, threadTitle } from "./thread/title";
 import { SECTIONS, type SectionId } from "./shell/sections";
@@ -388,6 +389,8 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const [note, setNote] = useState<Note | null>(null);
   const closeNote = useCallback(() => setNote(null), []);
   const failed = (error: unknown) => setNote({ text: String(error).replace(/^Error: /, ""), problem: true });
+  // A newer Shoji waits at the foot of the window, behind any other note, until nothing runs.
+  const update = useUpdate(given, prefs.checkUpdates, running, failed);
   // The thread whose name is being edited, in the list or the title bar.
   const [renaming, setRenaming] = useState<number | null>(null);
   const actions: ThreadActions = {
@@ -998,7 +1001,11 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
 
       {ask && <LimitAsk ask={ask} limit={prefs.dailyLimit} onClose={() => setAsk(null)} />}
       {searching && !inSetup && <Search items={searchItems()} onClose={() => setSearching(false)} />}
-      {note && <Toast note={note} onClose={closeNote} />}
+      {note ? (
+        <Toast note={note} onClose={closeNote} />
+      ) : (
+        update.note && <Toast note={update.note} onClose={update.close} />
+      )}
 
       {prefs.statusBar && (
         // In Threads it tells of the thread on show, wherever its project is; elsewhere, of the open project.

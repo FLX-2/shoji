@@ -52,6 +52,8 @@ export interface Prefs {
   devCommands: Record<string, string>;
   /** Download the current models and prices once a day. */
   updateModels: boolean;
+  /** Ask GitHub, when Shoji opens, whether a newer Shoji has been released. */
+  checkUpdates: boolean;
   /** Models the person has had the chance to try: those Shoji knew when this was first set, and each new one
    *  once it's tried or set aside. Stack marks any other model the list brings Worth a trial. Null until then. */
   seenModels: string[] | null;
@@ -111,6 +113,7 @@ export const DEFAULT_PREFS: Prefs = {
   previewUrls: {},
   devCommands: {},
   updateModels: true,
+  checkUpdates: true,
   seenModels: null,
   mcpServers: "",
   lookAtPages: true,

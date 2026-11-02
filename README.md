@@ -120,7 +120,7 @@ Your code goes to the model, and nowhere else.
 - **Private files never go at all.** `.env` files and keys are off limits to every role. Add your own patterns in Settings.
 - **No account, no server.** Receipts and run logs stay on your computer. Shoji sends no usage data.
 
-Once a day Shoji downloads the list of models and their prices from this repository ([`catalog/models.json`](catalog/models.json)). The download carries nothing about you or your work, and you can turn it off in Settings. More in the [guide](docs/guide.md#your-data).
+Once a day Shoji downloads the list of models and their prices from this repository ([`catalog/models.json`](catalog/models.json)), and when it opens it asks this repository's releases whether a newer Shoji is out. Neither carries anything about you or your work, and you can turn each off in Settings. More in the [guide](docs/guide.md#your-data).
 
 ## Install
 

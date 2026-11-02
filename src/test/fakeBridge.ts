@@ -3,7 +3,7 @@ import type { RuntimeEvent } from "../../runtime/src/events";
 import type { NotesEvent } from "../../runtime/src/notes";
 import type { TrialEvent } from "../../runtime/src/trial";
 import type { SlashCommand } from "../shell/mention";
-import type { Bridge, KeyStatus, LedgerThread, NotesRequest, RunExit, RunRequest, TrialRequest } from "../bridge";
+import type { AvailableUpdate, Bridge, KeyStatus, LedgerThread, NotesRequest, RunExit, RunRequest, TrialRequest } from "../bridge";
 
 /** Stands in for the Rust side: records what the app asks for and plays back runtime events. */
 export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
@@ -65,6 +65,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   };
   /** What the attach dialog answers with; tests fill it. */
   const picked: string[] = [];
+  /** The newer release GitHub lists, if any, and what installing it fails with; tests set these. */
+  const release = { update: null as AvailableUpdate | null, installError: null as string | null, checks: 0, installs: 0 };
   let runs = 0;
   let threads = 0;
 
@@ -244,6 +246,14 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       onServerExit.push(handler);
       return () => onServerExit.splice(onServerExit.indexOf(handler), 1);
     },
+    checkUpdate: async () => {
+      release.checks++;
+      return release.update;
+    },
+    installUpdate: async () => {
+      release.installs++;
+      if (release.installError) throw new Error(release.installError);
+    },
   };
 
   return {
@@ -254,6 +264,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     logs,
     files,
     picked,
+    release,
     /** Sends events from the latest run. */
     emit: (...events: RuntimeEvent[]) => act(() => events.forEach((event) => onEvent.forEach((h) => h(runs, event)))),
     /** Sends trial events from the latest run. */

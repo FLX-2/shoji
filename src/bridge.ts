@@ -197,6 +197,12 @@ export interface LedgerCall extends Omit<CallRecord, "model"> {
   model: string;
 }
 
+/** A newer release of Shoji, as GitHub lists it. */
+export interface AvailableUpdate {
+  version: string;
+  notes: string | null;
+}
+
 export const bridge = {
   keyStatus: () => invoke<KeyStatus>("key_status"),
   saveKey: (key: string) => invoke<void>("save_key", { key }),
@@ -284,6 +290,10 @@ export const bridge = {
     invoke<void>("resize_terminal", { id: terminal, cols, rows }),
   /** Ends a terminal's shell. Its end arrives through onTerminalExit. */
   closeTerminal: (terminal: number) => invoke<void>("close_terminal", { id: terminal }),
+  /** Asks GitHub whether a newer Shoji has been released. Null when there's none, or this build can't update. */
+  checkUpdate: () => invoke<AvailableUpdate | null>("check_update"),
+  /** Downloads and installs the newer Shoji, then opens it; Shoji closes on the way. */
+  installUpdate: () => invoke<void>("install_update"),
   onTerminalOutput: (handler: (terminal: number, data: string) => void) =>
     listen<{ terminal: number; data: string }>("terminal-output", (e) => handler(e.payload.terminal, e.payload.data)),
   onTerminalExit: (handler: (terminal: number) => void) =>
