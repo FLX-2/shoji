@@ -1,0 +1,48 @@
+name: Bug report
+description: Something in Shoji doesn't work as it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start a task that…
+        2. Press…
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Shoji version
+      description: The version in the installer's file name.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: System
+      options:
+        - macOS
+        - Windows
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: System version
+      placeholder: "macOS 15.1, Windows 11 24H2, Ubuntu 24.04"
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, the step it stopped at, or the error it showed. Leave out your API key and any private code.

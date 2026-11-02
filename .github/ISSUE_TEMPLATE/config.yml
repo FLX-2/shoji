@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and answers
+    url: https://shoji-app.vercel.app/#faq
+    about: What it costs, which models it uses, where your code goes, and how to open an unsigned build.
+  - name: Report a security problem
+    url: https://github.com/FLX-2/shoji/security/advisories/new
+    about: Please report security problems privately, not as an issue.
