@@ -1,10 +1,12 @@
 // The link card: the hero's title, window and light at 1200 × 627, rendered from the built page.
 // Serve dist/ on port 5300 first (python3 -m http.server 5300), then: node capture/share.cjs src/img/share.jpg
+// The repo's banner and social preview use the same render at 1280 × 640:
+// W=1280 H=640 node capture/share.cjs ../.github/media/social-preview.png (add DPR=2 for the README banner)
 const { chromium } = require("playwright");
 (async () => {
   const out = process.argv[2] || "src/img/share.png";
   const b = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
-  const p = await b.newPage({ viewport: { width: 1200, height: 627 }, deviceScaleFactor: 1 });
+  const p = await b.newPage({ viewport: { width: Number(process.env.W || 1200), height: Number(process.env.H || 627) }, deviceScaleFactor: Number(process.env.DPR || 1) });
   await p.addInitScript(() => { try { localStorage.setItem("site.motion", "off"); } catch {} });
   await p.goto("http://localhost:5300/index.html");
   await p.addStyleTag({ content: `

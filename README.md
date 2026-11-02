@@ -1,108 +1,174 @@
-# Shoji
+<p align="center">
+  <a href="https://shoji-app.vercel.app/"><img src=".github/media/banner.jpg" alt="The shoji wordmark behind the app's window, in red-orange light." width="100%"></a>
+</p>
 
-**The right model for every step.**
+<h3 align="center">The right model for every step.</h3>
 
-Website: [shoji-app.vercel.app](https://shoji-app.vercel.app/)
+<p align="center">
+  A free desktop app for building software with AI. You describe a change, and a small team of models plans it, builds it and checks it, each one chosen for its step.
+</p>
 
-Shoji is a free desktop app for building software with AI. You describe a change, and a small team of models plans it, builds it and checks it, each model chosen for its step. You bring your own API keys and pay providers directly. Every finished task leaves a receipt showing which model ran each step and what it cost.
+<p align="center">
+  <a href="https://github.com/FLX-2/shoji/releases/latest"><b>Download</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://shoji-app.vercel.app/">Website</a>
+  &nbsp;·&nbsp;
+  <!-- FILM LINK: on launch day, swap this address for the release film on YouTube. -->
+  <a href="https://shoji-app.vercel.app/#film">Watch the film</a>
+  &nbsp;·&nbsp;
+  <a href="docs/guide.md">Guide</a>
+</p>
 
-In a test on real tasks, routing each step to the right model cost 55% less per accepted change than running everything on one strong model, with the same acceptance rate.
+<p align="center">
+  <sub>macOS (Apple silicon) · Windows · Linux &nbsp;|&nbsp; Bring your own Anthropic API key &nbsp;|&nbsp; MIT license</sub>
+</p>
 
-## Status
+<br>
 
-Getting ready for a private beta. Everything below works today. Mac comes first. Windows and Linux build from the same code and get their polish later. Models come from Anthropic only for now; other providers come after the beta.
+## How it works
 
-## Install
+A change is a series of steps. Shoji gives each step the model that suits it. The strong model plans, where judgment matters. Faster, cheaper models read, build and review.
 
-Download the installer for your system from [Releases](https://github.com/FLX-2/shoji/releases). The Mac build is for Apple silicon.
+| Step | What it does | Model | Cost |
+| --- | --- | --- | ---: |
+| **Scout** | Finds the files that matter and sums them up. | Haiku 5.5 | $0.001 |
+| **Plan** | Writes the steps the build follows. | Opus 5.5 | $0.071 |
+| **Build** | Edits the code, runs your tests and fixes what they catch. | Sonnet 5.5 | $0.025 |
+| **Review** | Reads the diff and says if it's ready. | Haiku 5.5 | $0.001 |
+| **You** | Accept it. Nothing is committed until you do. | | **$0.098** |
 
-Builds aren't signed yet. The first time you open Shoji on a Mac, Control-click the app and choose Open. If macOS still blocks it, allow it under System Settings, Privacy & Security. On Windows, if SmartScreen stops the installer, choose More info, then Run anyway.
+<sub>One sample task: an annual billing toggle on a pricing page. Change any role's model in Stack.</sub>
 
-The first time Shoji opens, setup asks for your Anthropic API key, picks a stack, opens a project and lets you choose a look.
+In a test on six real tasks in October 2026, routing each step this way cost 55% less per accepted change than running every step on Opus 5.5, and all six were accepted, the same as Opus alone.
 
-## What it does
+## Every step in view
 
-**Home.** Describe a task. Type @ to point at one of the project's files, and Plan reads it in full. Attach screenshots, PDFs or text files with the clip, or paste an image. Pick how much the task is worth: Draft moves Build and Review down one model, Max puts Build on the Plan model, and Balanced follows your stack. Once you've finished a few tasks, Home shows what a task usually costs at that setting.
+The conversation shows each step as it runs, with its model, its work and what it has cost so far. The code opens beside it the moment a file changes.
 
-**Threads.** Scout reads the code, Plan writes the steps, Build makes the change and Review judges it. Plan, Build and Review follow the project's own `AGENTS.md` and `CLAUDE.md` when it has them, and Plan also reads the `SHOJI.md` notes that setup can write. With Check the plan first on, the thread pauses after the plan so you can build it or ask for another. Every thread you start is listed beside the one on show, with where it got to and what it cost. Open any of them to read it again, or carry it on. Each thread has three views:
+<img src="site/src/img/running.webp" alt="A thread mid-run: the conversation on the left, the changed files and their diffs on the right." width="100%">
 
-- **Conversation:** each step with its model, its work and what it cost.
-- **Code:** every file the thread changed, with its diff. Click a line's number to comment on it, then send your comments to Build as one request for changes. Edit opens a changed file to fix something small by hand; Ctrl+S (Cmd+S) saves and Escape cancels.
-- **Preview:** your project's dev server at 360, 768 or 1280 px. Start dev server runs the project's dev command (guessed from its package manager, such as `pnpm dev`, and remembered per project) in the thread's own copy, so the preview shows that thread's work, and Preview uses the address the server prints. Each server gets a free `PORT`, so several threads can preview at once. Stop server, or quitting Shoji, stops it and everything it started. You can also point Preview at a server you run yourself; that address is remembered per project and starts at `http://localhost:5173`.
-- **Terminal:** your own shell (your login shell on macOS and Linux, PowerShell on Windows) in the thread's copy of the project. It keeps running while you look at the other views, and ends when the thread is committed or Shoji quits.
+- **Code:** every changed file with its diff. Comment on a line, then send your notes as one request for changes.
+- **Preview:** your dev server at 360, 768 or 1280 px, showing this thread's work.
+- **Terminal:** your own shell, in the thread's copy of the project.
 
-Ask a question about a thread's work at any point. The Scout model reads the code and answers in the conversation, and nothing in the project changes.
+Ask a question at any point. Scout reads the code and answers in the thread, and nothing in the project changes.
 
-A role can run the project's checks at any time. Any other command, such as installing a package, waits for you to allow it once, always for that project, or not at all.
+## Nothing is committed until you accept it
 
-**MCP servers.** Add servers in Settings, under Tools, by pasting the JSON from a server's README (`{"mcpServers": {…}}`, with a `command` or a `url`). Each run starts them in the thread's copy of the project. Scout gets the tools that only look; Build gets them all. A tool that could change something waits for you, like a command. A server that can't be reached is named in the conversation, and the run goes on without it.
+Each thread works on its own branch, in its own copy of your project, so your checkout stays as it was. Accept or revert file by file, then commit the rest under your own git name. Shoji never pushes on its own. When you're ready, Push and open PR takes you to the pull request.
 
-**Looking at pages.** Build can start the project's dev server in its copy and open a page in a headless browser at 360, 768 or 1280 px. It sees a screenshot, the page's title and any errors in its console, so it can check a change to what a page shows. It uses the dev command Preview uses, and Chrome, Edge, Chromium or Brave from this computer (or the browser `SHOJI_BROWSER` names), with a profile of its own that's deleted after. The server and the browser stop when the run ends. Turn it off in Settings, under Tools.
+<img src="site/src/img/accept.webp" alt="Ready to accept: the checks pass, the review approved the change, and the diff sits beside it." width="100%">
 
-**Commands and skills.** Shoji reads the same files Claude Code does. Type / at the start of a task or a request to pick one of the project's commands (`.claude/commands/*.md`) or your own (`~/.claude/commands`). The command's text becomes the task, with what you type after it in place of `$ARGUMENTS`, or `$1`, `$2` and on. Skills (`.claude/skills/<name>/SKILL.md`, and your own in `~/.claude/skills`) are listed for Scout and Build by name and description, and a role reads one in full when the task calls for it. Commands and skills you keep out of git still reach a thread's copy of the project. Shoji doesn't run the `!` shell lines some commands hold.
+## Every task leaves a receipt
 
-**Scheduled tasks.** Turn on Repeat under the task box to run a task by itself every day, on weekdays or once a week at a set time, in the open project. Threads lists your scheduled tasks above your threads, where you can pause or remove one. A scheduled task runs while Shoji is open; a time missed while it was closed runs once when it next opens. It never pauses after the plan, and it's skipped, and says why, when it could take the day past your daily limit, since nobody may be there to say yes.
+The model behind each step and what it cost, set against running every step on one strong model. Export any month as CSV.
 
-**Receipts.** What each thread cost, step by step, against running everything on one strong model. You can export a month as CSV.
+<img src="site/src/img/receipts.webp" alt="Receipts for a month: spend, savings against one model, cost per accepted task, and a receipt for one task." width="100%">
 
-**Stack.** Which model and effort takes each role, saved to `stack.lock` with its history. A trial replays your latest accepted tasks on another stack, in scratch copies of your project, and reports what changed. Watching compares this week with the four weeks before, and names a model that got slower, more expensive or worse at its role.
+## Your stack, your call
 
-**Limits.** Each thread has a spending limit, and the runtime stops before any call that could take it past. A daily limit asks before a thread or trial could take the day past it.
+Choose the model and effort for each role, or start from Balanced. The choice is saved to `stack.lock` with its history, so you can see what changed and when.
+
+<img src="site/src/img/stack.webp" alt="Stack: the model and effort for Scout, Plan, Build and Review." width="100%">
+
+Before you switch, try the new stack on work you've already accepted.
+
+- **Trial** replays your latest accepted tasks on another stack, in scratch copies of your project, and tells you what changed.
+- **Watching** compares each model's week with the four before, and names one that got slower, dearer or worse at its role.
+- **New models** arrive with the model list, which updates once a day, so a new model needs no new release. You decide when to trial it.
+
+<img src="site/src/img/trial.webp" alt="A trial of Build on Haiku 5.5: five tasks replayed, with cost, checks and review against the first run." width="100%">
+
+## Several threads at once, and a limit that holds
+
+Every thread has its own branch and copy, so threads never step on each other. A role can run your project's checks at any time. Any other command, like installing a package, waits for you to allow it once, always for that project, or not at all.
+
+<img src="site/src/img/agents.webp" alt="Agents: three threads running at once, one waiting for permission to run a command." width="100%">
+
+Each thread has a spending limit, and Shoji stops before any call that could pass it. A daily limit asks before a new thread could take the day past it.
+
+## Fits the way you already work
+
+- **Commands and skills.** Reads the same files Claude Code does: your commands, your skills, `AGENTS.md` and `CLAUDE.md`.
+- **MCP servers.** Paste a server's JSON. Tools that could change something wait for you, like commands.
+- **Pages it can see.** Build opens your page in a headless browser at 360, 768 or 1280 px and checks what it shows.
+- **Check the plan first.** Pause after the plan, then build it or ask for another.
+- **Draft, Balanced, Max.** Set what a task is worth. Draft moves steps down a model; Max puts Build on the plan model.
+- **Attach anything.** Point at a file with @, or attach screenshots, PDFs and text.
+- **Scheduled tasks.** Run a task every day, on weekdays or weekly, inside your daily limit.
+- **Push and open PR.** Pushes the thread's branch with your own git sign-in, then opens the pull request page.
+
+The [guide](docs/guide.md) covers each of these in detail.
+
+## Darkroom or paper
+
+A darkroom theme, and a paper one like the screens the app is named for. Every effect, motion and accent can be turned off in Settings.
+
+<table>
+  <tr>
+    <td width="50%"><img src="site/src/img/ready.webp" alt="Shoji in the darkroom theme."></td>
+    <td width="50%"><img src="site/src/img/ready-paper.webp" alt="Shoji in the paper theme."></td>
+  </tr>
+</table>
 
 ## Your data
 
-- Your API key stays in the system keychain. Shoji sends it only to Anthropic.
-- Your code goes only to the model provider, and only what a role reads or you attach.
-- **Private files** never go at all. By default those are env files and keys: `.env`, `.env.*` (but not `.env.example`), `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*` and `.npmrc`. No role can read, change, list or search them, and the reviewer's diff leaves them out. Edit the list in Settings, under Data, with patterns as in `.gitignore`.
-- MCP servers get only what a role sends their tools. Shoji passes a server the environment a program needs plus what you set in its `env`, never your API key. The JSON you paste, tokens included, stays on this computer.
-- Receipts and run logs stay on your computer. There is no Shoji server, and Shoji sends no usage data.
-- Once a day Shoji downloads the list of models and their prices from this repository, [`catalog/models.json`](catalog/models.json), so a new model or price needs no new release. The download carries nothing about you or your work. Turn it off in Settings, under Data.
+Your code goes to the model, and nowhere else.
 
-## Threads and git
+- **Your key stays in the keychain.** Shoji sends it only to Anthropic.
+- **A model sees only what it needs.** Only the files a role reads or you attach go to the provider.
+- **Private files never go at all.** `.env` files and keys are off limits to every role. Add your own patterns in Settings.
+- **No account, no server.** Receipts and run logs stay on your computer. Shoji sends no usage data.
 
-Each thread gets its own branch and its own copy of the project, so several threads can run at once while your own checkout stays as it is. When you start a task, Shoji makes a git worktree on a new branch named after it, such as `shoji/add-a-faq`, in Shoji's data folder. If that name is taken, it adds `-2`, `-3` and so on. The copy starts from your project's last commit, so changes you haven't committed stay out of it. It links to your installed packages (`node_modules`, `.venv`, `venv`, `vendor`) rather than installing them again, and gets a copy of your `.env` files. The project must be a git repo with at least one commit. When you request changes, the thread carries on in the same copy.
+Once a day Shoji downloads the list of models and their prices from this repository ([`catalog/models.json`](catalog/models.json)). The download carries nothing about you or your work, and you can turn it off in Settings. More in the [guide](docs/guide.md#your-data).
 
-Code lists every file the thread changed, with its diff. Accept keeps a file's changes and stages it in git. Revert puts the file back as it was at the last commit, or deletes it if the thread created it. Shoji asks before it reverts. Both buttons are unavailable while a run is going.
+## Install
 
-Revert anything you don't want. Accept and commit then commits the rest as one commit on the thread's branch, using your own git name and email, so `user.name` and `user.email` must be set. The message is the task, followed by `Shoji-Models:` and `Shoji-Cost:` lines. The thread's copy is then put away, so you can check the branch out in your project.
+Download the installer for your system from the [latest release](https://github.com/FLX-2/shoji/releases/latest).
 
-Shoji never pushes on its own. Once a thread is committed, Push and open PR pushes its branch to the project's `origin` (or its only remote) with your own git sign-in, then opens the page for a pull request on GitHub, GitLab or Bitbucket. If git would need to ask for a password, the push stops and says so; sign in to your git host in a terminal once, then press it again. Merging is up to you.
+| System | Download |
+| --- | --- |
+| macOS 12 or later, Apple silicon | `.dmg` |
+| Windows 10 or 11 | `.exe` or `.msi` installer |
+| Linux | `.AppImage` or `.deb` |
 
-## Build it yourself
+The builds aren't signed yet, so your system asks once before opening one.
 
-You need [Node 22](https://nodejs.org), [pnpm](https://pnpm.io), [Rust](https://rustup.rs) and [Bun](https://bun.sh), which compiles the agent runtime that the app bundles. On Linux you also need the [Tauri system libraries](https://v2.tauri.app/start/prerequisites/) and `libdbus-1-dev` for the keychain.
+- **Mac:** the first time, Control-click the app and choose Open. If macOS still blocks it, allow it under System Settings, Privacy & Security.
+- **Windows:** if SmartScreen stops the installer, choose More info, then Run anyway.
+
+Shoji is free. You pay Anthropic for the models your tasks use, with your own API key. The first time Shoji opens, setup asks for that key, picks a stack, opens a project and lets you choose a look. A project must be a git repo with at least one commit.
+
+## Build from source
+
+You need [Node 22](https://nodejs.org), [pnpm](https://pnpm.io), [Rust](https://rustup.rs) and [Bun](https://bun.sh), which compiles the agent runtime that the app bundles, plus the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your system:
+
+- **Mac:** the Xcode Command Line Tools (`xcode-select --install`).
+- **Windows:** the Microsoft C++ Build Tools and WebView2, which Windows 10 and 11 already include.
+- **Linux:** the Tauri system libraries, including `libwebkit2gtk-4.1-dev`, and `libdbus-1-dev` for the keychain.
 
 ```sh
+git clone https://github.com/FLX-2/shoji.git
+cd shoji
 pnpm install
 pnpm tauri dev
 ```
 
-Other commands:
-
 | Command | What it does |
 | --- | --- |
+| `pnpm tauri dev` | Runs the app with live reload |
 | `pnpm test` | Runs the tests. They replay recorded model answers and never call a model |
 | `pnpm typecheck` | Checks types |
 | `pnpm tauri build` | Builds the installable app for this computer |
 
-When you start Shoji from a shell, it also uses `SHOJI_API_KEY` or `ANTHROPIC_API_KEY`.
+The agent runtime in `runtime/` also runs on its own, on any git project. See [the guide](docs/guide.md#the-agent-runtime-on-the-command-line).
 
-Every push to a pull request also builds the app for Mac, Windows and Linux. The builds are attached to the CI run.
+## Status
 
-### The agent runtime
+Shoji 0.1 is the first public release. Models come from Anthropic for now; other providers come later. Mac comes first, and Windows and Linux build from the same code on every change.
 
-The loop that plans, builds and checks a change lives in `runtime/`. The app runs it as a separate program, so a crashed run never takes the window down. You can also run it on any git project from the command line, with an Anthropic API key in `SHOJI_API_KEY` or `ANTHROPIC_API_KEY`.
-
-```sh
-pnpm runtime --repo ../my-project --task "Add a dark mode toggle" --cap 0.50
-```
-
-`--stack haiku` runs every step on Haiku 5.5, which costs a fraction of a cent per task. `--help` lists every option, including `--attach`, `--allow` and `--private`. The runtime stops before any call that could take the thread past its `--cap`.
-
-### Releasing
-
-Set the same version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, merge it, then push a tag for it, such as `v0.2.0`. The Release workflow builds each system and attaches the installers to a draft pre-release. Read the draft, then publish it.
+Found a bug or want something? [Open an issue](https://github.com/FLX-2/shoji/issues/new/choose). To work on Shoji itself, read [CONTRIBUTING](CONTRIBUTING.md).
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). The screens in this README are the real app working on a sample project, so their numbers are sample data.

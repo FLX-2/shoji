@@ -33,6 +33,8 @@ Link previews (LinkedIn, X, Slack, iMessage) need absolute addresses, so the bui
 
 ## Screens and film
 
+The repo's README shows these screens too, straight from this folder, so keep their names. Its banner (`.github/media/banner.jpg`, 2560 × 1280) and the GitHub social preview (`.github/media/social-preview.jpg`, 1280 × 640) are the same render as the link card, made with `share.cjs` at `W=1280 H=640` (and `DPR=2` for the banner), then saved as JPG.
+
 The screens are the real app, captured at 1280 × 800 and 2× from the film harness that made the launch films, which runs the app on a virtual clock (it is kept with the films, outside this repo). They show the name in the app's title bar, so recapture them after a rename, and swap the film.
 
 | File | Performance and moment |
