@@ -40,6 +40,8 @@ export type RuntimeEvent =
   | { type: "tool"; step: string; tool: string; target: string }
   | { type: "call"; call: CallRecord }
   | { type: "checks"; step: string; results: CheckResult[] }
+  /** What failed before the thread's first build, as soon as Shoji has looked, for later runs to leave alone. */
+  | { type: "baseline"; failingBefore: string[]; failingTestsBefore: string[] }
   /** A step wants a command that isn't a check and that the person hasn't allowed, or with `tool`, an MCP tool
    *  that may change something, named as "server: tool". It waits for an answer. */
   | { type: "ask"; step: string; command: string; tool?: true }

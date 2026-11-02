@@ -253,7 +253,7 @@ export function Composer({
             </svg>
           </button>
         ) : (
-          <div className={sendAlso ? "sends" : "sends solo"}>
+          <div className="sends">
             {sendAlso}
             <button type="submit" className="send" aria-label={sendLabel} title={sendLabel} disabled={!ready}>
               <svg viewBox="0 0 24 24" aria-hidden="true">

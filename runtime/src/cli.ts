@@ -55,6 +55,8 @@ Options:
   --failing-test-before <name>
                       A failure one of those checks named then, so a new one still counts;
                       repeat for more
+  --checked-before    The thread's checks ran before its first build, so the --failing-before
+                      list is complete even when there's none
   --allow <command>   A command beyond the checks that may run without asking; repeat
                       for more. Any other command asks first: with --json, the run writes
                       an "ask" event and reads {"allow":true} or {"allow":false} on stdin
@@ -139,6 +141,8 @@ function describe(event: RuntimeEvent): string | null {
             `  ${c.ok ? "passed" : c.failedBefore ? "failed, as it did before" : c.newFailures ? `failed, newly: ${c.newFailures.join(", ")}` : "failed"}: ${c.command}`,
         )
         .join("\n");
+    case "baseline":
+      return event.failingBefore.length ? `  failing before any change: ${event.failingBefore.join(", ")}` : null;
     case "escalate":
       return `  moving up to ${MODELS[event.to].label}: ${event.reason}`;
     case "ask":
@@ -221,6 +225,7 @@ async function main() {
       "plan-file": { type: "string" },
       "failing-before": { type: "string", multiple: true },
       "failing-test-before": { type: "string", multiple: true },
+      "checked-before": { type: "boolean" },
       attach: { type: "string", multiple: true },
       allow: { type: "string", multiple: true },
       private: { type: "string", multiple: true },
@@ -368,6 +373,7 @@ async function main() {
       replan,
       failingBefore: values["failing-before"],
       failingTestsBefore: values["failing-test-before"],
+      ...(values["checked-before"] && { checkedBefore: true }),
       ...(values.attach?.length && { attachments: attached(values.attach) }),
       allowed: values.allow,
       ask: (command) => askPerson(command, values.json),

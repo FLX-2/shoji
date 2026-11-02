@@ -242,8 +242,17 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
       const { key, thread } = held;
       const results = thread.turns.map((t) => foldRun(t.events).result);
       const plan = results.map((r) => r?.plan).findLast(Boolean) ?? "";
-      const failingBefore = [...new Set(results.flatMap((r) => r?.failingBefore ?? []))];
-      const failingTestsBefore = [...new Set(results.flatMap((r) => r?.failingTestsBefore ?? []))];
+      // What failed before the first build, from the moment it was known, so a run stopped mid-build keeps it.
+      const baselines = thread.turns.flatMap((t) => t.events.filter((e) => e.type === "baseline"));
+      const failingBefore = [
+        ...new Set([...baselines.flatMap((b) => b.failingBefore), ...results.flatMap((r) => r?.failingBefore ?? [])]),
+      ];
+      const failingTestsBefore = [
+        ...new Set([
+          ...baselines.flatMap((b) => b.failingTestsBefore),
+          ...results.flatMap((r) => r?.failingTestsBefore ?? []),
+        ]),
+      ];
       run(
         key,
         { ...thread, cap: thread.cap + extra },
@@ -256,6 +265,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
           ...(kind !== "changes" && { kind }),
           ...(failingBefore.length && { failingBefore }),
           ...(failingTestsBefore.length && { failingTestsBefore }),
+          ...(baselines.length && { checkedBefore: true }),
         },
         kind === "replan",
       );
