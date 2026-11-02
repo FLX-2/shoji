@@ -61,6 +61,7 @@ Shoji never pushes on its own. Once a thread is committed, Push and open PR push
 - MCP servers get only what a role sends their tools. Shoji passes a server the environment a program needs plus what you set in its `env`, never your API key. The JSON you paste, tokens included, stays on this computer.
 - Receipts and run logs stay on your computer. There is no Shoji server, and Shoji sends no usage data.
 - Once a day Shoji downloads the list of models and their prices from this repository, [`catalog/models.json`](../catalog/models.json), so a new model or price needs no new release. The download carries nothing about you or your work. Turn it off in Settings, under Data.
+- When Shoji opens, it asks this repository's [releases](https://github.com/FLX-2/shoji/releases) whether a newer Shoji is out. If one is, a note at the foot of the window offers Restart to update, once nothing is running. The update is checked against Shoji's signing key before it installs. The check carries nothing about you or your work. Turn it off in Settings, under Data.
 
 ## The agent runtime on the command line
 

@@ -47,5 +47,13 @@
     "externalBin": [
       "binaries/shoji-runtime"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": [
+        "https://github.com/FLX-2/shoji/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

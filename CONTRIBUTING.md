@@ -46,4 +46,16 @@ Shoji's look is the Zone design system, and restraint is part of it.
 
 ## Releasing
 
-For maintainers. Set the same version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, merge it, then push a tag for it, such as `v0.2.0`. The Release workflow builds each system and attaches the installers to a draft pre-release. Read the draft, then publish it.
+For maintainers. Set the same version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, merge it, then push a tag for it, such as `v0.2.0`. The Release workflow builds each system and attaches the installers to a draft release. Read the draft, then publish it. Publish it as a full release, not a pre-release: the website's download buttons and Shoji's update check both use GitHub's latest release, which skips pre-releases.
+
+### Update signing
+
+Shoji updates itself from the latest release. Each build is signed, and Shoji installs only an update whose signature matches the public key built into it. Set this up once, before the first release:
+
+1. On your own computer, in this repository, run `pnpm tauri signer generate -w ~/.tauri/shoji.key` and choose a password. It writes the private key to `~/.tauri/shoji.key` and the public key to `~/.tauri/shoji.key.pub`.
+2. In the repository's Settings, under Secrets and variables, Actions, add `TAURI_SIGNING_PRIVATE_KEY` with the whole contents of `shoji.key`, and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` with its password.
+3. Put the contents of `shoji.key.pub` in `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`, and merge it.
+
+Keep `shoji.key` and its password somewhere safe, such as a password manager. Never commit them. If the private key is lost, installed copies of Shoji can't update to anything signed with a new one, and everyone has to download the next release by hand.
+
+With no public key set, the Release workflow warns and builds without update signing. With a public key but no secret, it stops.

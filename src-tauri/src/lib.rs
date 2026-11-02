@@ -1,5 +1,6 @@
 mod ledger;
 mod push;
+mod updates;
 #[cfg(unix)]
 mod shell_path;
 mod slash;
@@ -1152,6 +1153,8 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        // Signatures are checked against the public key in tauri.conf.json; see updates.rs.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         // The window opens at the size and place it closed at. Only those: the title bar stays Shoji's own.
         .plugin(
             tauri_plugin_window_state::Builder::default()
@@ -1224,7 +1227,9 @@ pub fn run() {
             open_terminal,
             write_terminal,
             resize_terminal,
-            close_terminal
+            close_terminal,
+            updates::check_update,
+            updates::install_update
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

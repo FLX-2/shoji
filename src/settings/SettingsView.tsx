@@ -218,6 +218,12 @@ export function SettingsView({
                       on={prefs.updateModels}
                       onToggle={() => onChange({ updateModels: !prefs.updateModels })}
                     />
+                    <SwitchRow
+                      label="Check for updates"
+                      description="When Shoji opens, it asks its GitHub releases whether a newer Shoji is out, and offers to install it. It sends nothing about you or your work, and installs nothing until you say."
+                      on={prefs.checkUpdates}
+                      onToggle={() => onChange({ checkUpdates: !prefs.checkUpdates })}
+                    />
                   </>
                 )}
               </div>
