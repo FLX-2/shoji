@@ -376,6 +376,75 @@ describe("thread pipeline", () => {
     expect(review.system).toContain("isn't the change's to fix");
   });
 
+  it("approves a task that asks for a report, judging the builder's reply when nothing in the project changed", async () => {
+    const REPORT = "Loose ends: src/hello.js greets nobody in particular.";
+    const scripted = team(() => true);
+    // The builder reads and reports, writing nothing. The reviewer approves only once it can see the report.
+    const provider = new ScriptedProvider((request, i) => {
+      const role = roleOf(request);
+      if (role === "builder") return reply([{ text: REPORT }]);
+      if (role === "reviewer")
+        return reply([{ text: JSON.stringify(request.messages).includes(REPORT) ? "VERDICT: APPROVE" : "VERDICT: FIX\n1. The diff is empty." }]);
+      return scripted.answer(request, i);
+    });
+    const { result, events } = await run(provider, 1, undefined, [UNBROKEN]);
+
+    expect(result.status).toBe("ready");
+    expect(result.diff.trim()).toBe("");
+    expect(result.reason).toMatch(/^The review approved the report above\. Nothing in the project changed/);
+    const review = provider.requests.find((r) => roleOf(r) === "reviewer")!;
+    expect(review.messages[0].content).toContain(`Diff:\n(no changes)\n\nThe builder's reply:\n${REPORT}`);
+    expect(review.system).toContain("an empty diff is right");
+    expect(events.some((e) => e.type === "step" && e.step.startsWith("fix"))).toBe(false);
+  });
+
+  it("checks the project itself in a changes run that was never told what failed before", async () => {
+    const ALWAYS_FAILS = `node -e "process.exit(1)"`;
+    const provider = team(() => true);
+    const { result, events } = await run(provider, 1, { plan: "Change the greeting.", notes: "Keep going." }, [
+      CHECK,
+      ALWAYS_FAILS,
+    ]);
+
+    expect(events.find((e) => e.type === "baseline")).toMatchObject({ failingBefore: [CHECK, ALWAYS_FAILS] });
+    expect(result.checks.map((c) => [c.ok, c.failedBefore])).toEqual([
+      [true, undefined],
+      [false, true],
+    ]);
+    expect(result.status).toBe("ready");
+    expect(events.some((e) => e.type === "step" && e.step.startsWith("fix"))).toBe(false);
+  });
+
+  it("tells later runs what failed before as soon as it knows, before the build", async () => {
+    const { events } = await run(team(() => true), 1, undefined, [UNBROKEN]);
+    const order = events.flatMap((e) => (e.type === "baseline" ? ["baseline"] : e.type === "step" && e.status === "running" ? [e.step] : []));
+    expect(order).toEqual(["scout", "plan", "baseline", "build", "review"]);
+  });
+
+  it("trusts a thread that already checked before its first build, even when nothing failed then", async () => {
+    // The build broke this check; it passed before the thread started, so a later run must still fix it.
+    const BROKEN = `node -e "process.exit(1)"`;
+    const provider = team(() => true);
+    const root = tempRepo({ "src/hello.js": "export default 'hello';\n" });
+    const events: RuntimeEvent[] = [];
+    const result = await runThread({
+      task: "Make the greeting say hello to Shoji.",
+      stack: STACKS.balanced,
+      provider,
+      workspace: new Workspace(root),
+      checks: [BROKEN],
+      cap: 1,
+      changes: { plan: "Change the greeting.", notes: "Keep going." },
+      checkedBefore: true,
+      emit: (e) => events.push(e),
+    });
+
+    expect(events.some((e) => e.type === "baseline")).toBe(false);
+    expect(result.checks[0]).toMatchObject({ ok: false });
+    expect(result.checks[0].failedBefore).toBeUndefined();
+    expect(result.status).toBe("needs-work");
+  });
+
   it("shortens a call near the cap instead of stopping, while it still has room to work", async () => {
     const cap = 0.3; // The planner's worst case is 16k tokens of Opus, $0.32, so it gets a little less.
     const provider = team(() => true);

@@ -59,6 +59,8 @@ export interface ChangesRequest {
   failingBefore?: string[];
   /** The failures those checks named then, so a new one inside them still counts. */
   failingTestsBefore?: string[];
+  /** The checks ran before the first build, so `failingBefore` is complete even when it's empty. */
+  checkedBefore?: boolean;
 }
 
 export interface TrialRequest {

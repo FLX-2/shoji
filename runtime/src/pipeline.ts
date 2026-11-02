@@ -45,6 +45,9 @@ export interface ThreadInput {
   failingBefore?: string[];
   /** The failures those checks named then. */
   failingTestsBefore?: string[];
+  /** The thread's checks already ran before its first build, so `failingBefore` is the whole story, even
+   *  when it's empty. Without it, a changes run checks the project itself before it changes anything. */
+  checkedBefore?: boolean;
   /** Screenshots and files the person attached to the task. Every role sees them. */
   attachments?: Attachments;
   /** Commands beyond the checks that the person already allowed in this project. */
@@ -72,7 +75,8 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   const changes = input.changes && { ...input.changes, notes: expandCommand(input.changes.notes, workspace) };
   const replan = input.replan && { ...input.replan, notes: expandCommand(input.replan.notes, workspace) };
   const meter = new Meter(input.provider, emit, input.cap);
-  const state = { plan: "", review: "", checks: [] as CheckResult[], escalated: false };
+  // `report` is what Build last replied, which for a task that asks for a report is the work itself.
+  const state = { plan: "", review: "", report: "", checks: [] as CheckResult[], escalated: false };
   // The project's AGENTS.md and CLAUDE.md, which Plan, Build and Review all follow.
   const guide = projectInstructions(workspace);
   const mcp = input.mcp ?? NO_MCP;
@@ -172,6 +176,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
                   task + asked + guide,
                   diffOf(workspace.root, (file) => workspace.isPrivate(file)),
                   state.checks,
+                  state.report,
                 ),
                 input.attachments,
               ),
@@ -192,10 +197,14 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     if (approved && input.fresh) discardWork(workspace.root);
     state.plan = changes ? changes.plan : (approved ?? (await planFor()));
     if (input.planOnly) return finish("planned");
-    if (!changes) {
+    // A changes run is told what failed before the thread's first build. When nothing was recorded, as
+    // when the first run stopped before it built anything, the project is still as it was, so look now.
+    if (!changes || !(input.checkedBefore || failingBefore.size)) {
       const before = runChecks(workspace.root, checks).filter((c) => !c.ok && !c.missing);
       failingBefore = new Set(before.map((c) => c.command));
       testsBefore = new Set(before.flatMap((c) => c.failing ?? []));
+      // Told as soon as it's known, so a run that's stopped mid-build still passes it on.
+      emit({ type: "baseline", failingBefore: [...failingBefore], failingTestsBefore: [...testsBefore] });
     }
     const commandsNote = checks.length
       ? `\n\nCheck commands you can run: ${checks.join(", ")}${
@@ -206,14 +215,14 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
       : "";
     const buildPrompt = `Task: ${task}${guide}${skills.note}\n\nPlan:\n${state.plan}${commandsNote}${asked}`;
     const buildStep = changes ? "changes" : "build";
-    await agent(buildStep, "build", stack.build, prompts.BUILD, buildPrompt, builderTools);
+    state.report = await agent(buildStep, "build", stack.build, prompts.BUILD, buildPrompt, builderTools);
 
     // Even when a review asks, an old failure stays out of a fix round, or the round spends itself there.
     const leaveOld = failingBefore.size
       ? `\n\nLeave the failures ${[...failingBefore].join(" and ")} already had before any change, even if the notes above mention them, unless the task itself is about them.`
       : "";
-    const fix = (name: string, seat: Seat, notes: string) =>
-      agent(
+    const fix = async (name: string, seat: Seat, notes: string) => {
+      const reply = await agent(
         name,
         "build",
         seat,
@@ -221,6 +230,9 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
         `${buildPrompt}\n\nA first attempt is already in the project. Fix what's wrong:\n${notes}${leaveOld}`,
         builderTools,
       );
+      if (reply !== OUT_OF_TURNS) state.report = reply;
+      return reply;
+    };
     const failures = () =>
       state.checks
         .filter((c) => !c.ok && !c.failedBefore)
@@ -271,6 +283,9 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
       );
     }
     const status = passing && approves(state.review) ? "ready" : "needs-work";
+    // A report changes nothing in the project, so there's nothing to accept: say what was approved instead.
+    if (status === "ready" && !diffOf(workspace.root).trim())
+      return finish(status, "The review approved the report above. Nothing in the project changed, so there's nothing to commit.");
     const old = state.checks.filter((c) => c.failedBefore).map((c) => c.command);
     if (old.length) {
       const was = old.length === 1 ? "was already failing" : "were already failing";
@@ -379,7 +394,7 @@ function filesFrom(workspace: Workspace, brief: string, mentioned: string[]): st
   return out.slice(0, MAX_FILES_CHARS) || "(none)";
 }
 
-export function reviewPrompt(task: string, diff: string, checks: CheckResult[]): string {
+export function reviewPrompt(task: string, diff: string, checks: CheckResult[], report = ""): string {
   const results = checks.length
     ? checks
         .map(
@@ -398,5 +413,6 @@ export function reviewPrompt(task: string, diff: string, checks: CheckResult[]):
         )
         .join("\n")
     : "No check commands are set for this project.";
-  return `Task: ${task}\n\nDiff:\n${diff || "(no changes)"}\n\nChecks:\n${results}`;
+  const reply = report.trim() ? `\n\nThe builder's reply:\n${report.trim()}` : "";
+  return `Task: ${task}\n\nDiff:\n${diff || "(no changes)"}${reply}\n\nChecks:\n${results}`;
 }

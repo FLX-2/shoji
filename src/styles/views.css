@@ -1207,6 +1207,20 @@
   white-space: nowrap;
 }
 
+/* Committed work: carrying it on is the way out, so it sits at the bar's end, with the sum on a line under it. */
+.review .carry {
+  margin-left: auto;
+}
+
+.review .carry ~ .sum {
+  flex-basis: 100%;
+  text-align: right;
+}
+
+.review .carry ~ .sum:empty {
+  display: none;
+}
+
 .review .sum b,
 .review .done b {
   font-weight: 500;

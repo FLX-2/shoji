@@ -439,6 +439,21 @@ describe("a thread in the app", () => {
     expect(screen.getByText("· failed before the change too, with 1 new failure")).toBeTruthy();
   });
 
+  it("tells a later run that the checks ran before the first build, even when nothing failed then", async () => {
+    const fake = await startThread();
+    fake.emit({ type: "baseline", failingBefore: [], failingTestsBefore: [] });
+    fake.emit(running("build", "build", SONNET), done("build", "build", SONNET));
+    fake.emit(result("needs-work", 0.2, { review: "VERDICT: FIX\n1. Fix the import." }));
+    fake.exit(1);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Fix it/ }));
+    });
+
+    const changes = fake.calls.starts[1].changes!;
+    expect(changes.checkedBefore).toBe(true);
+    expect(changes.failingBefore).toBeUndefined();
+  });
+
   it("asks before an MCP tool that could change something", async () => {
     const fake = await startThread();
     fake.emit(running("build", "build", SONNET), {

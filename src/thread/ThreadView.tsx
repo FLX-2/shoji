@@ -531,10 +531,10 @@ export function ThreadView({
                       </>
                     )}
                   </span>
-                  <button type="button" className="btn" onClick={onContinue}>
+                  {push && "error" in push && <span className="err">{push.error}</span>}
+                  <button type="button" className="btn carry" onClick={onContinue}>
                     Carry on in a new thread
                   </button>
-                  {push && "error" in push && <span className="err">{push.error}</span>}
                 </>
               ) : (
                 <>
