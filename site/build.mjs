@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cfg = JSON.parse(readFileSync(join(here, "site.json"), "utf8"));
-const words = { name: cfg.name, word: cfg.word, tagline: cfg.tagline, github: cfg.github, download: cfg.download };
+const words = { name: cfg.name, word: cfg.word, tagline: cfg.tagline, github: cfg.github, download: cfg.download, film: cfg.film };
 
 let src = readFileSync(join(here, "src/index.html"), "utf8");
 src = src.replace(/\{\{(\w+)\}\}/g, (m, k) => {

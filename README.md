@@ -13,8 +13,7 @@
   &nbsp;·&nbsp;
   <a href="https://shoji-app.vercel.app/">Website</a>
   &nbsp;·&nbsp;
-  <!-- FILM LINK: on launch day, swap this address for the release film on YouTube. -->
-  <a href="https://shoji-app.vercel.app/#film">Watch the film</a>
+  <a href="https://youtu.be/qsCWjtK_kMI">Watch the film</a>
   &nbsp;·&nbsp;
   <a href="docs/guide.md">Guide</a>
 </p>
