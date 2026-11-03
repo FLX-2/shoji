@@ -22,7 +22,7 @@ The film is about 14 MB and only loads when someone presses play. Vercel's free 
 
 ## The name and links
 
-The page is written for after the release: every Download button leads to the download section, whose platform links open the latest GitHub release. `site.json` holds every word that changes: `name`, `word` (the lowercase wordmark), `tagline`, `url`, `github`, `download` and `film` (the release film on YouTube, linked from the footer). A rename is one edit here, then a rebuild.
+The page is written for after the release: every Download button leads to the download section, whose platform links open the latest GitHub release. `site.json` holds every word that changes: `name`, `word` (the lowercase wordmark), `tagline`, `url`, `github`, `download` and `youtube` (the YouTube channel, linked from the footer). A rename is one edit here, then a rebuild.
 
 Link previews (LinkedIn, X, Slack, iMessage) need absolute addresses, so the build writes the site's own address into the canonical link, `og:url` and `og:image`. On Vercel it is the project's production domain (`VERCEL_PROJECT_PRODUCTION_URL`), which becomes the custom domain once one is added. Elsewhere it is `SITE_URL` if set, then `url` in `site.json`, which holds the live address.
 
