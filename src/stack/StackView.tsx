@@ -338,6 +338,8 @@ function Watching({
 
 function History({ lock, current, onUse }: { lock: StackLock; current: Stack; onUse: (stack: Stack) => void }) {
   const versions = lock.versions.map((v, i) => ({ ...v, n: i + 1, before: lock.versions[i - 1]?.stack }));
+  // The effort column starts two spaces past the longest id, so a provider's longer ids keep their gap.
+  const idWidth = Math.max(19, ...ROLES.map((role) => current[role].model.length + 2));
   return (
     <aside className="rpane spane" aria-label="History">
       <h2>stack.lock</h2>
@@ -346,7 +348,7 @@ function History({ lock, current, onUse }: { lock: StackLock; current: Stack; on
       ) : (
         <>
           <pre className="lockfile">
-            {ROLES.map((role) => `${role.padEnd(8)}${current[role].model.padEnd(19)}${current[role].effort}`).join(
+            {ROLES.map((role) => `${role.padEnd(8)}${current[role].model.padEnd(idWidth)}${current[role].effort}`).join(
               "\n",
             )}
           </pre>

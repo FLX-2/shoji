@@ -68,6 +68,18 @@ describe("Ollama", () => {
     expect(screen.queryByText(/needs your Anthropic API key/)).toBeNull();
   });
 
+  it("keeps a gap before each effort in stack.lock, however long the id", async () => {
+    const fake = fakeBridge();
+    fake.ollama.models = ["qwen3-coder:30b"];
+    fake.files.stackLock = JSON.stringify({ versions: [{ at: 1, stack: localStack(["ollama/qwen3-coder:30b"]) }] });
+    localStorage.setItem("shoji.prefs", JSON.stringify({ setupDone: true, repo: "/work/pricing-page" }));
+    render(<App bridge={fake.bridge} />);
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: "Stack" }));
+    const lock = within(await screen.findByRole("complementary", { name: "History" })).getByText(/^scout/);
+    for (const line of lock.textContent!.split("\n")) expect(line).toMatch(/^\w+ +ollama\/qwen3-coder:30b {2,}\w+$/);
+  });
+
   it("lists its models under Ollama, free, and keeps a draft on the same provider", () => {
     applyFound("ollama", {
       "ollama/gemma4:31b": { label: "gemma4:31b", input: 0, output: 0, cacheRead: 0, billing: "local" },
