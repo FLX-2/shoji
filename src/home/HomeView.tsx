@@ -324,7 +324,7 @@ export function HomeView({
           </div>
           {estimate !== null && (
             <span className="est" title="The middle of your recent tasks, priced on this tier's models">
-              about {formatCost(estimate)}
+              about {formatCost(Number(estimate.toPrecision(2)))}
             </span>
           )}
         </Composer>

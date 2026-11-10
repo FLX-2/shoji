@@ -37,21 +37,21 @@ describe("first-run setup", () => {
     expect(screen.queryByRole("region", { name: "Setup" })).toBeNull();
   });
 
-  it("goes on only once a key is saved, and keeps going after", async () => {
+  it("is one page, and starts only once a key is saved", async () => {
     const fake = await open();
-    await click("Set up Shoji");
-    expect(screen.getByRole("button", { name: "Continue" }).hasAttribute("disabled")).toBe(true);
+    for (const name of ["Models", "Stack", "Project"]) expect(screen.getByRole("region", { name })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Start using Shoji" }).hasAttribute("disabled")).toBe(true);
     fireEvent.change(screen.getByLabelText("Anthropic API key"), { target: { value: "sk-ant-test" } });
     await click("Connect");
     expect(fake.calls.savedKeys).toEqual(["sk-ant-test"]);
     // The key is saved, so this is no longer a first run, but setup stays until it's finished.
     expect(screen.getByText("connected")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Continue" }).hasAttribute("disabled")).toBe(false);
+    expect(screen.getByRole("button", { name: "Start using Shoji" }).hasAttribute("disabled")).toBe(false);
   });
 
   it("offers a key found in the shell, and keeps it only when asked", async () => {
     const fake = await open(fakeBridge({ saved: false, fromEnv: true }));
-    await click("Set up Shoji");
     expect(screen.getByText("A key was found in your shell")).toBeTruthy();
     expect(fake.calls.savedKeys).toEqual([]);
     await click("Use it");
@@ -59,29 +59,24 @@ describe("first-run setup", () => {
     expect(screen.queryByText("A key was found in your shell")).toBeNull();
   });
 
-  it("walks through stack and project, saving only what changed", async () => {
+  it("takes a stack and a project, saving only what changed when it starts", async () => {
     const fake = fakeBridge();
     render(<App bridge={fake.bridge} />);
     // With a key already saved, setup comes from Settings.
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     await click("Run setup again");
-    await click("Set up Shoji");
-    await click("Continue");
 
     fireEvent.click(
       within(screen.getByRole("radiogroup", { name: "Starting stack" })).getByRole("radio", { name: "Haiku" }),
     );
     expect(screen.getByText("Haiku 5.5 takes every step.")).toBeTruthy();
     expect(fake.calls.lockWrites).toEqual([]);
-    await click("Continue");
-    expect(parseLock(fake.files.stackLock!).versions.map((v) => v.stack)).toEqual([STACKS.haiku]);
 
     await click("Open a folder…");
     expect(prefs().repo).toBe("/work/pricing-page");
     expect(screen.getByRole("button", { name: /pricing-page/ }).getAttribute("aria-pressed")).toBe("true");
-    // Look isn't a step; it's in Settings.
-    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
     await click("Start using Shoji");
+    expect(parseLock(fake.files.stackLock!).versions.map((v) => v.stack)).toEqual([STACKS.haiku]);
     expect(prefs().setupDone).toBe(true);
     expect(screen.queryByRole("region", { name: "Setup" })).toBeNull();
     expect(screen.getByRole("textbox", { name: "Task" })).toBeTruthy();
@@ -95,23 +90,37 @@ describe("first-run setup", () => {
     render(<App bridge={fake.bridge} />);
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     await click("Run setup again");
-    await click("Set up Shoji");
-    await click("Continue");
-    await click("Continue");
     await click("Open a folder…");
     expect(screen.getByText(/isn't a git repository/)).toBeTruthy();
     expect(screen.queryByText("Project notes")).toBeNull();
   });
 
-  /** Opens setup's Project step with a project already chosen. */
+  it("offers projects found in Claude Code and Codex after Shoji's own, each once", async () => {
+    const fake = fakeBridge({ saved: false, fromEnv: false });
+    fake.found.push(
+      { path: "/code/axon", from: "Claude Code", at: 2 },
+      { path: "/work/pricing-page", from: "Codex", at: 1 },
+    );
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page" }));
+    await open(fake);
+    const project = screen.getByRole("region", { name: "Project" });
+    await within(project).findByRole("button", { name: /axon/ });
+    expect(within(project).getByText(/listed too/)).toBeTruthy();
+    const rows = within(project)
+      .getAllByRole("button")
+      .filter((b) => b.classList.contains("proj"))
+      .map((b) => b.textContent);
+    expect(rows).toEqual(["pricing-page/work/pricing-page", "axonClaude Code · /code/axon"]);
+    await click(/axon/);
+    expect(prefs().repo).toBe("/code/axon");
+  });
+
+  /** Opens setup with a project already chosen. */
   async function projectStep(fake = fakeBridge()) {
     localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page" }));
     render(<App bridge={fake.bridge} />);
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     await click("Run setup again");
-    await click("Set up Shoji");
-    await click("Continue");
-    await click("Continue");
     await screen.findByText("Project notes");
     return fake;
   }

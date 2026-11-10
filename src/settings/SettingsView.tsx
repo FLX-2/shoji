@@ -251,6 +251,14 @@ export function SettingsView({
                       on={prefs.lookAtPages}
                       onToggle={() => onChange({ lookAtPages: !prefs.lookAtPages })}
                     />
+                    {prefs.lookAtPages && (
+                      <SwitchRow
+                        label="Let Review judge the look"
+                        description="When Build looked at pages, Review sees them before and after the change, at 360 and 1280 px, and scores the look out of 10. Under 8, Build gets its notes to fix. The screenshots add about a cent to each review on Haiku."
+                        on={prefs.lookReview}
+                        onToggle={() => onChange({ lookReview: !prefs.lookReview })}
+                      />
+                    )}
                     <AllowedRows prefs={prefs} onChange={onChange} />
                   </>
                 )}

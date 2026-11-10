@@ -100,7 +100,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     privateFiles: prefs.privateFiles,
     models: catalog ?? undefined,
     mcpServers: readMcpServers(prefs.mcpServers).servers,
-    ...(prefs.lookAtPages && { devCommandFor: devCommandIn }),
+    ...(prefs.lookAtPages && { devCommandFor: devCommandIn, lookReview: prefs.lookReview }),
   };
   const bridge = useMemo(() => carrying(given, () => carried.current), [given]);
   const [keyStatus, setKeyStatus] = useState<KeyStatus | null>(null);
@@ -841,7 +841,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
             prefs={prefs}
             onChange={setPrefs}
             notes={notes.notes}
-            onWriteNotes={(repo) => notes.start(repo, stack.stack)}
+            onWriteNotes={(repo, picked) => notes.start(repo, picked)}
             onDone={() => {
               setPrefs({ setupDone: true });
               setInSetup(false);

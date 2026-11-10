@@ -223,7 +223,7 @@ function FilePane(props: {
               {accepted ? (
                 <span className="done">Accepted</span>
               ) : (
-                <button type="button" className="btn sm solid" disabled={running} title={busy} onClick={props.onAccept}>
+                <button type="button" className="btn sm" disabled={running} title={busy} onClick={props.onAccept}>
                   Accept
                 </button>
               )}

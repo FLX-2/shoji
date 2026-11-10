@@ -193,9 +193,19 @@ export function approves(review: string | undefined): boolean {
   return /^\s*VERDICT:\s*APPROVE/i.test(review ?? "");
 }
 
-/** The review without its verdict line. */
+/** The review without its verdict and look lines. */
 export function reviewNotes(review: string): string {
-  return review.replace(/^\s*VERDICT:\s*\w+\s*/i, "").trim();
+  return review
+    .replace(/^\s*VERDICT:\s*\w+\s*/i, "")
+    .replace(/^\s*LOOK:.*(?:\r?\n|$)/im, "")
+    .trim();
+}
+
+/** The look score the review gave the pages it saw, such as 8 for "LOOK: 8/10". */
+export function lookScore(review: string | undefined): number | undefined {
+  const found = (review ?? "").match(/^\s*LOOK:\s*(\d+(?:\.\d+)?)\s*(?:\/|out of|of)\s*10\b/im);
+  const score = found ? Number(found[1]) : NaN;
+  return score >= 0 && score <= 10 ? score : undefined;
 }
 
 export function formatCost(dollars: number): string {

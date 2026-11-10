@@ -63,6 +63,8 @@ export interface Prefs {
   mcpServers: string;
   /** Let Build start the dev server in its copy and look at pages in a headless browser. */
   lookAtPages: boolean;
+  /** Let Review see the pages Build looked at, before and after, and send a weak look back to Build. */
+  lookReview: boolean;
   /** Tasks Shoji starts by itself on a schedule. */
   schedules: Schedule[];
   /** Tasks waiting their turn, first in line first. */
@@ -120,6 +122,7 @@ export const DEFAULT_PREFS: Prefs = {
   seenModels: null,
   mcpServers: "",
   lookAtPages: true,
+  lookReview: true,
   schedules: [],
   queue: [],
   notify: true,

@@ -148,17 +148,34 @@ describe("Settings", () => {
     };
     await send("Restyle the pricing table");
     expect(fake.calls.starts[0].devCommand).toBe("pnpm dev");
+    expect(fake.calls.starts[0].lookReview).toBe(true);
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Tools and commands" }));
+    const toTools = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Tools and commands" }));
+    };
+    const home = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "Home" }));
+      });
+    };
+    await toTools();
+    fireEvent.click(screen.getByRole("switch", { name: "Let Review judge the look" }));
+    await home();
+    await send("Restyle the header");
+    expect(fake.calls.starts[1].devCommand).toBe("pnpm dev");
+    expect(fake.calls.starts[1].lookReview).toBeUndefined();
+
+    await toTools();
     fireEvent.click(screen.getByRole("switch", { name: "Let Build look at pages" }));
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Home" }));
-    });
+    // Review can only judge pages Build looked at.
+    expect(screen.queryByRole("switch", { name: "Let Review judge the look" })).toBeNull();
+    await home();
     await send("Restyle the footer");
-    expect(fake.calls.starts[1].devCommand).toBeUndefined();
+    expect(fake.calls.starts[2].devCommand).toBeUndefined();
+    expect(fake.calls.starts[2].lookReview).toBeUndefined();
   });
 
   it("shows one page at a time, and the key's page when Home asks for a key", async () => {

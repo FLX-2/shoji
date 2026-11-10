@@ -60,16 +60,14 @@ describe("Sign in with ChatGPT", () => {
     const fake = fakeBridge({ saved: false, fromEnv: false });
     render(<App bridge={fake.bridge} />);
     await screen.findByRole("region", { name: "Setup" });
-    await click("Set up Shoji");
-    expect(screen.getByText("Connect a provider to go on")).toBeTruthy();
+    expect(screen.getByText("Connect a provider to start")).toBeTruthy();
     await click("Continue with ChatGPT");
     expect(screen.getByText("ChatGPT is connected")).toBeTruthy();
-    await click("Continue");
 
     const stacks = within(screen.getByRole("radiogroup", { name: "Starting stack" }));
     expect(stacks.getAllByRole("radio").map((r) => r.textContent)).toEqual(["On my ChatGPT plan"]);
     expect(screen.getByText("GPT-5.5 plans and builds and GPT-5.5 mini scouts and reviews.")).toBeTruthy();
-    await click("Continue");
+    await click("Start using Shoji");
     expect(parseLock(fake.files.stackLock!).versions.at(-1)!.stack).toEqual(
       planStack(["chatgpt/gpt-5.5", "chatgpt/gpt-5.5-mini"]),
     );

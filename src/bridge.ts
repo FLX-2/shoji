@@ -67,6 +67,8 @@ export interface RunRequest {
   mcpServers?: { mcpServers: Record<string, Omit<McpServer, "name">> };
   /** The project's dev command, when Build may start it to look at pages. */
   devCommand?: string;
+  /** With `devCommand`: Review sees the pages Build looked at, before and after, and scores the look. */
+  lookReview?: boolean;
   /** What the person asked for, as the thread shows it, kept so a reopened thread shows it again. */
   ask?: string;
   /** For a new thread that carries on a committed one: the branch its copy starts from. */
@@ -128,6 +130,8 @@ export interface Carried {
   mcpServers?: McpServer[];
   /** The dev command Build may start in a project to look at its pages, or "" when it doesn't look. */
   devCommandFor?: (repo: string) => string;
+  /** Review sees the pages Build looked at and scores the look. */
+  lookReview?: boolean;
 }
 
 /** The OpenRouter models a stack names, with the prices OpenRouter listed. */
@@ -160,12 +164,12 @@ export function carrying(bridge: Bridge, carried: () => Carried): Bridge {
   return {
     ...bridge,
     startRun: (request) => {
-      const { mcpServers, devCommandFor } = carried();
+      const { mcpServers, devCommandFor, lookReview } = carried();
       const devCommand = devCommandFor?.(request.repo);
       return bridge.startRun({
         ...add(request),
         ...(mcpServers?.length && { mcpServers: serversJson(mcpServers) }),
-        ...(devCommand && { devCommand }),
+        ...(devCommand && { devCommand, ...(lookReview && { lookReview }) }),
       });
     },
     startTrial: (request) => bridge.startTrial(add(request)),
@@ -246,6 +250,15 @@ export interface LedgerCall extends Omit<CallRecord, "model"> {
   model: string;
 }
 
+/** A git project the person worked on in another coding tool on this computer. */
+export interface FoundProject {
+  path: string;
+  /** The tool it was found in. */
+  from: "Claude Code" | "Codex";
+  /** When it was last worked on there, in milliseconds. */
+  at: number;
+}
+
 /** A newer release of Shoji, as GitHub lists it. */
 export interface AvailableUpdate {
   version: string;
@@ -276,6 +289,8 @@ export const bridge = {
   /** Opens ChatGPT's settings in the browser, where the person manages their plan's usage. */
   chatgptManageUsage: () => invoke<void>("chatgpt_manage_usage"),
   pickProject: () => invoke<string | null>("pick_project"),
+  /** Git projects the person worked on in Claude Code or Codex, latest first, for setup to offer. */
+  foundProjects: () => invoke<FoundProject[]>("found_projects"),
   /** Asks for screenshots or files to attach to a task. Empty when the person cancels. */
   pickAttachments: () => invoke<string[]>("pick_attachments"),
   /** Keeps a pasted screenshot as a file and returns its path. */
