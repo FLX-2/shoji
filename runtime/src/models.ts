@@ -46,12 +46,16 @@ export interface ModelInfo {
 
 /** Listed prices on 28 Oct 2026. Cache writes cost 1.25x input. A downloaded catalog can add to these
  *  and change their prices, but never take one away. */
-const BUILT_IN_LISTED = "2026-10-28";
+const BUILT_IN_LISTED = "2026-11-10";
 
 export const BUILT_IN: Readonly<Record<string, ModelInfo>> = {
   "claude-opus-5-5": { label: "Opus 5.5", input: 4, output: 20, cacheRead: 0.2 },
   "claude-sonnet-5-5": { label: "Sonnet 5.5", input: 2, output: 10, cacheRead: 0.2 },
   "claude-haiku-5-5": { label: "Haiku 5.5", input: 0.1, output: 0.5, cacheRead: 0.01 },
+  "openai/gpt-6-astra": { label: "GPT-6 Astra", input: 10, output: 50, cacheRead: 1 },
+  "openai/gpt-6.1-sol": { label: "GPT-6.1 Sol", input: 2, output: 10, cacheRead: 0.1 },
+  "openai/gpt-6.1-terra": { label: "GPT-6.1 Terra", input: 1, output: 5, cacheRead: 0.05 },
+  "openai/gpt-6-luna": { label: "GPT-6 Luna", input: 0.1, output: 0.5, cacheRead: 0.01 },
 };
 
 /** A model's API id, such as claude-sonnet-5-5: one of MODELS' keys. */

@@ -6,7 +6,7 @@ import { AnthropicProvider, notConnected, type ModelProvider, Providers } from "
 /** Where the app hands a run each provider's key. The keys never appear in a flag, where other programs see them. */
 export const KEY_ENV: Readonly<Partial<Record<ProviderId, readonly string[]>>> = {
   anthropic: ["SHOJI_API_KEY", "ANTHROPIC_API_KEY"],
-  openai: ["SHOJI_OPENAI_KEY"],
+  openai: ["SHOJI_OPENAI_KEY", "OPENAI_API_KEY"],
 };
 
 /** A ChatGPT access token lasts an hour; one this close to its end is renewed before a call. */

@@ -27,6 +27,9 @@ export interface PlanModel {
   displayName: string;
 }
 
+/** The providers Shoji keeps an API key for. */
+export type KeyedProvider = "anthropic" | "openai";
+
 export interface KeyStatus {
   saved: boolean;
   /** A key from SHOJI_API_KEY or ANTHROPIC_API_KEY, which only a shell-launched app sees. */
@@ -224,11 +227,12 @@ export interface AvailableUpdate {
 }
 
 export const bridge = {
-  keyStatus: () => invoke<KeyStatus>("key_status"),
-  saveKey: (key: string) => invoke<void>("save_key", { key }),
+  /** A provider's API key: Anthropic's unless another is named. */
+  keyStatus: (provider?: KeyedProvider) => invoke<KeyStatus>("key_status", { provider }),
+  saveKey: (key: string, provider?: KeyedProvider) => invoke<void>("save_key", { key, provider }),
   /** Saves the key the app found in its environment to the keychain. The key never reaches this side. */
-  useShellKey: () => invoke<void>("use_shell_key"),
-  forgetKey: () => invoke<void>("forget_key"),
+  useShellKey: (provider?: KeyedProvider) => invoke<void>("use_shell_key", { provider }),
+  forgetKey: (provider?: KeyedProvider) => invoke<void>("forget_key", { provider }),
   /** The models pulled into Ollama on this computer that can use tools, largest first. Fails when Ollama
    *  isn't running. */
   ollamaModels: () => invoke<PulledModel[]>("ollama_models"),

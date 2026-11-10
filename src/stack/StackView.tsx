@@ -15,6 +15,7 @@ import {
 } from "./lock";
 import { listedDay } from "./catalog";
 import { familyOf, ModelPick, modelGroups, priceLine } from "./ModelPick";
+import { useReaches } from "./reach";
 import { TrialSection } from "./TrialSection";
 import type { Trial } from "./useTrial";
 import { watch } from "./watch";
@@ -72,7 +73,9 @@ export function StackView({
   const seat = (role: Role, change: Partial<Seat>) => edit({ ...shown, [role]: { ...shown[role], ...change } });
   // New models from the list that nobody has tried or set aside yet.
   // Only the list's news: a model the person pulled themselves is no surprise to them.
-  const fresh = Object.keys(MODELS).filter((id) => !seenModels.includes(id) && !isFound(id));
+  const reaches = useReaches();
+  // Only a model the person could run is worth a trial.
+  const fresh = Object.keys(MODELS).filter((id) => !seenModels.includes(id) && !isFound(id) && reaches(id));
   const usedIn = (s: Stack) => ROLES.map((role) => s[role].model);
   // Puts a new model on the roles it most likely suits, and brings Trial into view: nothing runs until Run trial.
   const tryModel = (model: ModelId) => {
@@ -228,7 +231,7 @@ export function StackView({
                   Read from cache
                 </span>
               </div>
-              {modelGroups()
+              {modelGroups(Object.keys(MODELS).filter(reaches))
                 .flatMap((g) => g.ids)
                 // Models on this computer or on the person's ChatGPT plan bill nothing, so they have no prices to list.
                 .filter((model) => !MODELS[model].billing)

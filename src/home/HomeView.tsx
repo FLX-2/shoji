@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ProviderId } from "../../runtime/src/models";
+import { PROVIDER_NAMES, type ProviderId } from "../../runtime/src/models";
 import type { LedgerThread } from "../bridge";
 import { REPEATS, type Repeat, type Schedule } from "../schedule/schedule";
 import { ClipIcon } from "../shell/ClipIcon";
@@ -350,7 +350,9 @@ export function HomeView({
           </p>
         ) : !hasKey ? (
           <p className="hint">
-            {unconnected === "chatgpt" ? "Your stack uses ChatGPT's models." : "Shoji needs your Anthropic API key to run."}{" "}
+            {unconnected === "chatgpt"
+              ? "Your stack uses ChatGPT's models."
+              : `Shoji needs your ${PROVIDER_NAMES[unconnected ?? "anthropic"]} API key to run.`}{" "}
             <button type="button" className="link" onClick={onOpenSettings}>
               {unconnected === "chatgpt" ? "Sign in with ChatGPT in Settings" : "Add it in Settings"}
             </button>

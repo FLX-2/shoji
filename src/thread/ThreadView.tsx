@@ -19,6 +19,7 @@ import { useChanges } from "../code/useChanges";
 import { ClipIcon } from "../shell/ClipIcon";
 import { ROLE_NAMES } from "../stack/lock";
 import { modelGroups } from "../stack/ModelPick";
+import { useReaches } from "../stack/reach";
 import { TIERS, type Tier } from "../stack/tier";
 import { Composer } from "../shell/Composer";
 import { Copy } from "../shell/Copy";
@@ -883,6 +884,7 @@ function StepRow({
   onOpenFile: (path: string) => void;
 }) {
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const reaches = useReaches();
   const step = steps[index];
   const label = stepLabel(steps, index);
   const about = step.cost > 0 ? `${MODELS[step.model].label} · ${formatCost(step.cost)}` : MODELS[step.model].label;
@@ -918,7 +920,7 @@ function StepRow({
                 <Menu
                   at={menuAt}
                   label="Do it again on"
-                  items={redoModels(step.model).map((model) => ({
+                  items={redoModels(step.model, reaches).map((model) => ({
                     label: `${AGAIN[redo]} with ${MODELS[model].label}`,
                     run: () => onRedo(redo, model),
                   }))}
@@ -946,7 +948,10 @@ function StepRow({
 const AGAIN: Record<Redo, string> = { plan: "Plan again", build: "Build again", review: "Review again" };
 
 /** The models a step can be done again on: the newest of each family, other than the one it ran on. */
-const redoModels = (ran: ModelId) => modelGroups().map((g) => g.ids[0]).filter((id) => id !== ran);
+const redoModels = (ran: ModelId, reaches: (model: ModelId) => boolean) =>
+  modelGroups(Object.keys(MODELS).filter(reaches))
+    .map((g) => g.ids[0])
+    .filter((id) => id !== ran);
 
 /** The step after the work: the pages Build looked at, before and after, which calls no model. */
 function CompareRow({

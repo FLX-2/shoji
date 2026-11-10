@@ -16,12 +16,20 @@ pub struct Keyed {
     pub shell_env: &'static [&'static str],
 }
 
-pub const KEYED: &[Keyed] = &[Keyed {
-    id: "anthropic",
-    name: "Anthropic",
-    run_env: "SHOJI_API_KEY",
-    shell_env: &["SHOJI_API_KEY", "ANTHROPIC_API_KEY"],
-}];
+pub const KEYED: &[Keyed] = &[
+    Keyed {
+        id: "anthropic",
+        name: "Anthropic",
+        run_env: "SHOJI_API_KEY",
+        shell_env: &["SHOJI_API_KEY", "ANTHROPIC_API_KEY"],
+    },
+    Keyed {
+        id: "openai",
+        name: "OpenAI",
+        run_env: "SHOJI_OPENAI_KEY",
+        shell_env: &["SHOJI_OPENAI_KEY", "OPENAI_API_KEY"],
+    },
+];
 
 pub fn keyed(provider: &str) -> Result<&'static Keyed, String> {
     KEYED
@@ -130,11 +138,16 @@ mod tests {
         );
         // A provider without a key, such as Ollama on this computer, needs none.
         assert!(run_env(&stack("ollama/gemma4"), none).unwrap().is_empty());
+        assert_eq!(
+            run_env(&stack("openai/gpt-6.1-sol"), have).unwrap_err(),
+            "Add your OpenAI API key in Settings first."
+        );
     }
 
     #[test]
     fn keeps_the_anthropic_entry_where_earlier_versions_saved_it() {
         assert_eq!(keyed("anthropic").unwrap().id, "anthropic");
+        assert_eq!(keyed("openai").unwrap().run_env, "SHOJI_OPENAI_KEY");
         assert!(keyed("nobody").is_err());
     }
 }

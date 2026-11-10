@@ -83,21 +83,25 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   };
   let runs = 0;
   let threads = 0;
+  /** The OpenAI key's status; tests set it with setOpenAIKey. */
+  let openai: KeyStatus = { saved: false, fromEnv: false };
 
   const bridge: Bridge = {
-    keyStatus: async () => key,
-    saveKey: async (value) => {
+    keyStatus: async (provider) => (provider === "openai" ? openai : key),
+    saveKey: async (value, provider) => {
       calls.savedKeys.push(value);
-      key = { ...key, saved: true };
+      if (provider === "openai") openai = { ...openai, saved: true };
+      else key = { ...key, saved: true };
     },
     useShellKey: async () => {
       if (!key.fromEnv) throw new Error("No key was found in the shell.");
       calls.savedKeys.push("(from the shell)");
       key = { ...key, saved: true };
     },
-    forgetKey: async () => {
+    forgetKey: async (provider) => {
       calls.forgot++;
-      key = { ...key, saved: false };
+      if (provider === "openai") openai = { ...openai, saved: false };
+      else key = { ...key, saved: false };
     },
     ollamaModels: async () => {
       if (!ollama.models) throw new Error("Ollama isn't running on this computer.");
@@ -301,6 +305,9 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     release,
     ollama,
     chatgpt,
+    setOpenAIKey: (status: KeyStatus) => {
+      openai = status;
+    },
     /** Sends events from the latest run. */
     emit: (...events: RuntimeEvent[]) => act(() => events.forEach((event) => onEvent.forEach((h) => h(runs, event)))),
     /** Sends trial events from the latest run. */

@@ -72,7 +72,7 @@ describe("Ollama", () => {
     applyFound("ollama", {
       "ollama/gemma4:31b": { label: "gemma4:31b", input: 0, output: 0, cacheRead: 0, billing: "local" },
     });
-    expect(modelGroups().map((g) => g.family)).toEqual(["Opus", "Sonnet", "Haiku", "Ollama"]);
+    expect(modelGroups().map((g) => g.family)).toEqual(["OpenAI", "Opus", "Sonnet", "Haiku", "Ollama"]);
     expect(priceLine("ollama/gemma4:31b")).toBe("Free, on this computer");
     // Haiku is Anthropic's cheapest, so a draft keeps it rather than moving to a free model.
     expect(tierStack(STACKS.balanced, "draft").review.model).toBe("claude-haiku-5-5");
