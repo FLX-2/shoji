@@ -4233,6 +4233,7 @@ button.rrow:focus-visible {
   left: 50%;
   bottom: 40px;
   transform: translateX(-50%);
+  width: max-content;
   max-width: min(520px, calc(100vw - 32px));
   display: flex;
   align-items: center;
