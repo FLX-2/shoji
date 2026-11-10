@@ -15,6 +15,7 @@ import {
 } from "./lock";
 import { listedDay } from "./catalog";
 import { familyOf, ModelPick, modelGroups, priceLine } from "./ModelPick";
+import type { ProviderPreset } from "./presets";
 import { useReaches } from "./reach";
 import { TrialSection } from "./TrialSection";
 import type { Trial } from "./useTrial";
@@ -39,6 +40,8 @@ interface StackViewProps {
    *  aside. Any other model the list brings is Worth a trial. */
   seenModels: ModelId[];
   onSeeModels: (models: ModelId[]) => void;
+  /** One-tap stacks on the other providers the person has connected. */
+  presets?: ProviderPreset[];
 }
 
 function when(at: number): string {
@@ -59,6 +62,7 @@ export function StackView({
   ledger,
   seenModels,
   onSeeModels,
+  presets = [],
 }: StackViewProps) {
   const [draft, setDraft] = useState<Stack | null>(null);
   // Which role's model list Watching asked to open, and when.
@@ -120,6 +124,17 @@ export function StackView({
                     onClick={() => edit(STACKS[name])}
                   >
                     {PRESETS[name]}
+                  </button>
+                ))}
+                {presets.map((p) => (
+                  <button
+                    key={p.name}
+                    type="button"
+                    role="radio"
+                    aria-checked={!preset && sameStack(shown, p.stack)}
+                    onClick={() => edit(p.stack)}
+                  >
+                    {p.name}
                   </button>
                 ))}
               </div>

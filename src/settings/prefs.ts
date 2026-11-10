@@ -42,6 +42,8 @@ export interface Prefs {
   autoPanel: boolean;
   /** The first-run setup was finished once, so it doesn't open on its own again. */
   setupDone: boolean;
+  /** The release, such as 0.2, whose news was last shown, so What's new shows once per release. */
+  seenVersion: string | null;
   /** Commands beyond the checks that the person always allows, by project folder. */
   allowedCommands: Record<string, string[]>;
   /** Patterns, as in .gitignore, for files no role may read, change or list. */
@@ -108,6 +110,7 @@ export const DEFAULT_PREFS: Prefs = {
   showModels: true,
   autoPanel: true,
   setupDone: false,
+  seenVersion: null,
   allowedCommands: {},
   privateFiles: DEFAULT_PRIVATE,
   previewUrls: {},

@@ -118,4 +118,30 @@ describe("a thread that ended early", () => {
     });
     expect(fake.calls.starts[1]).toMatchObject({ task: "Style the FAQ", from: "shoji/thread" });
   });
+
+  it("offers a run Shoji closed during on Home, and picks it up from its plan", async () => {
+    const fake = fakeBridge();
+    const cut = record(7, "Add a FAQ");
+    cut.runs[0].status = "interrupted";
+    fake.ledger.push(cut);
+    fake.logs[7] = [
+      { type: "step", step: "plan", role: "plan", model: "claude-opus-5-5", status: "running" },
+      { type: "step", step: "plan", role: "plan", model: "claude-opus-5-5", status: "done", output: "1. Add faq.html." },
+      { type: "step", step: "build", role: "build", model: "claude-sonnet-5-5", status: "running" },
+    ];
+    await act(async () => {
+      render(<App bridge={fake.bridge} />);
+    });
+    const recent = screen.getByRole("region", { name: "Pick up where you left off" });
+    expect(recent.textContent).toContain("Cut off");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Add a FAQ/ }));
+    });
+    expect(screen.getByText("Shoji closed before this run finished. The work it had done is kept.")).toBeTruthy();
+    await click("Pick up where it stopped");
+    expect(fake.calls.starts[0]).toMatchObject({
+      ask: "Pick up where it stopped",
+      changes: { thread: 7, plan: "1. Add faq.html.", branch: "shoji/thread" },
+    });
+  });
 });

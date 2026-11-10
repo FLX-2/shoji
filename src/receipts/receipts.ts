@@ -192,6 +192,8 @@ export function outcome(thread: LedgerThread): string {
       return "Needs work";
     case "stopped":
       return "Stopped";
+    case "interrupted":
+      return "Cut off";
     case "planned":
       return "Planned";
     default:

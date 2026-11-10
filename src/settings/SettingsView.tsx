@@ -47,6 +47,8 @@ interface SettingsViewProps {
   onSaveKey: (key: string) => Promise<void>;
   onForgetKey: () => Promise<void>;
   onRunSetup: () => void;
+  /** Copies what a bug report needs, with no keys or code. */
+  onCopyDiagnostics: () => void;
 }
 
 /** The pages of Settings, in the order the side lists them, under their groups. */
@@ -82,6 +84,7 @@ export function SettingsView({
   onSaveKey,
   onForgetKey,
   onRunSetup,
+  onCopyDiagnostics,
 }: SettingsViewProps) {
   const shown = SETTINGS_PAGES.find((p) => p.id === page) ?? SETTINGS_PAGES[0];
   return (
@@ -253,6 +256,18 @@ export function SettingsView({
                       on={prefs.checkUpdates}
                       onToggle={() => onChange({ checkUpdates: !prefs.checkUpdates })}
                     />
+                    <div className="srow">
+                      <div>
+                        <b>Diagnostics</b>
+                        <span className="d">
+                          Shoji's version, your system, which providers are connected and the last error, to paste
+                          into a bug report. No keys, code or tasks.
+                        </span>
+                      </div>
+                      <button type="button" className="btn sm" onClick={onCopyDiagnostics}>
+                        Copy diagnostics
+                      </button>
+                    </div>
                   </>
                 )}
               </div>

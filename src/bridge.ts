@@ -233,7 +233,8 @@ export interface LedgerRun {
   kind: "task" | CarryOn | "trial" | "notes";
   startedAt: number;
   /** How the run ended; null while it's going. */
-  status: "ready" | "needs-work" | "stopped" | "failed" | "planned" | "answered" | null;
+  /** interrupted: Shoji closed or crashed while the run was going. */
+  status: "ready" | "needs-work" | "stopped" | "failed" | "interrupted" | "planned" | "answered" | null;
   /** What the person asked for in the run; missing for runs from before it was kept. */
   ask?: string | null;
   calls: LedgerCall[];

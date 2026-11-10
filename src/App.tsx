@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { MODELS, providerOf, type ModelId } from "../runtime/src/models";
+import { MODELS, pricesListed, providerOf, type ModelId } from "../runtime/src/models";
 import { ROLES } from "../runtime/src/stack";
 import { LimitAsk, type Ask } from "./budget/LimitAsk";
 import { spentOn } from "./budget/daily";
@@ -26,6 +26,7 @@ import { notesProgress, useNotes } from "./setup/useNotes";
 import { useModelCatalog } from "./stack/catalog";
 import { useChatGPT } from "./stack/chatgpt";
 import { useOpenRouter } from "./stack/openrouter";
+import { providerPresets } from "./stack/presets";
 import { ReachContext } from "./stack/reach";
 import { useOllama } from "./stack/ollama";
 import { StackView } from "./stack/StackView";
@@ -41,6 +42,8 @@ import { WindowControls } from "./shell/WindowControls";
 import { Search, type SearchItem } from "./shell/Search";
 import { Toast, type Note } from "./shell/Toast";
 import { useUpdate } from "./shell/useUpdate";
+import { minorOf, whatsNew } from "./shell/whatsNew";
+import { diagnostics } from "./settings/diagnostics";
 import { threadMenu, type ThreadActions } from "./thread/actions";
 import { liveTitle, threadTitle } from "./thread/title";
 import { SECTIONS, type SectionId } from "./shell/sections";
@@ -430,9 +433,50 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   // A short note after an action, with Undo when it can be undone.
   const [note, setNote] = useState<Note | null>(null);
   const closeNote = useCallback(() => setNote(null), []);
-  const failed = (error: unknown) => setNote({ text: String(error).replace(/^Error: /, ""), problem: true });
+  const lastShown = useRef<string | null>(null);
+  const failed = (error: unknown) => {
+    lastShown.current = String(error).replace(/^Error: /, "");
+    setNote({ text: lastShown.current, problem: true });
+  };
+  const copyDiagnostics = () =>
+    navigator.clipboard
+      .writeText(
+        diagnostics({
+          version: __APP_VERSION__,
+          userAgent: navigator.userAgent,
+          anthropic: keyStatus,
+          openai: openaiKey,
+          chatgpt: chatgpt.status,
+          openrouter: openrouter.status,
+          ollama: { status: ollama.status, models: ollama.models.length },
+          stack: stack.stack,
+          pricesListed: pricesListed(),
+          threads,
+          lastShown: lastShown.current,
+        }),
+      )
+      .then(() => setNote({ text: "Copied diagnostics" }), failed);
   // A newer Shoji waits at the foot of the window, behind any other note, until nothing runs.
   const update = useUpdate(given, prefs.checkUpdates, running, failed);
+  // What's new, once, on the first open after an update. A new install starts from this release.
+  useEffect(() => {
+    const news = whatsNew(__APP_VERSION__, prefs.seenVersion, prefs.setupDone);
+    if (news)
+      setNote({
+        text: news,
+        stays: true,
+        action: {
+          label: "See them",
+          run: () => {
+            setSettingsPage("models");
+            setSection("settings");
+            setNote(null);
+          },
+        },
+      });
+    if (prefs.seenVersion !== minorOf(__APP_VERSION__)) setPrefs({ seenVersion: minorOf(__APP_VERSION__) });
+    // Only at launch.
+  }, []);
   // The thread whose name is being edited, in the list or the title bar.
   const [renaming, setRenaming] = useState<number | null>(null);
   const actions: ThreadActions = {
@@ -851,6 +895,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 error={stack.error}
                 onSave={stack.save}
                 ledger={ledger}
+                presets={providerPresets({ openai: openaiConnected, chatgpt, ollama })}
                 seenModels={prefs.seenModels ?? Object.keys(MODELS)}
                 onSeeModels={(models) =>
                   setPrefs({ seenModels: [...new Set([...(prefs.seenModels ?? Object.keys(MODELS)), ...models])] })
@@ -1034,6 +1079,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 onManageUsage={() => void bridge.chatgptManageUsage().catch(() => {})}
                 onSaveKey={(key) => bridge.saveKey(key).then(refreshKey)}
                 onForgetKey={() => bridge.forgetKey().then(refreshKey)}
+                onCopyDiagnostics={copyDiagnostics}
                 onRunSetup={() => setInSetup(true)}
               />
             ) : (

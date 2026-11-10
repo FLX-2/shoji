@@ -57,4 +57,27 @@ describe("an OpenAI API key", () => {
     await act(async () => {});
     expect(screen.queryByText(/needs your OpenAI API key/)).toBeNull();
   });
+
+  it("adds one-tap stacks for the providers that are connected", async () => {
+    const fake = fakeBridge();
+    fake.setOpenAIKey({ saved: true, fromEnv: false });
+    fake.chatgpt.email = "bob@example.com";
+    fake.ollama.models = ["gemma4:31b"];
+    localStorage.setItem("shoji.prefs", JSON.stringify({ setupDone: true, repo: "/work/pricing-page" }));
+    render(<App bridge={fake.bridge} />);
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: "Stack" }));
+    const presets = within(screen.getByRole("radiogroup", { name: "Preset" }));
+    expect(presets.getAllByRole("radio").map((r) => r.textContent)).toEqual([
+      "Balanced",
+      "Opus",
+      "Haiku",
+      "On my ChatGPT plan",
+      "OpenAI",
+      "On this computer",
+    ]);
+    fireEvent.click(presets.getByRole("radio", { name: "OpenAI" }));
+    expect(presets.getByRole("radio", { name: "OpenAI" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText("GPT-6.1 Sol plans, GPT-6.1 Terra builds, and GPT-6 Luna scouts and reviews.")).toBeTruthy();
+  });
 });

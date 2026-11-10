@@ -132,14 +132,14 @@ type Result<T> = rusqlite::Result<T>;
 
 impl Ledger {
     /// Opens the ledger file. No run can be going while the app starts, so a run left
-    /// without an ending, by a crash or a forced quit, is marked failed.
+    /// without an ending, by a crash or a forced quit, is marked interrupted, for the person to pick up.
     pub fn open(path: &Path) -> Result<Self> {
         let ledger = Self::with(Connection::open(path)?)?;
         ledger
             .0
             .lock()
             .unwrap()
-            .execute("UPDATE runs SET status = 'failed' WHERE status IS NULL", [])?;
+            .execute("UPDATE runs SET status = 'interrupted' WHERE status IS NULL", [])?;
         Ok(ledger)
     }
 
@@ -629,7 +629,7 @@ mod tests {
         let threads = ledger.threads().unwrap();
         assert_eq!(threads[0].task, "Kept");
         // The app closed while the run was going, so it can't still be running.
-        assert_eq!(threads[0].runs[0].status.as_deref(), Some("failed"));
+        assert_eq!(threads[0].runs[0].status.as_deref(), Some("interrupted"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
