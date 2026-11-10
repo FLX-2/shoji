@@ -4232,8 +4232,14 @@ button.rrow:focus-visible {
   white-space: nowrap;
 }
 
-.toast.problem > span {
+.toast.problem > span,
+.toast.stays > span {
   white-space: normal;
+}
+
+.toast > .link {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .toast .x {

@@ -40,7 +40,7 @@ export function Toast({ note, onClose }: { note: Note; onClose: () => void }) {
   }, [note, onClose]);
 
   return (
-    <div className={note.problem ? "toast problem" : "toast"} role={note.problem ? "alert" : "status"}>
+    <div className={["toast", note.problem && "problem", note.stays && "stays"].filter(Boolean).join(" ")} role={note.problem ? "alert" : "status"}>
       <span>{note.text}</span>
       {note.action && (
         <button type="button" className="link" onClick={note.action.run}>
