@@ -47,6 +47,8 @@ interface SettingsViewProps {
   onSaveKey: (key: string) => Promise<void>;
   onForgetKey: () => Promise<void>;
   onRunSetup: () => void;
+  /** Copies what a bug report needs, with no keys or code. */
+  onCopyDiagnostics: () => void;
 }
 
 /** The pages of Settings, in the order the side lists them, under their groups. */
@@ -82,6 +84,7 @@ export function SettingsView({
   onSaveKey,
   onForgetKey,
   onRunSetup,
+  onCopyDiagnostics,
 }: SettingsViewProps) {
   const shown = SETTINGS_PAGES.find((p) => p.id === page) ?? SETTINGS_PAGES[0];
   return (
@@ -131,6 +134,48 @@ export function SettingsView({
           <div className="swrap">
             {shown.id === "shortcuts" ? (
               <Shortcuts />
+            ) : shown.id === "models" ? (
+              <>
+                <section className="sgroup" aria-labelledby="s-providers">
+                  <h2 id="s-providers" className="k">
+                    Providers
+                  </h2>
+                  <div className="card">
+                    <KeyRow status={keyStatus} onSave={onSaveKey} onForget={onForgetKey} />
+                    <ChatGPTRow chatgpt={chatgpt} onManageUsage={onManageUsage} />
+                    <KeyRow
+                      provider="openai"
+                      status={openaiKey}
+                      onSave={onSaveOpenAIKey}
+                      onForget={onForgetOpenAIKey}
+                    />
+                    <OpenRouterRow openrouter={openrouter} />
+                    <OllamaRow ollama={ollama} />
+                  </div>
+                </section>
+                <section className="sgroup" aria-labelledby="s-threads">
+                  <h2 id="s-threads" className="k">
+                    How threads run
+                  </h2>
+                  <div className="card">
+                    <div className="srow">
+                      <div>
+                        <b>Stack</b>
+                        <span className="d">{describeStack(stack)}</span>
+                      </div>
+                      <button type="button" className="btn sm" onClick={onOpenStack}>
+                        Change in Stack
+                      </button>
+                    </div>
+                    <SwitchRow
+                      label="Check the plan first"
+                      description="Each thread pauses once its plan is written, so you can build it or change it first."
+                      on={prefs.planFirst}
+                      onToggle={() => onChange({ planFirst: !prefs.planFirst })}
+                    />
+                  </div>
+                </section>
+              </>
             ) : (
               <div className="card">
                 {shown.id === "look" && (
@@ -179,35 +224,6 @@ export function SettingsView({
                     />
                   </>
                 )}
-                {shown.id === "models" && (
-                  <>
-                    <KeyRow status={keyStatus} onSave={onSaveKey} onForget={onForgetKey} />
-                    <ChatGPTRow chatgpt={chatgpt} onManageUsage={onManageUsage} />
-                    <KeyRow
-                      provider="openai"
-                      status={openaiKey}
-                      onSave={onSaveOpenAIKey}
-                      onForget={onForgetOpenAIKey}
-                    />
-                    <OpenRouterRow openrouter={openrouter} />
-                    <OllamaRow ollama={ollama} />
-                    <div className="srow">
-                      <div>
-                        <b>Stack</b>
-                        <span className="d">{describeStack(stack)}</span>
-                      </div>
-                      <button type="button" className="btn sm" onClick={onOpenStack}>
-                        Change in Stack
-                      </button>
-                    </div>
-                    <SwitchRow
-                      label="Check the plan first"
-                      description="Each thread pauses once its plan is written, so you can build it or change it first."
-                      on={prefs.planFirst}
-                      onToggle={() => onChange({ planFirst: !prefs.planFirst })}
-                    />
-                  </>
-                )}
                 {shown.id === "spending" && (
                   <>
                     <MoneyRow
@@ -253,6 +269,18 @@ export function SettingsView({
                       on={prefs.checkUpdates}
                       onToggle={() => onChange({ checkUpdates: !prefs.checkUpdates })}
                     />
+                    <div className="srow">
+                      <div>
+                        <b>Diagnostics</b>
+                        <span className="d">
+                          Shoji's version, your system, which providers are connected and the last error, to paste
+                          into a bug report. No keys, code or tasks.
+                        </span>
+                      </div>
+                      <button type="button" className="btn sm" onClick={onCopyDiagnostics}>
+                        Copy diagnostics
+                      </button>
+                    </div>
                   </>
                 )}
               </div>

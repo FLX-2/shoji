@@ -13,6 +13,7 @@ const STATUS: Record<Exclude<LedgerThread["runs"][number]["status"], "answered" 
   planned: "Plan ready",
   stopped: "Stopped",
   failed: "Failed",
+  interrupted: "Cut off",
 };
 
 /** Where a thread got to: committed, or how its latest run ended. A question leaves the work as it was. */
@@ -41,7 +42,9 @@ const GROUPS = ["Pinned", "Running", "Needs you", "Earlier"] as const;
 
 function groupOf(status: string): ThreadGroup {
   if (status === "Running") return "Running";
-  if (status === "Ready to accept" || status === "Plan ready" || status === "Needs work") return "Needs you";
+  // A run cut off by Shoji closing waits to be picked up.
+  if (status === "Ready to accept" || status === "Plan ready" || status === "Needs work" || status === "Cut off")
+    return "Needs you";
   return "Earlier";
 }
 
