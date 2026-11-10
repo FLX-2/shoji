@@ -27,7 +27,9 @@ export function modelGroups(ids: ModelId[] = Object.keys(MODELS)): { family: str
 export const priceLine = (id: ModelId) =>
   MODELS[id].billing === "local"
     ? "Free, on this computer"
-    : `${dollars(MODELS[id].input)} in, ${dollars(MODELS[id].output)} out`;
+    : MODELS[id].billing === "plan"
+      ? "Using your ChatGPT plan"
+      : `${dollars(MODELS[id].input)} in, ${dollars(MODELS[id].output)} out`;
 
 const dollars = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
 

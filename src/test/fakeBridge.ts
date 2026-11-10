@@ -69,6 +69,18 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   const release = { update: null as AvailableUpdate | null, installError: null as string | null, checks: 0, installs: 0 };
   /** Ollama's tool-ready models, largest first, or null when it isn't running; tests set it. */
   const ollama = { models: null as string[] | null };
+  /** ChatGPT: who is signed in, the plan's models, and what signing in fails with; tests set these. */
+  const chatgpt = {
+    email: null as string | null,
+    models: [
+      { slug: "gpt-5.5", displayName: "GPT-5.5" },
+      { slug: "gpt-5.5-mini", displayName: "GPT-5.5 mini" },
+    ],
+    signInError: null as string | null,
+    signIns: 0,
+    signOuts: 0,
+    usageOpened: 0,
+  };
   let runs = 0;
   let threads = 0;
 
@@ -90,6 +102,22 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     ollamaModels: async () => {
       if (!ollama.models) throw new Error("Ollama isn't running on this computer.");
       return ollama.models.map((name, i) => ({ name, size: 1000 - i }));
+    },
+    chatgptStatus: async () => ({ signedIn: chatgpt.email !== null, email: chatgpt.email }),
+    chatgptSignIn: async () => {
+      chatgpt.signIns++;
+      if (chatgpt.signInError) throw new Error(chatgpt.signInError);
+      chatgpt.email = "bob@example.com";
+      return { signedIn: true, email: chatgpt.email };
+    },
+    chatgptSignOut: async () => {
+      chatgpt.signOuts++;
+      chatgpt.email = null;
+      return null;
+    },
+    chatgptModels: async () => (chatgpt.email ? [...chatgpt.models] : []),
+    chatgptManageUsage: async () => {
+      chatgpt.usageOpened++;
     },
     pickProject: async () => "/work/pricing-page",
     pickAttachments: async () => [...picked],
@@ -272,6 +300,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     picked,
     release,
     ollama,
+    chatgpt,
     /** Sends events from the latest run. */
     emit: (...events: RuntimeEvent[]) => act(() => events.forEach((event) => onEvent.forEach((h) => h(runs, event)))),
     /** Sends trial events from the latest run. */

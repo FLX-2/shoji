@@ -127,9 +127,13 @@ const found = new Map<string, Record<ModelId, ModelInfo>>();
 /** The day the prices in MODELS were listed, as YYYY-MM-DD. */
 export const pricesListed = () => listed;
 
+/** Where a saved stack's own models are found. They go under every other source's, which know their names. */
+export const NAMED = "named";
+
 function rebuild() {
   for (const id of Object.keys(MODELS)) delete MODELS[id];
-  Object.assign(MODELS, BUILT_IN, listedModels, ...found.values());
+  const others = [...found].filter(([where]) => where !== NAMED).map(([, models]) => models);
+  Object.assign(MODELS, BUILT_IN, listedModels, found.get(NAMED) ?? {}, ...others);
 }
 
 /** Puts a catalog's models and prices in place of the last one's, over the built-in list. */

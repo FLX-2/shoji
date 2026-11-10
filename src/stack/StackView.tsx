@@ -230,8 +230,8 @@ export function StackView({
               </div>
               {modelGroups()
                 .flatMap((g) => g.ids)
-                // Models on this computer cost nothing, so they have no prices to list.
-                .filter((model) => MODELS[model].billing !== "local")
+                // Models on this computer or on the person's ChatGPT plan bill nothing, so they have no prices to list.
+                .filter((model) => !MODELS[model].billing)
                 .map((model) => (
                   <div key={model} className="prow" role="row">
                     <span role="cell">{MODELS[model].label}</span>

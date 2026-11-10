@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { applyFound, MODELS } from "../../runtime/src/models";
+import { applyFound, MODELS, NAMED } from "../../runtime/src/models";
 import { STACKS } from "../../runtime/src/stack";
 import App from "../App";
 import { fakeBridge } from "../test/fakeBridge";
@@ -19,6 +19,7 @@ describe("Ollama", () => {
     cleanup();
     localStorage.clear();
     applyFound("ollama", {});
+    applyFound(NAMED, {});
   });
 
   it("lets setup go on with models on this computer alone, on a stack that runs there", async () => {

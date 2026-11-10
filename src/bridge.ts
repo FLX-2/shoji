@@ -15,6 +15,18 @@ export interface PulledModel {
   size: number;
 }
 
+/** Whether Shoji is signed in with ChatGPT, and as whom. */
+export interface ChatGPTStatus {
+  signedIn: boolean;
+  email: string | null;
+}
+
+/** A model the person's ChatGPT plan offers: its slug, such as gpt-5.5, and the name ChatGPT shows. */
+export interface PlanModel {
+  slug: string;
+  displayName: string;
+}
+
 export interface KeyStatus {
   saved: boolean;
   /** A key from SHOJI_API_KEY or ANTHROPIC_API_KEY, which only a shell-launched app sees. */
@@ -220,6 +232,15 @@ export const bridge = {
   /** The models pulled into Ollama on this computer that can use tools, largest first. Fails when Ollama
    *  isn't running. */
   ollamaModels: () => invoke<PulledModel[]>("ollama_models"),
+  chatgptStatus: () => invoke<ChatGPTStatus>("chatgpt_status"),
+  /** Opens ChatGPT's sign-in page in the browser and waits for the person to allow Shoji, or not. */
+  chatgptSignIn: () => invoke<ChatGPTStatus>("chatgpt_sign_in"),
+  /** Signs out. Returns a note when ChatGPT didn't confirm it on its side. */
+  chatgptSignOut: () => invoke<string | null>("chatgpt_sign_out"),
+  /** The models the person's ChatGPT plan offers. Empty when signed out. */
+  chatgptModels: () => invoke<PlanModel[]>("chatgpt_models"),
+  /** Opens ChatGPT's settings in the browser, where the person manages their plan's usage. */
+  chatgptManageUsage: () => invoke<void>("chatgpt_manage_usage"),
   pickProject: () => invoke<string | null>("pick_project"),
   /** Asks for screenshots or files to attach to a task. Empty when the person cancels. */
   pickAttachments: () => invoke<string[]>("pick_attachments"),

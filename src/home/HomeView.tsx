@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ProviderId } from "../../runtime/src/models";
 import type { LedgerThread } from "../bridge";
 import { REPEATS, type Repeat, type Schedule } from "../schedule/schedule";
 import { ClipIcon } from "../shell/ClipIcon";
@@ -22,6 +23,8 @@ export interface HomeDraft {
 interface HomeViewProps {
   repo: string | null;
   hasKey: boolean;
+  /** The provider the stack needs that isn't connected, when one isn't. */
+  unconnected?: ProviderId;
   onPickProject: () => void;
   /** The projects Shoji knows, latest first, for the project chip's menu. */
   projects?: string[];
@@ -74,6 +77,7 @@ interface HomeViewProps {
 export function HomeView({
   repo,
   hasKey,
+  unconnected,
   onPickProject,
   onOpenSettings,
   planFirst,
@@ -346,9 +350,9 @@ export function HomeView({
           </p>
         ) : !hasKey ? (
           <p className="hint">
-            Shoji needs your Anthropic API key to run.{" "}
+            {unconnected === "chatgpt" ? "Your stack uses ChatGPT's models." : "Shoji needs your Anthropic API key to run."}{" "}
             <button type="button" className="link" onClick={onOpenSettings}>
-              Add it in Settings
+              {unconnected === "chatgpt" ? "Sign in with ChatGPT in Settings" : "Add it in Settings"}
             </button>
           </p>
         ) : !repo ? (

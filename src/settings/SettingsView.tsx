@@ -1,4 +1,6 @@
+import type { ChatGPT } from "../stack/chatgpt";
 import type { Ollama } from "../stack/ollama";
+import { ChatGPTRow } from "./ChatGPTRow";
 import { OllamaRow } from "./OllamaRow";
 import { useState } from "react";
 import { type McpServer, parseMcpServers } from "../../runtime/src/mcpConfig";
@@ -34,6 +36,8 @@ interface SettingsViewProps {
   onOpenStack: () => void;
   keyStatus: KeyStatus | null;
   ollama: Ollama;
+  chatgpt: ChatGPT;
+  onManageUsage: () => void;
   onSaveKey: (key: string) => Promise<void>;
   onForgetKey: () => Promise<void>;
   onRunSetup: () => void;
@@ -63,6 +67,8 @@ export function SettingsView({
   onOpenStack,
   keyStatus,
   ollama,
+  chatgpt,
+  onManageUsage,
   onSaveKey,
   onForgetKey,
   onRunSetup,
@@ -166,6 +172,7 @@ export function SettingsView({
                 {shown.id === "models" && (
                   <>
                     <KeyRow status={keyStatus} onSave={onSaveKey} onForget={onForgetKey} />
+                    <ChatGPTRow chatgpt={chatgpt} onManageUsage={onManageUsage} />
                     <OllamaRow ollama={ollama} />
                     <div className="srow">
                       <div>

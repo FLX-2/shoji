@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { providerOf } from "../../runtime/src/models";
 import type { Bridge, LedgerThread } from "../bridge";
 import { folderName } from "../home/HomeView";
 import { SECTIONS } from "../shell/sections";
@@ -349,7 +350,7 @@ function ReceiptPane({ thread }: { thread: LedgerThread }) {
                   {STEPS[line.step] ?? line.step}
                   <span className="m"> · {modelLabel(line.model)}</span>
                 </span>
-                <span className="n">{dollars(line.cost, 3)}</span>
+                <span className="n">{lineCost(line.model, line.cost)}</span>
               </li>
             ))}
           </ul>
@@ -389,4 +390,11 @@ function compact(tokens: number): string {
   if (tokens < 1000) return String(tokens);
   if (tokens < 1e6) return `${Math.round(tokens / 100) / 10}K`.replace(".0K", "K");
   return `${Math.round(tokens / 1e5) / 10}M`.replace(".0M", "M");
+}
+
+/** A receipt line's cost: dollars, or where it ran when that charged nothing. */
+function lineCost(model: string, cost: number): string {
+  if (providerOf(model) === "chatgpt") return "On your ChatGPT plan";
+  if (providerOf(model) === "ollama") return "Free, on this computer";
+  return dollars(cost, 3);
 }

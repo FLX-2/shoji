@@ -2,7 +2,8 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ollamaModel, ollamaModelsIn, OllamaProvider, ollamaUrl } from "../src/ollama";
+import { foundModelsIn, ollamaModel } from "../src/found";
+import { OllamaProvider, ollamaUrl } from "../src/ollama";
 
 describe("Ollama's address", () => {
   it("reads OLLAMA_HOST as Ollama does, and falls back to its usual place", () => {
@@ -31,8 +32,8 @@ describe("Ollama's models", () => {
       build: { model: "ollama/qwen3-coder", effort: "low" },
       review: { model: "ollama/", effort: "low" },
     };
-    expect(Object.keys(ollamaModelsIn(stack))).toEqual(["ollama/gemma4:31b", "ollama/qwen3-coder"]);
-    expect(ollamaModelsIn(null)).toEqual({});
+    expect(Object.keys(foundModelsIn(stack))).toEqual(["ollama/gemma4:31b", "ollama/qwen3-coder"]);
+    expect(foundModelsIn(null)).toEqual({});
   });
 });
 
