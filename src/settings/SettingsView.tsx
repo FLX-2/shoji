@@ -134,6 +134,48 @@ export function SettingsView({
           <div className="swrap">
             {shown.id === "shortcuts" ? (
               <Shortcuts />
+            ) : shown.id === "models" ? (
+              <>
+                <section className="sgroup" aria-labelledby="s-providers">
+                  <h2 id="s-providers" className="k">
+                    Providers
+                  </h2>
+                  <div className="card">
+                    <KeyRow status={keyStatus} onSave={onSaveKey} onForget={onForgetKey} />
+                    <ChatGPTRow chatgpt={chatgpt} onManageUsage={onManageUsage} />
+                    <KeyRow
+                      provider="openai"
+                      status={openaiKey}
+                      onSave={onSaveOpenAIKey}
+                      onForget={onForgetOpenAIKey}
+                    />
+                    <OpenRouterRow openrouter={openrouter} />
+                    <OllamaRow ollama={ollama} />
+                  </div>
+                </section>
+                <section className="sgroup" aria-labelledby="s-threads">
+                  <h2 id="s-threads" className="k">
+                    How threads run
+                  </h2>
+                  <div className="card">
+                    <div className="srow">
+                      <div>
+                        <b>Stack</b>
+                        <span className="d">{describeStack(stack)}</span>
+                      </div>
+                      <button type="button" className="btn sm" onClick={onOpenStack}>
+                        Change in Stack
+                      </button>
+                    </div>
+                    <SwitchRow
+                      label="Check the plan first"
+                      description="Each thread pauses once its plan is written, so you can build it or change it first."
+                      on={prefs.planFirst}
+                      onToggle={() => onChange({ planFirst: !prefs.planFirst })}
+                    />
+                  </div>
+                </section>
+              </>
             ) : (
               <div className="card">
                 {shown.id === "look" && (
@@ -179,35 +221,6 @@ export function SettingsView({
                       description="The project, branch, running cost and today's spend along the bottom of the window."
                       on={prefs.statusBar}
                       onToggle={() => onChange({ statusBar: !prefs.statusBar })}
-                    />
-                  </>
-                )}
-                {shown.id === "models" && (
-                  <>
-                    <KeyRow status={keyStatus} onSave={onSaveKey} onForget={onForgetKey} />
-                    <ChatGPTRow chatgpt={chatgpt} onManageUsage={onManageUsage} />
-                    <KeyRow
-                      provider="openai"
-                      status={openaiKey}
-                      onSave={onSaveOpenAIKey}
-                      onForget={onForgetOpenAIKey}
-                    />
-                    <OpenRouterRow openrouter={openrouter} />
-                    <OllamaRow ollama={ollama} />
-                    <div className="srow">
-                      <div>
-                        <b>Stack</b>
-                        <span className="d">{describeStack(stack)}</span>
-                      </div>
-                      <button type="button" className="btn sm" onClick={onOpenStack}>
-                        Change in Stack
-                      </button>
-                    </div>
-                    <SwitchRow
-                      label="Check the plan first"
-                      description="Each thread pauses once its plan is written, so you can build it or change it first."
-                      on={prefs.planFirst}
-                      onToggle={() => onChange({ planFirst: !prefs.planFirst })}
                     />
                   </>
                 )}
