@@ -203,6 +203,23 @@ describe("OpenAIProvider", () => {
     expect(sent).toHaveLength(3);
   });
 
+  it("tries again when the connection drops before or during the answer, as a reused connection can", async () => {
+    const reset = () => {
+      throw Object.assign(new TypeError("fetch failed"), { code: "ECONNRESET" });
+    };
+    const cut = () => new Response(stream({ type: "response.output_text.delta", delta: "Hi" }), { status: 200 });
+    const { fake, sent } = openai(reset, cut, ok(completed([toolCall])));
+    const message = await new OpenAIProvider({ plan: true, credential: async () => "t", fetch: fake, backoff: 0 }).send(request);
+    expect(message.stop_reason).toBe("tool_use");
+    expect(sent).toHaveLength(3);
+
+    const down = openai(reset, reset, reset);
+    await expect(new OpenAIProvider({ plan: true, credential: async () => "t", fetch: down.fake, backoff: 0 }).send(request)).rejects.toThrow(
+      "Shoji couldn't reach ChatGPT after 3 tries (ECONNRESET). Check your internet connection, then try again.",
+    );
+    expect(down.sent).toHaveLength(3);
+  });
+
   it("names a plan that can't be shared, and an API key without credit", async () => {
     const plan = openai(failed(403, "subscription_sharing_user_not_eligible"));
     await expect(new OpenAIProvider({ plan: true, credential: async () => "t", fetch: plan.fake }).send(request)).rejects.toThrow(
