@@ -10,9 +10,17 @@ Everything Shoji does, in detail. For a quick look, start with the [README](../R
 
 ## First run
 
-The first time Shoji opens, setup asks for your Anthropic API key, picks a stack, opens a project and lets you choose a look. The project must be a git repo with at least one commit, and git needs your `user.name` and `user.email` set so Shoji can commit under your name.
+The first time Shoji opens, setup connects Anthropic, your ChatGPT plan or Ollama, picks a stack, opens a project and lets you choose a look. The project must be a git repo with at least one commit, and git needs your `user.name` and `user.email` set so Shoji can commit under your name.
 
-When you start Shoji from a shell, it also uses `SHOJI_API_KEY` or `ANTHROPIC_API_KEY`.
+Connect any of these in Settings, under Models and keys:
+
+- **Anthropic.** Paste an API key. Shoji's default stack runs on Anthropic's models.
+- **ChatGPT.** With ChatGPT Plus or Pro, Continue with ChatGPT signs you in in the browser, and OpenAI's models run on your plan with no API key and no API bill. If the plan's limit is reached, the thread stops and says so; Shoji never switches to paid use by itself. Manage usage opens your ChatGPT settings.
+- **OpenAI.** Paste an API key to run OpenAI's models at API prices.
+- **OpenRouter.** Connect OpenRouter signs you in on OpenRouter's site and hands Shoji a key, billed to your OpenRouter credit. Stack then lists its models that can use tools, at OpenRouter's prices.
+- **Ollama.** Install [Ollama](https://ollama.com) and pull a model that can use tools. Shoji finds it on this computer, at `OLLAMA_HOST` if you set it. It's free, and your code stays on this computer.
+
+Stack lists a provider's models only once it's connected, and its presets include a ready stack for your ChatGPT plan, OpenAI and Ollama. When you start Shoji from a shell, it also uses `SHOJI_API_KEY` or `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `OPENROUTER_API_KEY`.
 
 ## What each part does
 
@@ -55,17 +63,17 @@ Shoji never pushes on its own. Once a thread is committed, Push and open PR push
 
 ## Your data
 
-- Your API key stays in the system keychain. Shoji sends it only to Anthropic.
+- Your API keys stay in the system keychain. Shoji sends each only to its own provider. A ChatGPT sign-in is kept in a file only your user can read, and signing out revokes it.
 - Your code goes only to the model provider, and only what a role reads or you attach.
 - **Private files** never go at all. By default those are env files and keys: `.env`, `.env.*` (but not `.env.example`), `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*` and `.npmrc`. No role can read, change, list or search them, and the reviewer's diff leaves them out. Edit the list in Settings, under Data, with patterns as in `.gitignore`.
 - MCP servers get only what a role sends their tools. Shoji passes a server the environment a program needs plus what you set in its `env`, never your API key. The JSON you paste, tokens included, stays on this computer.
 - Receipts and run logs stay on your computer. There is no Shoji server, and Shoji sends no usage data.
-- Once a day Shoji downloads the list of models and their prices from this repository, [`catalog/models.json`](../catalog/models.json), so a new model or price needs no new release. The download carries nothing about you or your work. Turn it off in Settings, under Data.
+- Once a day Shoji downloads the list of models and their prices from this repository, [`catalog/v2/models.json`](../catalog/v2/models.json), so a new model or price needs no new release. The download carries nothing about you or your work. Turn it off in Settings, under Data.
 - When Shoji opens, it asks this repository's [releases](https://github.com/FLX-2/shoji/releases) whether a newer Shoji is out. If one is, a note at the foot of the window offers Restart to update, once nothing is running. The update is checked against Shoji's signing key before it installs. The check carries nothing about you or your work. Turn it off in Settings, under Data.
 
 ## The agent runtime on the command line
 
-The loop that plans, builds and checks a change lives in `runtime/`. The app runs it as a separate program, so a crashed run never takes the window down. You can also run it on any git project from the command line, with an Anthropic API key in `SHOJI_API_KEY` or `ANTHROPIC_API_KEY`.
+The loop that plans, builds and checks a change lives in `runtime/`. The app runs it as a separate program, so a crashed run never takes the window down. You can also run it on any git project from the command line, with an Anthropic API key in `SHOJI_API_KEY` or `ANTHROPIC_API_KEY`. For other providers, `--stack-json` names each role's model, as `openai/…` or `ollama/…`, with OpenAI's key in `OPENAI_API_KEY`; Ollama needs none.
 
 ```sh
 pnpm runtime --repo ../my-project --task "Add a dark mode toggle" --cap 0.50

@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <sub>macOS (Apple silicon) · Windows · Linux &nbsp;|&nbsp; Bring your own Anthropic API key &nbsp;|&nbsp; MIT license</sub>
+  <sub>macOS (Apple silicon) · Windows · Linux &nbsp;|&nbsp; Anthropic, OpenAI, ChatGPT, OpenRouter or Ollama &nbsp;|&nbsp; MIT license</sub>
 </p>
 
 <br>
@@ -114,12 +114,12 @@ A darkroom theme, and a paper one like the screens the app is named for. Every e
 
 Your code goes to the model, and nowhere else.
 
-- **Your key stays in the keychain.** Shoji sends it only to Anthropic.
+- **Your keys stay in the keychain.** Shoji sends each only to its own provider.
 - **A model sees only what it needs.** Only the files a role reads or you attach go to the provider.
 - **Private files never go at all.** `.env` files and keys are off limits to every role. Add your own patterns in Settings.
 - **No account, no server.** Receipts and run logs stay on your computer. Shoji sends no usage data.
 
-Once a day Shoji downloads the list of models and their prices from this repository ([`catalog/models.json`](catalog/models.json)), and when it opens it asks this repository's releases whether a newer Shoji is out. Neither carries anything about you or your work, and you can turn each off in Settings. More in the [guide](docs/guide.md#your-data).
+Once a day Shoji downloads the list of models and their prices from this repository ([`catalog/v2/models.json`](catalog/v2/models.json)), and when it opens it asks this repository's releases whether a newer Shoji is out. Neither carries anything about you or your work, and you can turn each off in Settings. More in the [guide](docs/guide.md#your-data).
 
 ## Install
 
@@ -136,7 +136,7 @@ The builds aren't signed yet, so your system asks once before opening one.
 - **Mac:** the first time, Control-click the app and choose Open. If macOS still blocks it, allow it under System Settings, Privacy & Security.
 - **Windows:** if SmartScreen stops the installer, choose More info, then Run anyway.
 
-Shoji is free. You pay Anthropic for the models your tasks use, with your own API key. The first time Shoji opens, setup asks for that key, picks a stack, opens a project and lets you choose a look. A project must be a git repo with at least one commit.
+Shoji is free. You pay for the models your tasks use, with your own API key from Anthropic, OpenAI or OpenRouter. With ChatGPT Plus or Pro you can sign in instead and run OpenAI's models on your plan, and with [Ollama](https://ollama.com) models run free on your computer. The first time Shoji opens, setup connects Anthropic, your ChatGPT plan or Ollama, picks a stack, opens a project and lets you choose a look. A project must be a git repo with at least one commit.
 
 ## Build from source
 
@@ -164,7 +164,7 @@ The agent runtime in `runtime/` also runs on its own, on any git project. See [t
 
 ## Status
 
-Shoji 0.1 is the first public release. Models come from Anthropic for now; other providers come later. Mac comes first, and Windows and Linux build from the same code on every change.
+Shoji 0.2 adds more models: OpenAI's with an API key or your ChatGPT plan, hundreds more through OpenRouter, and local models with Ollama. Mac comes first, and Windows and Linux build from the same code on every change.
 
 Found a bug or want something? [Open an issue](https://github.com/FLX-2/shoji/issues/new/choose). To work on Shoji itself, read [CONTRIBUTING](CONTRIBUTING.md).
 

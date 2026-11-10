@@ -658,7 +658,7 @@ html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="
       <h2 id="data-h">Your code goes to the model, and nowhere else.</h2>
     </div>
     <div class="data">
-      <div><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/></svg><h3>Your key stays in the keychain</h3><p>{{name}} sends it only to Anthropic.</p></div>
+      <div><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3M14 9l2 2"/></svg><h3>Your keys stay in the keychain</h3><p>{{name}} sends each only to its own provider.</p></div>
       <div><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/></svg><h3>A model sees only what it needs</h3><p>Only the files a role reads or you attach go to the provider.</p></div>
       <div><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="1.5"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><h3>Private files never go at all</h3><p><code>.env</code> files and keys are off limits to every role. Add your own patterns in Settings.</p></div>
       <div><svg viewBox="0 0 24 24"><path d="M3 12h18"/><path d="M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/><circle cx="12" cy="12" r="9"/><path d="M4 4l16 16"/></svg><h3>No account, no server</h3><p>Receipts and run logs stay on your computer. {{name}} sends no usage data.</p></div>
@@ -672,7 +672,7 @@ html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="
     <div class="head">
       <p class="eyebrow">Download</p>
       <h2 id="get-h">Free for Mac and Windows.</h2>
-      <p class="lede">Bring your own Anthropic API key and pay only for the models your tasks use. {{name}} is open source, under the MIT license.</p>
+      <p class="lede">Bring your own key from Anthropic, OpenAI or OpenRouter, sign in with ChatGPT, or run models free with Ollama. Pay only for the models your tasks use. {{name}} is open source, under the MIT license.</p>
     </div>
     <div class="plats">
       <a class="plat" href="{{download}}"><h3>macOS</h3><p>Apple silicon, macOS 12 or later</p><span class="state">Download →</span></a>
@@ -693,10 +693,10 @@ html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="
       <h2 id="faq-h">Asked and answered.</h2>
     </div>
     <dl>
-      <details><summary>What does it cost to run?</summary><p>{{name}} is free. You pay Anthropic for the models your tasks use, with your own API key. The sample task on this page came to $0.098, and Home shows what a task usually costs once you've finished a few.</p></details>
-      <details><summary>Which models does it use?</summary><p>Anthropic's Claude models for now. By default Opus 5.5 plans, Sonnet 5.5 builds, and Haiku 5.5 reads the code and reviews the work. You can put any model on any role in Stack. Other providers come later.</p></details>
+      <details><summary>What does it cost to run?</summary><p>{{name}} is free. You pay for the models your tasks use, with your own API key, or run them on your ChatGPT plan or free on your computer with Ollama. The sample task on this page came to $0.098, and Home shows what a task usually costs once you've finished a few.</p></details>
+      <details><summary>Which models does it use?</summary><p>Anthropic's, OpenAI's, hundreds more through OpenRouter, and local models with Ollama. By default Opus 5.5 plans, Sonnet 5.5 builds, and Haiku 5.5 reads the code and reviews the work. You can put any model on any role in Stack.</p></details>
       <details><summary>Does my code leave my computer?</summary><p>Only the parts a role reads or you attach, and only to the model provider. Private files like <code>.env</code> and keys never go at all. There is no {{name}} server.</p></details>
-      <details><summary>Do I need an account?</summary><p>No. You need an Anthropic API key, which stays in your system keychain, and a project in git with at least one commit.</p></details>
+      <details><summary>Do I need an account?</summary><p>No {{name}} account. You need one way to reach models (an API key, which stays in your system keychain, a ChatGPT Plus or Pro sign-in, or Ollama) and a project in git with at least one commit.</p></details>
       <details><summary>Can it run up a bill while I'm away?</summary><p>Every thread has a spending limit, and {{name}} stops before any call that could pass it. A daily limit asks before a new thread or a trial could take the day past it, and a scheduled task that could pass it is skipped and says why.</p></details>
       <details><summary>Will it work with my setup?</summary><p>It follows your project's <code>AGENTS.md</code> and <code>CLAUDE.md</code>, uses your commands, skills and MCP servers, previews your own dev server, and commits with your own git name.</p></details>
       <details id="faq-open"><summary>My Mac or Windows won't open it. What do I do?</summary><p>The builds aren't signed yet. The first time you open {{name}} on a Mac, Control-click the app and choose Open; if macOS still blocks it, allow it under System Settings, Privacy &amp; Security. On Windows, if SmartScreen stops the installer, choose More info, then Run anyway.</p></details>
