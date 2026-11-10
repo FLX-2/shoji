@@ -1,4 +1,5 @@
 import { providerOf, type ModelId, type ProviderId } from "./models";
+import { OllamaProvider, ollamaUrl } from "./ollama";
 import { AnthropicProvider, notConnected, type ModelProvider, Providers } from "./provider";
 
 /** Where the app hands a run each provider's key. The keys never appear in a flag, where other programs see them. */
@@ -14,11 +15,13 @@ export interface Connections {
   anthropicUrl?: string;
 }
 
-/** The providers this run can reach, from the keys in its environment. */
+/** The providers this run can reach, from the keys in its environment, and Ollama where OLLAMA_HOST says. */
 export function connect(env: NodeJS.ProcessEnv, options: Connections = {}): Providers {
   const connected: Partial<Record<ProviderId, ModelProvider>> = {};
   const anthropic = keyOf(env, "anthropic");
   if (anthropic) connected.anthropic = new AnthropicProvider(anthropic, options.anthropicUrl);
+  // Ollama needs no key, so it's always there to try. A call to it when it isn't running says so.
+  connected.ollama = new OllamaProvider(ollamaUrl(env.OLLAMA_HOST));
   return new Providers(connected);
 }
 

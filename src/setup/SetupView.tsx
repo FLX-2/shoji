@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { MODELS } from "../../runtime/src/models";
+import { MODELS, providerOf } from "../../runtime/src/models";
 import { STACKS, type Stack, type StackName } from "../../runtime/src/stack";
 import type { Bridge, FoundProject, KeyStatus } from "../bridge";
 import { folderName } from "../home/HomeView";
@@ -7,6 +7,8 @@ import { MoneyRow } from "../settings/MoneyRow";
 import type { Prefs } from "../settings/prefs";
 import { Mark } from "../shell/Mark";
 import { describeStack, presetOf, PRESETS, sameStack } from "../stack/lock";
+import { localStack, type Ollama } from "../stack/ollama";
+import { OllamaRow } from "../settings/OllamaRow";
 import { formatCost } from "../thread/fold";
 import { NOTES_CAP, notesProgress, type Notes } from "./useNotes";
 
@@ -15,6 +17,7 @@ interface SetupViewProps {
   keyStatus: KeyStatus | null;
   /** Reads the key's status again after it changes. */
   onKeyChanged: () => Promise<void>;
+  ollama: Ollama;
   stack: Stack;
   onSaveStack: (stack: Stack) => Promise<void>;
   prefs: Prefs;
@@ -29,7 +32,14 @@ interface SetupViewProps {
  *  here: its defaults are calm, and Settings has it for later. */
 export function SetupView(props: SetupViewProps) {
   const [choice, setChoice] = useState(props.stack);
-  const connected = !!props.keyStatus?.saved;
+  const anthropic = !!props.keyStatus?.saved;
+  const local = props.ollama.status === "ready" ? localStack(props.ollama.models) : null;
+  const connected = anthropic || !!local;
+
+  // With only Ollama connected, the stack starts on this computer, since no other can run.
+  useEffect(() => {
+    if (!anthropic && local && !sameStack(choice, local)) setChoice(local);
+  }, [anthropic, local, choice]);
 
   const start = async () => {
     if (!sameStack(choice, props.stack)) await props.onSaveStack(choice);
@@ -47,8 +57,15 @@ export function SetupView(props: SetupViewProps) {
             the models and pay the provider directly. Shoji itself is free.
           </p>
         </div>
-        <Models bridge={props.bridge} status={props.keyStatus} onKeyChanged={props.onKeyChanged} />
-        <StackStep choice={choice} onChoose={setChoice} prefs={props.prefs} onChange={props.onChange} />
+        <Models bridge={props.bridge} status={props.keyStatus} onKeyChanged={props.onKeyChanged} ollama={props.ollama} />
+        <StackStep
+          choice={choice}
+          onChoose={setChoice}
+          anthropic={anthropic}
+          local={local}
+          prefs={props.prefs}
+          onChange={props.onChange}
+        />
         <Project
           bridge={props.bridge}
           repo={props.prefs.repo}
@@ -58,7 +75,7 @@ export function SetupView(props: SetupViewProps) {
           onWriteNotes={props.onWriteNotes}
         />
         <div className="suf">
-          <span className="note">{connected ? "Anthropic is connected" : "Connect Anthropic to start"}</span>
+          <span className="note">{anthropic ? "Anthropic is connected" : local ? "Ollama is connected" : "Connect a provider to start"}</span>
           <span className="sp" />
           <button type="button" className="btn solid" disabled={!connected} onClick={start}>
             Start using Shoji
@@ -73,10 +90,12 @@ function Models({
   bridge,
   status,
   onKeyChanged,
+  ollama,
 }: {
   bridge: Bridge;
   status: KeyStatus | null;
   onKeyChanged: () => Promise<void>;
+  ollama: Ollama;
 }) {
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +110,10 @@ function Models({
     <section className="sup" aria-label="Models">
       <div className="suhd">
         <h3>Connect your models</h3>
-        <p>Your key stays in the system keychain and is sent only to Anthropic. You can change it later in Settings.</p>
+        <p>
+          Connect either, or both. Your key stays in the system keychain and is sent only to Anthropic. Ollama runs models
+          on this computer. You can change these later in Settings.
+        </p>
       </div>
       {status?.fromEnv && !saved && (
         <div className="found">
@@ -146,25 +168,34 @@ function Models({
             </form>
           )}
         </div>
+        <OllamaRow ollama={ollama} setup />
       </div>
     </section>
   );
 }
 
+/** Anthropic's models, which its key reaches. */
 function modelNames() {
-  return Object.values(MODELS)
-    .map((m) => m.label)
+  return Object.entries(MODELS)
+    .filter(([id]) => providerOf(id) === "anthropic")
+    .map(([, m]) => m.label)
     .join(", ");
 }
 
 function StackStep({
   choice,
   onChoose,
+  anthropic,
+  local,
   prefs,
   onChange,
 }: {
   choice: Stack;
   onChoose: (stack: Stack) => void;
+  /** Whether Anthropic is connected, so its stacks can run. */
+  anthropic: boolean;
+  /** A stack on Ollama's models, when Ollama has some. */
+  local: Stack | null;
   prefs: Prefs;
   onChange: (change: Partial<Prefs>) => void;
 }) {
@@ -179,17 +210,23 @@ function StackStep({
         </p>
       </div>
       <div className="seg" role="radiogroup" aria-label="Starting stack">
-        {(Object.keys(STACKS) as StackName[]).map((name) => (
-          <button
-            key={name}
-            type="button"
-            role="radio"
-            aria-checked={preset === name}
-            onClick={() => onChoose(STACKS[name])}
-          >
-            {PRESETS[name]}
+        {anthropic &&
+          (Object.keys(STACKS) as StackName[]).map((name) => (
+            <button
+              key={name}
+              type="button"
+              role="radio"
+              aria-checked={preset === name}
+              onClick={() => onChoose(STACKS[name])}
+            >
+              {PRESETS[name]}
+            </button>
+          ))}
+        {local && (
+          <button type="button" role="radio" aria-checked={sameStack(choice, local)} onClick={() => onChoose(local)}>
+            On this computer
           </button>
-        ))}
+        )}
       </div>
       <p className="note">{describeStack(choice)}</p>
       <div className="card">

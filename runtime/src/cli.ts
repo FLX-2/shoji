@@ -7,7 +7,8 @@ import type { RuntimeEvent } from "./events";
 import { hasChanges, isGitRepo } from "./git";
 import { Browser, findBrowser } from "./browser";
 import { connectMcp, type Mcp, parseMcpServers, transportFor } from "./mcp";
-import { applyCatalog, MODELS, parseCatalog } from "./models";
+import { applyCatalog, applyFound, MODELS, parseCatalog } from "./models";
+import { ollamaModelsIn } from "./ollama";
 import { writeNotes, type NotesEvent } from "./notes";
 import { runThread } from "./pipeline";
 import { NO_PREVIEW, previewFor } from "./preview";
@@ -263,6 +264,8 @@ async function main() {
   let stack: Stack;
   if (values["stack-json"] !== undefined) {
     try {
+      // A stack's Ollama models are known by their names alone, wherever the app found them.
+      applyFound("stack", ollamaModelsIn(JSON.parse(values["stack-json"])));
       stack = parseStack(values["stack-json"]);
     } catch (e) {
       fail(e instanceof Error ? e.message : String(e));

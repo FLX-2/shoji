@@ -1,4 +1,4 @@
-import { MODELS, type ModelId } from "../../runtime/src/models";
+import { MODELS, providerOf, type ModelId } from "../../runtime/src/models";
 import type { Stack } from "../../runtime/src/stack";
 import type { LedgerThread } from "../bridge";
 import { callsOf, isNotes, isTrial, priceAs } from "../receipts/receipts";
@@ -12,9 +12,12 @@ export const TIERS: Record<Tier, { label: string; does: string }> = {
   max: { label: "Max", does: "Build runs on the Plan model" },
 };
 
-/** The next model down by output price, or the same one when it's the cheapest. */
+/** The next model down by output price from the same provider, or the same one when it's the cheapest. A draft
+ *  never moves work to another provider, which the person may not have connected. */
 function cheaper(model: ModelId): ModelId {
-  const ladder = Object.keys(MODELS).sort((a, b) => MODELS[a].output - MODELS[b].output);
+  const ladder = Object.keys(MODELS)
+    .filter((m) => providerOf(m) === providerOf(model) && !MODELS[m].billing === !MODELS[model].billing)
+    .sort((a, b) => MODELS[a].output - MODELS[b].output);
   return ladder[Math.max(0, ladder.indexOf(model) - 1)];
 }
 

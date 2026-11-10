@@ -34,7 +34,8 @@ describe("model ids", () => {
 describe("billing", () => {
   afterEach(() => {
     applyCatalog(null);
-    applyFound({});
+    applyFound("ollama", {});
+    applyFound("stack", {});
   });
 
   const list = {
@@ -68,7 +69,7 @@ describe("billing", () => {
 
   it("adds the models found on a connection beside the list's, without changing a listed one", () => {
     applyCatalog(parseCatalog(list));
-    applyFound({
+    applyFound("ollama", {
       "ollama/llama5": { label: "Llama 5", input: 0, output: 0, cacheRead: 0, billing: "local" },
       "claude-haiku-5-5": { label: "Cheap", input: 0, output: 0, cacheRead: 0, billing: "local" },
     });
@@ -77,7 +78,11 @@ describe("billing", () => {
     // A new list keeps what was found.
     applyCatalog(null);
     expect(MODELS["ollama/llama5"].label).toBe("Llama 5");
-    applyFound({});
+    // Each connection's models stand apart, so one looking again leaves the others.
+    applyFound("stack", { "ollama/gemma4": { label: "gemma4", input: 0, output: 0, cacheRead: 0, billing: "local" } });
+    applyFound("ollama", {});
+    expect(Object.keys(MODELS)).toContain("ollama/gemma4");
+    applyFound("stack", {});
     expect(MODELS).toEqual(BUILT_IN);
   });
 });
@@ -106,7 +111,9 @@ describe("providers", () => {
     expect(unreachable(none, ["claude-haiku-5-5"])).toMatch(/connected to Anthropic/);
     const keyed = connect({ SHOJI_API_KEY: "sk-test" });
     expect(unreachable(keyed, ["claude-haiku-5-5", "claude-opus-5-5"])).toBeNull();
-    expect(unreachable(keyed, ["claude-haiku-5-5", "ollama/gemma4"])).toMatch(/connected to Ollama/);
+    expect(unreachable(none, ["openai/gpt-6"])).toMatch(/connected to OpenAI/);
+    // Ollama needs no key, so it's always there to try.
+    expect(unreachable(none, ["ollama/gemma4"])).toBeNull();
     expect(unreachable(connect({ ANTHROPIC_API_KEY: " sk-test " }), ["claude-haiku-5-5"])).toBeNull();
   });
 });

@@ -121,14 +121,15 @@ export function parseCatalog(value: unknown): Catalog {
 
 let listed = BUILT_IN_LISTED;
 let listedModels: Record<ModelId, ModelInfo> = {};
-let found: Record<ModelId, ModelInfo> = {};
+/** Models found on each connection, by where they were found. */
+const found = new Map<string, Record<ModelId, ModelInfo>>();
 
 /** The day the prices in MODELS were listed, as YYYY-MM-DD. */
 export const pricesListed = () => listed;
 
 function rebuild() {
   for (const id of Object.keys(MODELS)) delete MODELS[id];
-  Object.assign(MODELS, BUILT_IN, listedModels, found);
+  Object.assign(MODELS, BUILT_IN, listedModels, ...found.values());
 }
 
 /** Puts a catalog's models and prices in place of the last one's, over the built-in list. */
@@ -138,12 +139,15 @@ export function applyCatalog(catalog: Catalog | null): void {
   rebuild();
 }
 
+/** Whether a model was found on one of the person's connections, rather than listed by Shoji. */
+export const isFound = (id: ModelId) => [...found.values()].some((models) => id in models);
+
 /**
- * Puts the models found on the person's own connections, such as the ones pulled into Ollama, in place of the
- * last ones found. They sit beside the list's, and never change a listed model or its price.
+ * Puts the models found on one of the person's connections, such as the ones pulled into Ollama, in place of
+ * the last ones found there. They sit beside the list's, and never change a listed model or its price.
  */
-export function applyFound(models: Record<ModelId, ModelInfo>): void {
-  found = Object.fromEntries(Object.entries(models).filter(([id]) => !(id in BUILT_IN) && !(id in listedModels)));
+export function applyFound(where: string, models: Record<ModelId, ModelInfo>): void {
+  found.set(where, Object.fromEntries(Object.entries(models).filter(([id]) => !(id in BUILT_IN) && !(id in listedModels))));
   rebuild();
 }
 

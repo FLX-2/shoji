@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { MODELS } from "../runtime/src/models";
+import { MODELS, providerOf } from "../runtime/src/models";
+import { ROLES } from "../runtime/src/stack";
 import { LimitAsk, type Ask } from "./budget/LimitAsk";
 import { spentOn } from "./budget/daily";
 import {
@@ -23,6 +24,7 @@ import { readMcpServers, SETTINGS_PAGES, type SettingsPage, SettingsView } from 
 import { SetupView } from "./setup/SetupView";
 import { notesProgress, useNotes } from "./setup/useNotes";
 import { useModelCatalog } from "./stack/catalog";
+import { useOllama } from "./stack/ollama";
 import { StackView } from "./stack/StackView";
 import { estimateCost, tierOf, tierStack, TIERS, type Tier } from "./stack/tier";
 import { keyLabel } from "./settings/shortcuts";
@@ -73,6 +75,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const [section, setSection] = useState<SectionId>(() => prefs.place?.section ?? "home");
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("look");
   const catalog = useModelCatalog(prefs.updateModels);
+  const ollama = useOllama(given);
   // The models there at first are known ones; only a model the list brings later is new.
   useEffect(() => {
     if (!prefs.seenModels) setPrefs({ seenModels: Object.keys(MODELS) });
@@ -258,7 +261,9 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     return false;
   };
 
-  const hasKey = !!keyStatus && (keyStatus.saved || keyStatus.fromEnv);
+  const anthropicKey = !!keyStatus && (keyStatus.saved || keyStatus.fromEnv);
+  // A stack on this computer alone needs no key. Ollama not running is said when the thread starts.
+  const hasKey = anthropicKey || ROLES.every((role) => providerOf(stack.stack[role].model) !== "anthropic");
   // Scheduled tasks start by themselves, never past the daily limit, since nobody may be here to say yes.
   useSchedules(
     prefs.schedules,
@@ -747,6 +752,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
             bridge={bridge}
             keyStatus={keyStatus}
             onKeyChanged={refreshKey}
+            ollama={ollama}
             stack={stack.stack}
             onSaveStack={stack.save}
             prefs={prefs}
@@ -980,6 +986,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 stack={stack.stack}
                 onOpenStack={() => setSection("stack")}
                 keyStatus={keyStatus}
+                ollama={ollama}
                 onSaveKey={(key) => bridge.saveKey(key).then(refreshKey)}
                 onForgetKey={() => bridge.forgetKey().then(refreshKey)}
                 onRunSetup={() => setInSetup(true)}

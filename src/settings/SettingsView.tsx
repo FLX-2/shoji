@@ -1,3 +1,5 @@
+import type { Ollama } from "../stack/ollama";
+import { OllamaRow } from "./OllamaRow";
 import { useState } from "react";
 import { type McpServer, parseMcpServers } from "../../runtime/src/mcpConfig";
 import { DEFAULT_PRIVATE } from "../../runtime/src/private";
@@ -31,6 +33,7 @@ interface SettingsViewProps {
   stack: Stack;
   onOpenStack: () => void;
   keyStatus: KeyStatus | null;
+  ollama: Ollama;
   onSaveKey: (key: string) => Promise<void>;
   onForgetKey: () => Promise<void>;
   onRunSetup: () => void;
@@ -59,6 +62,7 @@ export function SettingsView({
   stack,
   onOpenStack,
   keyStatus,
+  ollama,
   onSaveKey,
   onForgetKey,
   onRunSetup,
@@ -162,6 +166,7 @@ export function SettingsView({
                 {shown.id === "models" && (
                   <>
                     <KeyRow status={keyStatus} onSave={onSaveKey} onForget={onForgetKey} />
+                    <OllamaRow ollama={ollama} />
                     <div className="srow">
                       <div>
                         <b>Stack</b>

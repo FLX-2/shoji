@@ -1,6 +1,7 @@
 mod found;
 mod keys;
 mod ledger;
+mod ollama;
 mod push;
 mod updates;
 #[cfg(unix)]
@@ -101,6 +102,15 @@ async fn found_projects() -> Vec<found::FoundProject> {
     tauri::async_runtime::spawn_blocking(move || found::found_in(Path::new(&home), codex))
         .await
         .unwrap_or_default()
+}
+
+/// The models pulled into Ollama on this computer that can call tools, largest first.
+#[tauri::command]
+async fn ollama_models() -> Result<Vec<ollama::Pulled>, String> {
+    let host = std::env::var("OLLAMA_HOST").ok();
+    tauri::async_runtime::spawn_blocking(move || ollama::pulled(host.as_deref()))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1184,6 +1194,7 @@ pub fn run() {
             save_key,
             use_shell_key,
             forget_key,
+            ollama_models,
             pick_project,
             found_projects,
             pick_attachments,
