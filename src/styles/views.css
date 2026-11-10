@@ -2017,7 +2017,9 @@
   box-sizing: border-box;
   cursor: pointer;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* Name, counts, and a short bar of added against removed: one line per file, the colour kept to a small mark. */
+  grid-template-columns: minmax(0, 1fr) auto 36px;
+  align-items: center;
   gap: 6px 10px;
   padding: 11px 16px;
   border-bottom: 1px solid var(--hair2);
@@ -2066,7 +2068,7 @@
 }
 
 .fl .bar {
-  grid-column: 1 / -1;
+  grid-column: 3;
   display: flex;
   height: 3px;
   border-radius: 2px;
@@ -3300,12 +3302,14 @@ button.rrow:focus-visible {
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  place-items: center;
+  /* Centred while it fits; taller than the window, it starts at the top so all of it scrolls into view. */
+  place-items: start center;
   padding: 28px 16px;
 }
 
 .su {
   width: min(640px, 100%);
+  margin-block: auto;
   display: grid;
   gap: 20px;
   padding: 26px 30px 22px;
@@ -3314,52 +3318,12 @@ button.rrow:focus-visible {
   background: rgba(var(--z1-rgb), 0.8);
 }
 
-.sust {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 22px;
-  font-size: var(--t-sm);
-  color: var(--z6);
-}
 
-.sust li {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
 
-.sust i {
-  font-style: normal;
-  font-family: var(--mono);
-  font-size: var(--t-micro);
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  border: 1px solid var(--z4);
-  display: grid;
-  place-items: center;
-}
 
-.sust .on {
-  color: var(--z10);
-}
 
-.sust .on i {
-  border-color: var(--z10);
-}
 
-.sust .done {
-  color: var(--z7);
-}
 
-.sust .done i {
-  background: var(--z7);
-  border-color: var(--z7);
-  color: var(--z0);
-}
 
 .sup {
   display: grid;
@@ -3369,6 +3333,20 @@ button.rrow:focus-visible {
 .sup > .seg,
 .sup > div:has(> .btn) {
   justify-self: start;
+}
+
+/* Setup's sections meet on a hairline, one page from key to project. */
+.su > .sup,
+.su > .suf {
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--hair2);
+}
+
+.sup h3 {
+  margin: 0;
+  font-size: var(--t-lg);
+  font-weight: 500;
+  color: var(--z10);
 }
 
 .sup h2 {
@@ -3414,40 +3392,10 @@ button.rrow:focus-visible {
   color: var(--z8);
 }
 
-.suplan {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  counter-reset: n;
-  border-top: 1px solid var(--hair2);
-}
 
-.suplan li {
-  counter-increment: n;
-  display: grid;
-  grid-template-columns: 26px 190px minmax(0, 1fr);
-  align-items: baseline;
-  padding: 11px 0;
-  border-bottom: 1px solid var(--hair2);
-  font-size: var(--t-md);
-}
 
-.suplan li::before {
-  content: counter(n);
-  font-family: var(--mono);
-  font-size: var(--t-micro);
-  color: var(--z6);
-}
 
-.suplan b {
-  font-weight: 500;
-  color: var(--z10);
-}
 
-.suplan span {
-  font-size: var(--t-sm);
-  color: var(--z6);
-}
 
 .suf {
   display: flex;
@@ -3917,6 +3865,18 @@ button.rrow:focus-visible {
 .threads > .home,
 .threads > .empty {
   min-width: 0;
+}
+
+/* Three panes don't fit a laptop window: while the side panel is open, the thread list steps aside so the
+   conversation keeps room to read. Closing the panel brings it back. */
+@media (max-width: 1439px) {
+  .threads:has(#side-panel) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .threads:has(#side-panel) > .tlist {
+    display: none;
+  }
 }
 
 .tlist {

@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { Browser, findBrowser } from "../src/browser";
-import { compareBeforeAndAfter } from "../src/compare";
+import { compareBeforeAndAfter, comparer } from "../src/compare";
 import { NO_PREVIEW, type Preview, previewFor } from "../src/preview";
 import { tempRepo } from "./helpers";
 
@@ -59,6 +59,32 @@ describe.skipIf(!browser)("comparing a thread's pages before and after", () => {
       // The work is as it was, and the scratch copy is gone.
       expect(fs.readFileSync(path.join(work, "page.html"), "utf8")).toBe(page("#000000"));
       expect(git(work, "status", "--porcelain").stdout.trim()).toBe("M page.html");
+    } finally {
+      await after.close();
+    }
+  }, 90_000);
+
+  it("shoots the before once, and the after again each time the work changes", async () => {
+    const project = tempRepo({ "server.js": SERVER, "page.html": page("#ffffff"), ".gitignore": ".env\n" });
+    fs.writeFileSync(path.join(project, ".env"), "PLAN=team\n");
+    fs.writeFileSync(path.join(project, "page.html"), page("#000000"));
+    const launch = () => Browser.launch(browser!);
+    const after = previewFor(project, "node server.js", launch);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "shoji-shots-"));
+    try {
+      await after.look("/", "1280");
+      const pages = comparer({ root: project, devCommand: "node server.js", after, launch, dir });
+      const first = await pages.take();
+      fs.writeFileSync(path.join(project, "page.html"), page("#ff0000"));
+      const second = await pages.take();
+
+      expect(second.problem).toBeUndefined();
+      const [a, b] = [first.pages[0].shots[2], second.pages[0].shots[2]];
+      expect(b.before).toBe(a.before);
+      expect(b.after).not.toBe(a.after);
+      // The first after still shows what it showed.
+      expect(fs.readFileSync(a.after!).equals(fs.readFileSync(b.after!))).toBe(false);
+      expect(fs.readdirSync(dir).filter((f) => f.startsWith("before"))).toHaveLength(3);
     } finally {
       await after.close();
     }

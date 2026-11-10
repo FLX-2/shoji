@@ -1,9 +1,12 @@
+import type Anthropic from "@anthropic-ai/sdk";
 import { MAX_TOKENS, OUT_OF_TURNS, runAgent, textOf } from "./agent";
 import { type Attachments, withAttachments } from "./attachments";
 import { runChecks } from "./commands";
 import type { CheckResult, Emit, ThreadResult } from "./events";
+import type { Comparison } from "./compare";
 import { diffOf, discardWork } from "./git";
 import { projectInstructions, projectNotes } from "./instructions";
+import { holdToLook, lookBlocks } from "./look";
 import { BudgetExceeded, Meter, RefusedError } from "./meter";
 import { PlanLimitError } from "./openai";
 import * as prompts from "./prompts";
@@ -60,6 +63,9 @@ export interface ThreadInput {
   mcp?: Mcp;
   /** The project's dev server in a headless browser, which Build can look at. */
   preview?: Preview;
+  /** The pages Build looked at, before the thread's work and as they are now. With it, Review sees them and
+   *  scores the look too. Calls no model. */
+  look?: () => Promise<Comparison>;
 }
 
 const MAX_FILES_CHARS = 60_000;
@@ -164,29 +170,37 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   const review = (recheck = false) =>
     step("review", "review", stack.review, async () => {
       if (recheck) check("review");
-      return textOf(
+      const diff = diffOf(workspace.root, (file) => workspace.isPrivate(file));
+      const prompt = withAttachments(reviewPrompt(task + asked + guide, diff, state.checks, state.report), input.attachments);
+      const shots = await pagesToJudge(diff);
+      const content: string | Anthropic.ContentBlockParam[] = shots.length
+        ? [
+            ...shots,
+            ...(typeof prompt === "string" ? [{ type: "text" as const, text: prompt }] : prompt),
+            { type: "text", text: "The screenshots above show the pages Build looked at, before the change and after it." },
+          ]
+        : prompt;
+      const said = textOf(
         await meter.send("review", "review", {
           model: stack.review.model,
           effort: stack.review.effort,
           system: prompts.REVIEW,
-          messages: [
-            {
-              role: "user",
-              content: withAttachments(
-                reviewPrompt(
-                  task + asked + guide,
-                  diffOf(workspace.root, (file) => workspace.isPrivate(file)),
-                  state.checks,
-                  state.report,
-                ),
-                input.attachments,
-              ),
-            },
-          ],
+          messages: [{ role: "user", content }],
           maxTokens: MAX_TOKENS,
         }),
       );
+      return shots.length ? holdToLook(said) : said;
     });
+  /** The pages before and after, when the work changed something and Build looked at a page. */
+  const pagesToJudge = async (diff: string) => {
+    if (!input.look || !diff.trim() || !preview.looked().length) return [];
+    try {
+      return lookBlocks(await input.look());
+    } catch {
+      // The review can judge the diff without them.
+      return [];
+    }
+  };
 
   try {
     if (input.reviewAgain) {

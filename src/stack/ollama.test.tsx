@@ -27,20 +27,31 @@ describe("Ollama", () => {
     fake.ollama.models = ["gemma4:31b", "qwen3:4b"];
     render(<App bridge={fake.bridge} />);
     await screen.findByRole("region", { name: "Setup" });
-    await click("Set up Shoji");
     expect(await screen.findByText("gemma4:31b, qwen3:4b. Free, and your code stays on this computer.")).toBeTruthy();
     expect(screen.getByText("Ollama is connected")).toBeTruthy();
-    await click("Continue");
 
     // Anthropic's stacks need its key, so only the stack on this computer is offered.
     const stacks = within(screen.getByRole("radiogroup", { name: "Starting stack" }));
     expect(stacks.getAllByRole("radio").map((r) => r.textContent)).toEqual(["On this computer"]);
     expect(stacks.getByRole("radio", { name: "On this computer" }).getAttribute("aria-checked")).toBe("true");
     expect(screen.getByText("gemma4:31b plans and builds and qwen3:4b scouts and reviews.")).toBeTruthy();
-    await click("Continue");
+    await click("Start using Shoji");
     expect(parseLock(fake.files.stackLock!).versions.at(-1)!.stack).toEqual(
       localStack(["ollama/gemma4:31b", "ollama/qwen3:4b"]),
     );
+  });
+
+  it("has setup's notes written by the local Scout, with no spending limit to name", async () => {
+    const fake = fakeBridge({ saved: false, fromEnv: false });
+    fake.ollama.models = ["gemma4:31b", "qwen3:4b"];
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page" }));
+    render(<App bridge={fake.bridge} />);
+    await screen.findByText("Project notes");
+    expect(
+      screen.getByText("qwen3:4b reads the project once and writes SHOJI.md: its commands and conventions. Plan reads it before every task."),
+    ).toBeTruthy();
+    await click("Write notes");
+    expect(fake.calls.notes.at(-1)!.stack).toEqual(localStack(["ollama/gemma4:31b", "ollama/qwen3:4b"]));
   });
 
   it("says in Settings what Ollama has, and how to get it when it isn't running", async () => {

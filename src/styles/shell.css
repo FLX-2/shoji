@@ -260,7 +260,7 @@ button {
   place-items: center;
   align-content: center;
   gap: 3px;
-  color: var(--z6);
+  color: var(--z7);
   position: relative;
   transition:
     color var(--d-quick) var(--e-out),
@@ -303,7 +303,7 @@ button {
 }
 
 .rail button span {
-  font-size: calc(var(--t-micro) - 1px);
+  font-size: var(--t-micro);
   line-height: 1;
   letter-spacing: 0.01em;
 }

@@ -27,19 +27,7 @@ export interface Comparison {
   problem?: string;
 }
 
-/**
- * Screenshots of the pages Build looked at, at each width, as they were at the thread's starting commit and as
- * they are now. The work's own dev server shows the after; the before comes from a scratch copy at `base`, with
- * a dev server of its own, so the project and the work are never touched. Calls no model.
- */
-export async function compareBeforeAndAfter({
-  root,
-  devCommand,
-  after,
-  launch,
-  dir,
-  base = "HEAD",
-}: {
+interface CompareOptions {
   /** The thread's copy of the project, with the work in it uncommitted. */
   root: string;
   devCommand: string;
@@ -50,51 +38,95 @@ export async function compareBeforeAndAfter({
   dir: string;
   /** The commit the thread started from. */
   base?: string;
-}): Promise<Comparison> {
-  const paths = after.looked().slice(-MOST_PAGES);
-  const pages: ComparedPage[] = paths.map((p) => ({ path: p, shots: WIDTHS.map((width) => ({ width })) }));
-  if (!pages.length) return { pages };
-  fs.mkdirSync(dir, { recursive: true });
-  const problems: string[] = [];
+}
 
-  const shootAll = async (preview: Preview, side: "before" | "after") => {
-    for (const [i, page] of pages.entries()) {
-      for (const shot of page.shots) {
-        const look = await preview.shoot(page.path, shot.width);
-        const file = path.join(dir, `${side}-${i + 1}-${shot.width}.png`);
-        fs.writeFileSync(file, Buffer.from(look.png, "base64"));
-        shot[side] = file;
+/** Compares the pages Build looked at, again and again as the work changes. */
+export interface Comparer {
+  /** The pages as they are now, beside how they were. Each page's before is shot once and kept, since the start
+   *  doesn't change; the after is shot fresh each time. */
+  take(): Promise<Comparison>;
+}
+
+/**
+ * Screenshots of the pages Build looked at, at each width, as they were at the thread's starting commit and as
+ * they are now. The work's own dev server shows the after; the before comes from a scratch copy at `base`, with
+ * a dev server of its own, so the project and the work are never touched. Calls no model.
+ */
+export function comparer({ root, devCommand, after, launch, dir, base = "HEAD" }: CompareOptions): Comparer {
+  /** Before shots already taken, by page and width. */
+  const befores = new Map<string, string>();
+  /** Why the before couldn't be shown, once it couldn't: the start doesn't change, so it isn't tried again. */
+  let beforeProblem: string | undefined;
+  let round = 0;
+  return {
+    async take() {
+      const paths = after.looked().slice(-MOST_PAGES);
+      const pages: ComparedPage[] = paths.map((p) => ({ path: p, shots: WIDTHS.map((width) => ({ width })) }));
+      if (!pages.length) return { pages };
+      fs.mkdirSync(dir, { recursive: true });
+      round++;
+      const problems: string[] = [];
+
+      // Each round's after has a file of its own, so a figure already shown keeps showing what it showed.
+      const prefix = round === 1 ? "after" : `after${round}`;
+      try {
+        for (const [i, page] of pages.entries()) {
+          for (const shot of page.shots) {
+            const look = await after.shoot(page.path, shot.width);
+            const file = path.join(dir, `${prefix}-${i + 1}-${shot.width}.png`);
+            fs.writeFileSync(file, Buffer.from(look.png, "base64"));
+            shot.after = file;
+          }
+        }
+      } catch (error) {
+        problems.push(`Couldn't show the pages as they are now: ${message(error)}`);
       }
-    }
+
+      const key = (page: string, width: number) => `${width} ${page}`;
+      const missing = pages.flatMap((page) => page.shots.filter((s) => !befores.has(key(page.path, s.width))).map((s) => ({ page, s })));
+      if (beforeProblem) problems.push(beforeProblem);
+      else if (missing.length) {
+        let copy: string | undefined;
+        let before: Preview | undefined;
+        try {
+          const commit = spawnSync("git", ["rev-parse", "--verify", `${base}^{commit}`], {
+            cwd: root,
+            encoding: "utf8",
+            windowsHide: true,
+          });
+          if (commit.status !== 0) throw new Error(`${base} isn't a commit in the project.`);
+          copy = scratchCopy(root, commit.stdout.trim());
+          bringEnvFiles(root, copy);
+          before = previewFor(copy, devCommand, launch);
+          for (const { page, s } of missing) {
+            const look = await before.shoot(page.path, s.width);
+            const file = path.join(dir, `before-${befores.size + 1}-${s.width}.png`);
+            fs.writeFileSync(file, Buffer.from(look.png, "base64"));
+            befores.set(key(page.path, s.width), file);
+          }
+        } catch (error) {
+          beforeProblem = `Couldn't show the pages as they were before: ${message(error)}`;
+          problems.push(beforeProblem);
+        } finally {
+          await before?.close().catch(() => {});
+          if (copy) removeCopy(copy);
+        }
+      }
+      for (const page of pages) {
+        for (const shot of page.shots) {
+          const file = befores.get(key(page.path, shot.width));
+          if (file) shot.before = file;
+        }
+      }
+
+      return { pages, ...(problems.length && { problem: problems.join(" ") }) };
+    },
   };
+}
 
-  try {
-    await shootAll(after, "after");
-  } catch (error) {
-    problems.push(`Couldn't show the pages as they are now: ${message(error)}`);
-  }
-
-  let copy: string | undefined;
-  let before: Preview | undefined;
-  try {
-    const commit = spawnSync("git", ["rev-parse", "--verify", `${base}^{commit}`], {
-      cwd: root,
-      encoding: "utf8",
-      windowsHide: true,
-    });
-    if (commit.status !== 0) throw new Error(`${base} isn't a commit in the project.`);
-    copy = scratchCopy(root, commit.stdout.trim());
-    bringEnvFiles(root, copy);
-    before = previewFor(copy, devCommand, launch);
-    await shootAll(before, "before");
-  } catch (error) {
-    problems.push(`Couldn't show the pages as they were before: ${message(error)}`);
-  } finally {
-    await before?.close().catch(() => {});
-    if (copy) removeCopy(copy);
-  }
-
-  return { pages, ...(problems.length && { problem: problems.join(" ") }) };
+/** One comparison of the pages Build looked at. */
+export function compareBeforeAndAfter(options: CompareOptions): Promise<Comparison> {
+  return comparer(options).take();
 }
 
 /** A project's .env files are kept out of git, so a copy made by git lacks them; its dev server may need them. */

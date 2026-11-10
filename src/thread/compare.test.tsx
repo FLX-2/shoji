@@ -4,7 +4,7 @@ import type { ComparedPage } from "../../runtime/src/compare";
 import type { RuntimeEvent } from "../../runtime/src/events";
 import App from "../App";
 import { fakeBridge } from "../test/fakeBridge";
-import { foldRun } from "./fold";
+import { foldRun, lookScore, reviewNotes } from "./fold";
 
 const SONNET = "claude-sonnet-5-5";
 const build: RuntimeEvent = { type: "step", step: "build", role: "build", model: SONNET, status: "running" };
@@ -102,6 +102,21 @@ describe("a run's pages before and after", () => {
     await fake.exit(0);
     expect(screen.getByText("Compared the pages before and after", { selector: ".sl" })).toBeTruthy();
     expect(screen.getByText(/^Ready to accept/, { selector: ".outcome" })).toBeTruthy();
+  });
+
+  it("says the review's look score on its line, and keeps the score out of its notes", async () => {
+    expect(lookScore("VERDICT: FIX\nLOOK: 6/10\n1. Wraps at 360px.")).toBe(6);
+    expect(lookScore("VERDICT: APPROVE")).toBeUndefined();
+    expect(reviewNotes("VERDICT: FIX\nLOOK: 6/10\n1. Wraps at 360px.")).toBe("1. Wraps at 360px.");
+
+    const fake = await startThread();
+    const review = (output: string): RuntimeEvent[] => [
+      { type: "step", step: "review", role: "review", model: "claude-haiku-5-5", status: "running" },
+      { type: "step", step: "review", role: "review", model: "claude-haiku-5-5", status: "done", output },
+    ];
+    await fake.emit(build, look, built, ...review("VERDICT: FIX\nLOOK: 6/10\n1. The price wraps at 360px."));
+    expect(screen.getByText("The review asked for fixes · the look scored 6 of 10")).toBeTruthy();
+    expect(screen.queryByText(/LOOK:/)).toBeNull();
   });
 
   it("opens from the conversation at the page asked for", async () => {

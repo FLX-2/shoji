@@ -1,3 +1,4 @@
+mod found;
 mod chatgpt;
 mod keys;
 mod ledger;
@@ -93,6 +94,16 @@ fn use_shell_key(provider: Option<String>) -> Result<(), String> {
 #[tauri::command]
 fn forget_key(provider: Option<String>) -> Result<(), String> {
     keys::forget(keys::keyed(provider.as_deref().unwrap_or("anthropic"))?)
+}
+
+/// Git projects the person worked on with Claude Code or Codex, for setup to offer.
+#[tauri::command]
+async fn found_projects() -> Vec<found::FoundProject> {
+    let Some(home) = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }) else { return vec![] };
+    let codex = std::env::var_os("CODEX_HOME").filter(|d| !d.is_empty()).map(std::path::PathBuf::from);
+    tauri::async_runtime::spawn_blocking(move || found::found_in(Path::new(&home), codex))
+        .await
+        .unwrap_or_default()
 }
 
 /// Every key a run of this stack gets, and the ChatGPT sign-in's token when a role is on the plan.
@@ -266,6 +277,9 @@ struct RunRequest {
     mcp_servers: Option<serde_json::Value>,
     /// The project's dev command, which Build may start to look at pages. None or empty: Build doesn't look.
     dev_command: Option<String>,
+    /// With a dev command: Review sees the pages Build looked at, before and after, and scores the look.
+    #[serde(default)]
+    look_review: bool,
     /// For a new thread that carries on a committed one: the branch its copy starts from. None starts
     /// from the project's last commit.
     from: Option<String>,
@@ -432,6 +446,9 @@ fn start_run(
     // Where the pages Build looked at are saved before and after the work, beside the run's log.
     if request.dev_command.as_deref().is_some_and(|c| !c.trim().is_empty()) {
         args.push(format!("--shots-dir={}", runs.join(format!("{stamp}-shots")).display()));
+        if request.look_review {
+            args.push("--look-review".into());
+        }
     }
     if let Some(changes) = request.changes {
         let plan = runs.join(format!("{stamp}-plan.md"));
@@ -1273,6 +1290,7 @@ pub fn run() {
             openrouter_connect,
             openrouter_models,
             pick_project,
+            found_projects,
             pick_attachments,
             save_attachment,
             start_run,
