@@ -2,6 +2,7 @@ mod chatgpt;
 mod keys;
 mod ledger;
 mod ollama;
+mod openrouter;
 mod push;
 mod updates;
 #[cfg(unix)]
@@ -152,6 +153,19 @@ async fn chatgpt_sign_out(store: State<'_, chatgpt::Store>) -> Result<Option<Str
 #[tauri::command]
 fn chatgpt_manage_usage() -> Result<(), String> {
     open_in_browser(chatgpt::USAGE_PAGE)
+}
+
+/// Connects OpenRouter in the browser and keeps the key it hands back in the keychain.
+#[tauri::command]
+async fn openrouter_connect() -> Result<(), String> {
+    let key = openrouter::connect(open_in_browser).await?;
+    keys::save(keys::keyed("openrouter")?, &key)
+}
+
+/// The models OpenRouter lists that can use tools, dearest first.
+#[tauri::command]
+async fn openrouter_models() -> Result<Vec<openrouter::Listed>, String> {
+    openrouter::models().await
 }
 
 /// The models the person's ChatGPT plan offers. Empty when signed out.
@@ -1256,6 +1270,8 @@ pub fn run() {
             chatgpt_sign_out,
             chatgpt_models,
             chatgpt_manage_usage,
+            openrouter_connect,
+            openrouter_models,
             pick_project,
             pick_attachments,
             save_attachment,

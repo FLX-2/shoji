@@ -33,7 +33,9 @@ export const priceLine = (id: ModelId) =>
     ? "Free, on this computer"
     : MODELS[id].billing === "plan"
       ? "Using your ChatGPT plan"
-      : `${dollars(MODELS[id].input)} in, ${dollars(MODELS[id].output)} out`;
+      : MODELS[id].input === 0 && MODELS[id].output === 0
+        ? "Free on OpenRouter"
+        : `${dollars(MODELS[id].input)} in, ${dollars(MODELS[id].output)} out`;
 
 const dollars = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
 

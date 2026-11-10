@@ -82,7 +82,7 @@ fn now_ms() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
 }
 
-fn random(bytes: usize) -> String {
+pub(crate) fn random(bytes: usize) -> String {
     let mut buf = vec![0u8; bytes];
     getrandom::fill(&mut buf).expect("the system has no randomness");
     URL_SAFE_NO_PAD.encode(buf)
@@ -403,7 +403,7 @@ pub fn callback_query(request: &str) -> Option<HashMap<String, String>> {
 
 const DONE_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Shoji</title><body style=\"font:16px system-ui;margin:48px;background:#141413;color:#f2efe9\"><p>You can close this tab and go back to Shoji.</p>";
 
-async fn wait_for_callback(listener: &TcpListener, deadline: Instant) -> Result<HashMap<String, String>, String> {
+pub(crate) async fn wait_for_callback(listener: &TcpListener, deadline: Instant) -> Result<HashMap<String, String>, String> {
     loop {
         let left = deadline.saturating_duration_since(Instant::now());
         let (mut stream, _) = tokio::time::timeout(left, listener.accept())

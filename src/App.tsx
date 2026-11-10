@@ -25,6 +25,7 @@ import { SetupView } from "./setup/SetupView";
 import { notesProgress, useNotes } from "./setup/useNotes";
 import { useModelCatalog } from "./stack/catalog";
 import { useChatGPT } from "./stack/chatgpt";
+import { useOpenRouter } from "./stack/openrouter";
 import { ReachContext } from "./stack/reach";
 import { useOllama } from "./stack/ollama";
 import { StackView } from "./stack/StackView";
@@ -79,6 +80,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const catalog = useModelCatalog(prefs.updateModels);
   const ollama = useOllama(given);
   const chatgpt = useChatGPT(given);
+  const openrouter = useOpenRouter(given);
   // The models there at first are known ones; only a model the list brings later is new.
   useEffect(() => {
     if (!prefs.seenModels) setPrefs({ seenModels: Object.keys(MODELS) });
@@ -283,7 +285,9 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
         ? chatgpt.status === "signed-out"
         : provider === "openai"
           ? !openaiConnected
-          : false,
+          : provider === "openrouter"
+            ? openrouter.status === "disconnected"
+            : false,
   );
   // Lists offer Anthropic's models always, as Setup asks for its key, and others once their provider is connected.
   const reaches = useCallback(
@@ -291,9 +295,10 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       const provider = providerOf(model);
       if (provider === "openai") return openaiConnected;
       if (provider === "chatgpt") return chatgpt.status === "signed-in";
-      return provider !== "openrouter";
+      if (provider === "openrouter") return openrouter.status === "connected";
+      return true;
     },
-    [openaiConnected, chatgpt.status],
+    [openaiConnected, chatgpt.status, openrouter.status],
   );
   const hasKey = !unconnected;
   // Scheduled tasks start by themselves, never past the daily limit, since nobody may be here to say yes.
@@ -1023,6 +1028,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 ollama={ollama}
                 chatgpt={chatgpt}
                 openaiKey={openaiKey}
+                openrouter={openrouter}
                 onSaveOpenAIKey={(key) => bridge.saveKey(key, "openai").then(refreshOpenAIKey)}
                 onForgetOpenAIKey={() => bridge.forgetKey("openai").then(refreshOpenAIKey)}
                 onManageUsage={() => void bridge.chatgptManageUsage().catch(() => {})}

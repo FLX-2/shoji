@@ -1,12 +1,16 @@
 import { providerOf, type ModelId, type ProviderId } from "./models";
 import { OllamaProvider, ollamaUrl } from "./ollama";
 import { OpenAIError, OpenAIProvider } from "./openai";
+
+/** OpenRouter's API, which takes OpenAI's Responses format for every model it routes to. */
+export const OPENROUTER_API = "https://openrouter.ai/api/v1";
 import { AnthropicProvider, notConnected, type ModelProvider, Providers } from "./provider";
 
 /** Where the app hands a run each provider's key. The keys never appear in a flag, where other programs see them. */
 export const KEY_ENV: Readonly<Partial<Record<ProviderId, readonly string[]>>> = {
   anthropic: ["SHOJI_API_KEY", "ANTHROPIC_API_KEY"],
   openai: ["SHOJI_OPENAI_KEY", "OPENAI_API_KEY"],
+  openrouter: ["SHOJI_OPENROUTER_KEY", "OPENROUTER_API_KEY"],
 };
 
 /** A ChatGPT access token lasts an hour; one this close to its end is renewed before a call. */
@@ -45,6 +49,15 @@ export function connect(env: NodeJS.ProcessEnv, options: Connections = {}): Prov
   if (anthropic) connected.anthropic = new AnthropicProvider(anthropic, options.anthropicUrl);
   const openai = keyOf(env, "openai");
   if (openai) connected.openai = new OpenAIProvider({ plan: false, credential: async () => openai });
+  const openrouter = keyOf(env, "openrouter");
+  if (openrouter)
+    connected.openrouter = new OpenAIProvider({
+      plan: false,
+      service: "OpenRouter",
+      baseURL: OPENROUTER_API,
+      headers: { "HTTP-Referer": "https://github.com/FLX-2/shoji", "X-Title": "Shoji" },
+      credential: async () => openrouter,
+    });
   const plan = env.SHOJI_CHATGPT_TOKEN?.trim();
   if (plan)
     connected.chatgpt = new OpenAIProvider({

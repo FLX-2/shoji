@@ -132,6 +132,27 @@ const failed = (status: number, code: string, param?: string) => () =>
   new Response(JSON.stringify({ error: { code, message: code, param } }), { status });
 
 describe("OpenAIProvider", () => {
+  it("sends a key's tools flat, since only the plan's route groups them", () => {
+    const body = toRequest(request, false);
+    expect((body.tools as { type: string; name: string }[])[0]).toMatchObject({ type: "function", name: "read_file" });
+    const items = toInput([{ role: "assistant", content: [{ type: "tool_use", id: "c", name: "read_file", input: {} }] }], false);
+    expect(items[0]).not.toHaveProperty("namespace");
+  });
+
+  it("reaches OpenRouter by its own address and names it, whose error codes are numbers", async () => {
+    const { fake } = openai(() => new Response(JSON.stringify({ error: { code: 402, message: "Insufficient credits" } }), { status: 402 }));
+    const provider = new OpenAIProvider({
+      plan: false,
+      service: "OpenRouter",
+      baseURL: "https://openrouter.ai/api/v1",
+      credential: async () => "sk-or",
+      fetch: fake,
+    });
+    await expect(provider.send({ ...request, model: "openrouter/vendor/large" })).rejects.toThrow(
+      "Your OpenRouter account is out of credit. Add credit on OpenRouter's site, then try again.",
+    );
+  });
+
   it("answers a call on the plan", async () => {
     const { fake, sent } = openai(ok(completed([toolCall])));
     const provider = new OpenAIProvider({ plan: true, credential: async () => "tok", fetch: fake });

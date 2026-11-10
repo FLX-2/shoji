@@ -29,6 +29,12 @@ pub const KEYED: &[Keyed] = &[
         run_env: "SHOJI_OPENAI_KEY",
         shell_env: &["SHOJI_OPENAI_KEY", "OPENAI_API_KEY"],
     },
+    Keyed {
+        id: "openrouter",
+        name: "OpenRouter",
+        run_env: "SHOJI_OPENROUTER_KEY",
+        shell_env: &["SHOJI_OPENROUTER_KEY", "OPENROUTER_API_KEY"],
+    },
 ];
 
 pub fn keyed(provider: &str) -> Result<&'static Keyed, String> {
@@ -92,7 +98,11 @@ pub fn run_env(stack: &serde_json::Value, key: impl Fn(&Keyed) -> Option<String>
     for model in models_of(stack) {
         if let Some(needed) = KEYED.iter().find(|k| k.id == provider_of(model)) {
             if key(needed).is_none() {
-                return Err(format!("Add your {} API key in Settings first.", needed.name));
+                return Err(if needed.id == "openrouter" {
+                    "Connect OpenRouter in Settings first.".to_string()
+                } else {
+                    format!("Add your {} API key in Settings first.", needed.name)
+                });
             }
         }
     }

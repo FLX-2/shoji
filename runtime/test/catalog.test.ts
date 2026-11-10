@@ -53,6 +53,12 @@ describe("the model list", () => {
     );
     expect(broken((l) => (l.models["claude-sonnet-6"].label = "Sonnet\n6"))).toThrow(/names a model/);
     expect(() => parseCatalog(null)).toThrow();
+    // A model OpenRouter offers free may say so, since its id does.
+    const routedFree = { label: "Vendor: Small", input: 0, output: 0, cacheRead: 0 };
+    expect(parseCatalog({ ...LIST, models: { "openrouter/vendor/small:free": routedFree } }).models).toHaveProperty(
+      "openrouter/vendor/small:free",
+    );
+    expect(() => parseCatalog({ ...LIST, models: { "openrouter/vendor/small": routedFree } })).toThrow(/prices/);
   });
 
   it("is published in the repository, the same as the built-in list so a new install starts current", () => {

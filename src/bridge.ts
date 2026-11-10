@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { CallRecord, RuntimeEvent } from "../runtime/src/events";
 import type { McpServer } from "../runtime/src/mcpConfig";
-import type { Catalog } from "../runtime/src/models";
+import { MODELS, pricesListed, providerOf, type Catalog, type ModelId, type ModelInfo } from "../runtime/src/models";
 import type { NotesEvent } from "../runtime/src/notes";
 import type { Stack } from "../runtime/src/stack";
 import type { TrialEvent, TrialTask } from "../runtime/src/trial";
@@ -28,7 +28,16 @@ export interface PlanModel {
 }
 
 /** The providers Shoji keeps an API key for. */
-export type KeyedProvider = "anthropic" | "openai";
+export type KeyedProvider = "anthropic" | "openai" | "openrouter";
+
+/** A model OpenRouter lists that can use tools: its id there, its name, and its prices per million tokens. */
+export interface RoutedModel {
+  id: string;
+  name: string;
+  input: number;
+  output: number;
+  cacheRead: number;
+}
 
 export interface KeyStatus {
   saved: boolean;
@@ -121,6 +130,16 @@ export interface Carried {
   devCommandFor?: (repo: string) => string;
 }
 
+/** The OpenRouter models a stack names, with the prices OpenRouter listed. */
+function routedIn(stack: Stack): Record<ModelId, ModelInfo> {
+  return Object.fromEntries(
+    Object.values(stack)
+      .map((seat) => seat.model)
+      .filter((model) => providerOf(model) === "openrouter" && model in MODELS)
+      .map((model) => [model, MODELS[model]]),
+  );
+}
+
 /** Servers in the shape the runtime's --mcp-json reads. */
 function serversJson(servers: McpServer[]) {
   return { mcpServers: Object.fromEntries(servers.map(({ name, ...server }) => [name, server])) };
@@ -128,9 +147,15 @@ function serversJson(servers: McpServer[]) {
 
 /** The bridge, with the person's private files and the model list added to everything that starts the runtime. */
 export function carrying(bridge: Bridge, carried: () => Carried): Bridge {
-  const add = <T extends object>(request: T) => {
+  const add = <T extends { stack: Stack }>(request: T) => {
     const { privateFiles, models } = carried();
-    return { ...request, privateFiles, ...(models && { models: { version: 1 as const, ...models } }) };
+    // The runtime can't ask OpenRouter for its prices, so a stack's OpenRouter models go with the list.
+    const routed = routedIn(request.stack);
+    const list =
+      models || Object.keys(routed).length
+        ? { version: 1 as const, updated: models?.updated ?? pricesListed(), models: { ...models?.models, ...routed } }
+        : undefined;
+    return { ...request, privateFiles, ...(list && { models: list }) };
   };
   return {
     ...bridge,
@@ -243,6 +268,10 @@ export const bridge = {
   chatgptSignOut: () => invoke<string | null>("chatgpt_sign_out"),
   /** The models the person's ChatGPT plan offers. Empty when signed out. */
   chatgptModels: () => invoke<PlanModel[]>("chatgpt_models"),
+  /** Connects OpenRouter in the browser and keeps the key it hands back. Waits until the person says yes or no. */
+  openrouterConnect: () => invoke<void>("openrouter_connect"),
+  /** The models OpenRouter lists that can use tools, dearest first. */
+  openrouterModels: () => invoke<RoutedModel[]>("openrouter_models"),
   /** Opens ChatGPT's settings in the browser, where the person manages their plan's usage. */
   chatgptManageUsage: () => invoke<void>("chatgpt_manage_usage"),
   pickProject: () => invoke<string | null>("pick_project"),

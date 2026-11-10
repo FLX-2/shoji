@@ -9,7 +9,8 @@ import { KeyRejectedError, type ModelProvider, type ModelRequest } from "./provi
 
 export const OPENAI_API = "https://api.openai.com/v1";
 
-/** Every tool goes in one namespace: the plan route asks for tools grouped so, and calls come back in it. */
+/** On a plan every tool goes in one namespace: that route asks for tools grouped so, and calls come back in it.
+ *  An API key's route takes them flat. */
 export const NAMESPACE = "shoji";
 
 /** A plan has run out for now, as a thread's limit does: the thread stops and can carry on later. */
@@ -42,7 +43,7 @@ function toolOutput(content: Anthropic.ToolResultBlockParam["content"]): string 
 }
 
 /** The conversation as Responses input items. Thinking stays behind: it isn't stored, so it can't be sent back. */
-export function toInput(messages: Anthropic.MessageParam[]): Item[] {
+export function toInput(messages: Anthropic.MessageParam[], grouped = true): Item[] {
   const items: Item[] = [];
   for (const message of messages) {
     const blocks: Anthropic.ContentBlockParam[] =
@@ -63,7 +64,7 @@ export function toInput(messages: Anthropic.MessageParam[]): Item[] {
             type: "function_call",
             call_id: block.id,
             name: block.name,
-            namespace: NAMESPACE,
+            ...(grouped && { namespace: NAMESPACE }),
             arguments: JSON.stringify(block.input ?? {}),
           });
       }
@@ -72,30 +73,26 @@ export function toInput(messages: Anthropic.MessageParam[]): Item[] {
   return items;
 }
 
-/** The request body for one call. A plan sets no output limit, which its route doesn't take. */
+/** The request body for one call. A plan sets no output limit, which its route doesn't take, and groups the tools. */
 export function toRequest(request: ModelRequest, plan: boolean, drop: string[] = []): Record<string, unknown> {
+  const tools = request.tools?.map((tool) => ({
+    type: "function",
+    name: tool.name,
+    description: tool.description ?? "",
+    parameters: tool.input_schema,
+  }));
   const body: Record<string, unknown> = {
     model: apiName(request.model),
     instructions: request.system,
-    input: toInput(request.messages),
+    input: toInput(request.messages, plan),
     reasoning: { effort: EFFORT[request.effort] },
     store: false,
     stream: true,
   };
-  if (request.tools?.length)
-    body.tools = [
-      {
-        type: "namespace",
-        name: NAMESPACE,
-        description: "Shoji's tools for working in the person's project.",
-        tools: request.tools.map((tool) => ({
-          type: "function",
-          name: tool.name,
-          description: tool.description ?? "",
-          parameters: tool.input_schema,
-        })),
-      },
-    ];
+  if (tools?.length)
+    body.tools = plan
+      ? [{ type: "namespace", name: NAMESPACE, description: "Shoji's tools for working in the person's project.", tools }]
+      : tools;
   if (!plan) body.max_output_tokens = request.maxTokens;
   for (const field of drop) delete body[field];
   return body;
@@ -220,6 +217,10 @@ export interface OpenAIOptions {
   /** A current access token or API key. A plan's token is asked for before each call, since it lasts an hour. */
   credential: (fresh?: boolean) => Promise<string>;
   baseURL?: string;
+  /** Who answers on a key, as the person knows them: OpenAI unless said otherwise, such as OpenRouter. */
+  service?: string;
+  /** Headers every call carries beyond the key, such as the app's name for OpenRouter. */
+  headers?: Record<string, string>;
   fetch?: typeof fetch;
   /** How long to wait before trying a busy service again, in ms; tests make it 0. */
   backoff?: number;
@@ -273,6 +274,7 @@ export class OpenAIProvider implements ModelProvider {
           authorization: `Bearer ${credential}`,
           "content-type": "application/json",
           accept: "text/event-stream",
+          ...this.options.headers,
         },
         body: JSON.stringify(toRequest(request, this.options.plan, drop)),
       });
@@ -283,7 +285,8 @@ export class OpenAIProvider implements ModelProvider {
       const said = (await answer.json().catch(() => ({}))) as { error?: { code?: string; message?: string; param?: string } };
       throw new OpenAIError(
         answer.status,
-        said.error?.code ?? null,
+        // OpenRouter's codes are numbers, the HTTP status again; only OpenAI's words say more.
+        typeof said.error?.code === "string" ? said.error.code : null,
         said.error?.message ?? answer.statusText,
         said.error?.param ?? null,
       );
@@ -297,8 +300,8 @@ export class OpenAIProvider implements ModelProvider {
     const name = MODELS[model]?.label ?? apiName(model);
     const code = error.code ?? "";
     const plan = this.options.plan;
-    if (code === "unreachable")
-      return new Error(`Shoji couldn't reach ${plan ? "ChatGPT" : "OpenAI"}. Check your internet connection, then try again.`);
+    const who = plan ? "ChatGPT" : (this.options.service ?? "OpenAI");
+    if (code === "unreachable") return new Error(`Shoji couldn't reach ${who}. Check your internet connection, then try again.`);
     if (code === "subscription_sharing_usage_limit_exceeded")
       return new PlanLimitError(
         "Your ChatGPT plan has reached its limit for Shoji for now. Manage usage in ChatGPT's settings, then carry on.",
@@ -307,16 +310,15 @@ export class OpenAIProvider implements ModelProvider {
       return new Error("Your ChatGPT plan can't be used in other apps. Plus and Pro plans can.");
     if (plan && (error.status === 401 || code === "subscription_sharing_invalid_user" || code === "signed_out"))
       return new KeyRejectedError("ChatGPT signed Shoji out. Sign in with ChatGPT again in Settings.");
-    if (!plan && error.status === 401) return new KeyRejectedError("OpenAI didn't accept your API key. Check it in Settings.");
-    if (!plan && code === "insufficient_quota")
-      return new Error("Your OpenAI account is out of credit. Add credit on OpenAI's platform, then try again.");
+    if (!plan && error.status === 401) return new KeyRejectedError(`${who} didn't accept your key. Check it in Settings.`);
+    if (!plan && (code === "insufficient_quota" || error.status === 402))
+      return new Error(`Your ${who} account is out of credit. Add credit on ${who}'s site, then try again.`);
     if (error.status === 404 || code === "model_not_found")
-      return new Error(`${plan ? "Your ChatGPT plan" : "OpenAI"} doesn't offer ${name} here. Pick another model in Stack.`);
-    if (error.status === 429)
-      return new Error(`${plan ? "ChatGPT" : "OpenAI"} is limiting how fast Shoji can send. Wait a minute, then try again.`);
+      return new Error(`${plan ? "Your ChatGPT plan" : who} doesn't offer ${name} here. Pick another model in Stack.`);
+    if (error.status === 429) return new Error(`${who} is limiting how fast Shoji can send. Wait a minute, then try again.`);
     if (error.status === 503 || /unavailable/.test(code))
-      return new Error(`${plan ? "ChatGPT" : "OpenAI"} couldn't take the request right now. Try again in a few minutes.`);
+      return new Error(`${who} couldn't take the request right now. Try again in a few minutes.`);
     if (code === "interrupted") return new Error(`${name}'s answer stopped partway. Try again.`);
-    return new Error(`${plan ? "ChatGPT" : "OpenAI"} turned the request down: ${error.message}`);
+    return new Error(`${who} turned the request down: ${error.message}`);
   }
 }

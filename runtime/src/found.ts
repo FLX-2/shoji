@@ -49,3 +49,11 @@ export function foundModelsIn(stack: unknown): Record<ModelId, ModelInfo> {
   }
   return Object.fromEntries(found);
 }
+
+/** A model OpenRouter lists, by its own name and prices, which OpenRouter charges to the person's credit. */
+export function routedModel(id: string, name: string, input: number, output: number, cacheRead: number): [ModelId, ModelInfo] {
+  return [
+    `openrouter/${id}`,
+    { label: name.length > LONGEST_LABEL ? `${name.slice(0, LONGEST_LABEL - 1)}…` : name, input, output, cacheRead },
+  ];
+}

@@ -85,12 +85,24 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   let threads = 0;
   /** The OpenAI key's status; tests set it with setOpenAIKey. */
   let openai: KeyStatus = { saved: false, fromEnv: false };
+  /** OpenRouter's key, which connecting saves. */
+  let router: KeyStatus = { saved: false, fromEnv: false };
+  /** OpenRouter's tool-ready models, and what connecting fails with; tests set these. */
+  const openrouter = {
+    models: [
+      { id: "vendor/large", name: "Vendor: Large", input: 3, output: 15, cacheRead: 0.3 },
+      { id: "vendor/small:free", name: "Vendor: Small (free)", input: 0, output: 0, cacheRead: 0 },
+    ],
+    connectError: null as string | null,
+    connects: 0,
+  };
 
   const bridge: Bridge = {
-    keyStatus: async (provider) => (provider === "openai" ? openai : key),
+    keyStatus: async (provider) => (provider === "openai" ? openai : provider === "openrouter" ? router : key),
     saveKey: async (value, provider) => {
       calls.savedKeys.push(value);
       if (provider === "openai") openai = { ...openai, saved: true };
+      else if (provider === "openrouter") router = { ...router, saved: true };
       else key = { ...key, saved: true };
     },
     useShellKey: async () => {
@@ -101,6 +113,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     forgetKey: async (provider) => {
       calls.forgot++;
       if (provider === "openai") openai = { ...openai, saved: false };
+      else if (provider === "openrouter") router = { ...router, saved: false };
       else key = { ...key, saved: false };
     },
     ollamaModels: async () => {
@@ -120,6 +133,12 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       return null;
     },
     chatgptModels: async () => (chatgpt.email ? [...chatgpt.models] : []),
+    openrouterConnect: async () => {
+      openrouter.connects++;
+      if (openrouter.connectError) throw new Error(openrouter.connectError);
+      router = { ...router, saved: true };
+    },
+    openrouterModels: async () => [...openrouter.models],
     chatgptManageUsage: async () => {
       chatgpt.usageOpened++;
     },
@@ -308,6 +327,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     setOpenAIKey: (status: KeyStatus) => {
       openai = status;
     },
+    openrouter,
     /** Sends events from the latest run. */
     emit: (...events: RuntimeEvent[]) => act(() => events.forEach((event) => onEvent.forEach((h) => h(runs, event)))),
     /** Sends trial events from the latest run. */

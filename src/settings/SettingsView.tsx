@@ -1,6 +1,8 @@
 import type { ChatGPT } from "../stack/chatgpt";
 import type { Ollama } from "../stack/ollama";
 import { ChatGPTRow } from "./ChatGPTRow";
+import { OpenRouterRow } from "./OpenRouterRow";
+import type { OpenRouter } from "../stack/openrouter";
 import { OllamaRow } from "./OllamaRow";
 import { useState } from "react";
 import { type McpServer, parseMcpServers } from "../../runtime/src/mcpConfig";
@@ -39,6 +41,7 @@ interface SettingsViewProps {
   chatgpt: ChatGPT;
   onManageUsage: () => void;
   openaiKey: KeyStatus | null;
+  openrouter: OpenRouter;
   onSaveOpenAIKey: (key: string) => Promise<void>;
   onForgetOpenAIKey: () => Promise<void>;
   onSaveKey: (key: string) => Promise<void>;
@@ -73,6 +76,7 @@ export function SettingsView({
   chatgpt,
   onManageUsage,
   openaiKey,
+  openrouter,
   onSaveOpenAIKey,
   onForgetOpenAIKey,
   onSaveKey,
@@ -185,6 +189,7 @@ export function SettingsView({
                       onSave={onSaveOpenAIKey}
                       onForget={onForgetOpenAIKey}
                     />
+                    <OpenRouterRow openrouter={openrouter} />
                     <OllamaRow ollama={ollama} />
                     <div className="srow">
                       <div>
@@ -284,6 +289,7 @@ function Shortcuts() {
 const KEY_ROWS = {
   anthropic: { name: "Anthropic", placeholder: "sk-ant-…" },
   openai: { name: "OpenAI", placeholder: "sk-…" },
+  openrouter: { name: "OpenRouter", placeholder: "sk-or-…" },
 } as const;
 
 function KeyRow({

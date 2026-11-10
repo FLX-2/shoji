@@ -113,8 +113,9 @@ export function parseCatalog(value: unknown): Catalog {
     if (billing !== undefined && !BILLINGS.includes(billing as string)) {
       throw new Error(`The model list's billing for ${id} isn't one Shoji knows.`);
     }
-    // Only a model that charges nothing may be listed as free.
-    const free = billing !== undefined;
+    // Only a model that charges nothing may be listed as free: one on the person's computer or plan, or one
+    // OpenRouter offers free, which its id says.
+    const free = billing !== undefined || /^openrouter\/.+:free$/.test(id);
     if (!price(input, free) || !price(output, free) || !price(cacheRead, true)) {
       throw new Error(`The model list's prices for ${id} aren't usable.`);
     }

@@ -350,11 +350,15 @@ export function HomeView({
           </p>
         ) : !hasKey ? (
           <p className="hint">
-            {unconnected === "chatgpt"
-              ? "Your stack uses ChatGPT's models."
+            {unconnected === "chatgpt" || unconnected === "openrouter"
+              ? `Your stack uses ${PROVIDER_NAMES[unconnected]}'s models.`
               : `Shoji needs your ${PROVIDER_NAMES[unconnected ?? "anthropic"]} API key to run.`}{" "}
             <button type="button" className="link" onClick={onOpenSettings}>
-              {unconnected === "chatgpt" ? "Sign in with ChatGPT in Settings" : "Add it in Settings"}
+              {unconnected === "chatgpt"
+                ? "Sign in with ChatGPT in Settings"
+                : unconnected === "openrouter"
+                  ? "Connect OpenRouter in Settings"
+                  : "Add it in Settings"}
             </button>
           </p>
         ) : !repo ? (
