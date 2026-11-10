@@ -1982,7 +1982,9 @@
   box-sizing: border-box;
   cursor: pointer;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  /* Name, counts, and a short bar of added against removed: one line per file, the colour kept to a small mark. */
+  grid-template-columns: minmax(0, 1fr) auto 36px;
+  align-items: center;
   gap: 6px 10px;
   padding: 11px 16px;
   border-bottom: 1px solid var(--hair2);
@@ -2031,7 +2033,7 @@
 }
 
 .fl .bar {
-  grid-column: 1 / -1;
+  grid-column: 3;
   display: flex;
   height: 3px;
   border-radius: 2px;
@@ -3787,6 +3789,18 @@ button.rrow:focus-visible {
 .threads > .home,
 .threads > .empty {
   min-width: 0;
+}
+
+/* Three panes don't fit a laptop window: while the side panel is open, the thread list steps aside so the
+   conversation keeps room to read. Closing the panel brings it back. */
+@media (max-width: 1439px) {
+  .threads:has(#side-panel) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .threads:has(#side-panel) > .tlist {
+    display: none;
+  }
 }
 
 .tlist {
