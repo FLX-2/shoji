@@ -136,7 +136,7 @@ The builds aren't signed yet, so your system asks once before opening one.
 - **Mac:** the first time, Control-click the app and choose Open. If macOS still blocks it, allow it under System Settings, Privacy & Security.
 - **Windows:** if SmartScreen stops the installer, choose More info, then Run anyway.
 
-Shoji is free. You pay for the models your tasks use, with your own API key from Anthropic, OpenAI or OpenRouter. With ChatGPT Plus or Pro you can sign in instead and run OpenAI's models on your plan, and with [Ollama](https://ollama.com) models run free on your computer. The first time Shoji opens, setup connects Anthropic, your ChatGPT plan or Ollama, picks a stack, opens a project and lets you choose a look. A project must be a git repo with at least one commit.
+Shoji is free. You pay for the models your tasks use, with your own API key from Anthropic, OpenAI or OpenRouter. With ChatGPT Plus or Pro you can sign in instead and run OpenAI's models on your plan, and with [Ollama](https://ollama.com) models run free on your computer. The first time Shoji opens, one Welcome page connects Anthropic, your ChatGPT plan or Ollama, picks a starting stack and opens a project. A project must be a git repo with at least one commit.
 
 ## Build from source
 
@@ -164,7 +164,7 @@ The agent runtime in `runtime/` also runs on its own, on any git project. See [t
 
 ## Status
 
-Shoji 0.2 adds more models: OpenAI's with an API key or your ChatGPT plan, hundreds more through OpenRouter, and local models with Ollama. Mac comes first, and Windows and Linux build from the same code on every change.
+Shoji 0.2 adds more models: OpenAI's with an API key or your ChatGPT plan, hundreds more through OpenRouter, and local models with Ollama. Review now judges the look of the pages Build changed, and first run is a single Welcome page. Mac comes first, and Windows and Linux build from the same code on every change.
 
 Found a bug or want something? [Open an issue](https://github.com/FLX-2/shoji/issues/new/choose). To work on Shoji itself, read [CONTRIBUTING](CONTRIBUTING.md).
 

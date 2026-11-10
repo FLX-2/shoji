@@ -10,7 +10,7 @@ Everything Shoji does, in detail. For a quick look, start with the [README](../R
 
 ## First run
 
-The first time Shoji opens, setup connects Anthropic, your ChatGPT plan or Ollama, picks a stack, opens a project and lets you choose a look. The project must be a git repo with at least one commit, and git needs your `user.name` and `user.email` set so Shoji can commit under your name.
+The first time Shoji opens, one Welcome page connects Anthropic, your ChatGPT plan or Ollama, picks a starting stack and opens a project. Besides the projects Shoji already knows, it offers git projects you worked on in Claude Code or Codex, found from the folder each of their sessions ran in. Nothing else is read from them. The look is in Settings. The project must be a git repo with at least one commit, and git needs your `user.name` and `user.email` set so Shoji can commit under your name.
 
 Connect any of these in Settings, under Models and keys:
 
@@ -40,6 +40,8 @@ A role can run the project's checks at any time. Any other command, such as inst
 **MCP servers.** Add servers in Settings, under Tools, by pasting the JSON from a server's README (`{"mcpServers": {…}}`, with a `command` or a `url`). Each run starts them in the thread's copy of the project. Scout gets the tools that only look; Build gets them all. A tool that could change something waits for you, like a command. A server that can't be reached is named in the conversation, and the run goes on without it.
 
 **Looking at pages.** Build can start the project's dev server in its copy and open a page in a headless browser at 360, 768 or 1280 px. It sees a screenshot, the page's title and any errors in its console, so it can check a change to what a page shows. It uses the dev command Preview uses, and Chrome, Edge, Chromium or Brave from this computer (or the browser `SHOJI_BROWSER` names), with a profile of its own that's deleted after. The server and the browser stop when the run ends. Turn it off in Settings, under Tools.
+
+**Look review.** When Build looked at pages, Review sees each page before the change and after it, at 360 and 1280 px, and scores the look out of 10. A look under 8 goes back to Build within the usual fix rounds, and the review's line in the thread gives the score. Each page adds four small screenshots to the review. Turn it off in Settings, under Tools, with Let Review judge the look.
 
 **Commands and skills.** Shoji reads the same files Claude Code does. Type / at the start of a task or a request to pick one of the project's commands (`.claude/commands/*.md`) or your own (`~/.claude/commands`). The command's text becomes the task, with what you type after it in place of `$ARGUMENTS`, or `$1`, `$2` and on. Skills (`.claude/skills/<name>/SKILL.md`, and your own in `~/.claude/skills`) are listed for Scout and Build by name and description, and a role reads one in full when the task calls for it. Commands and skills you keep out of git still reach a thread's copy of the project. Shoji doesn't run the `!` shell lines some commands hold.
 
