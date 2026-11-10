@@ -137,4 +137,19 @@ describe("the thread's side panel", () => {
     await fake.emit(edit("src/Card.tsx"), look);
     expect(shown()).toBeNull();
   });
+  it("resizes from its edge, keeps the width for next time, and resets on a double click", async () => {
+    await startThread();
+    fireEvent.click(toggle());
+    const thread = document.querySelector(".thread") as HTMLElement;
+    thread.getBoundingClientRect = () => ({ left: 0, right: 1400, width: 1400, top: 0, bottom: 800, height: 800, x: 0, y: 0, toJSON() {} });
+    const edge = screen.getByRole("separator", { name: "Resize the side panel" });
+    // jsdom lays nothing out, so the first step lands on the narrowest panel, and the next widens it.
+    fireEvent.keyDown(edge, { key: "ArrowLeft" });
+    fireEvent.keyDown(edge, { key: "ArrowLeft" });
+    expect(thread.style.gridTemplateColumns).toBe("minmax(360px, 1fr) min(344px, calc(100% - 360px))");
+    expect(localStorage.getItem("shoji.panelWidth")).toBe("344");
+    fireEvent.doubleClick(edge);
+    expect(thread.style.gridTemplateColumns).toBe("");
+    expect(localStorage.getItem("shoji.panelWidth")).toBeNull();
+  });
 });

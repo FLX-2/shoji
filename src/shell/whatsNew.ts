@@ -1,7 +1,7 @@
 /** What each minor release brings, said once on the first open after the update. A release with nothing worth
  *  saying has no entry, and says nothing. */
 export const WHATS_NEW: Record<string, string> = {
-  "0.2": "New in Shoji 0.2: more models. Sign in with ChatGPT, add an OpenAI key, connect OpenRouter, or run models on this computer with Ollama.",
+  "0.2": "Shoji 0.2 runs more models: ChatGPT, OpenAI, OpenRouter and Ollama.",
 };
 
 /** "0.2" for 0.2.3. Point releases share their minor release's news. */

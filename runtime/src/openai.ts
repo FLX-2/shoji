@@ -158,6 +158,15 @@ export function toMessage(response: ResponsesResult, model: ModelId): Anthropic.
   } as unknown as Anthropic.Message;
 }
 
+/** Why a connection failed, in the system's own short words, such as ECONNRESET. */
+function reason(cause: unknown): string {
+  const inner = (cause as { cause?: { code?: string; message?: string } })?.cause;
+  const code = (cause as { code?: string })?.code ?? inner?.code;
+  if (typeof code === "string" && code) return code;
+  const message = cause instanceof Error ? cause.message : String(cause);
+  return message.slice(0, 80) || "no answer";
+}
+
 /** An error OpenAI sent, before or during the answer. */
 export class OpenAIError extends Error {
   constructor(
@@ -236,6 +245,7 @@ export class OpenAIProvider implements ModelProvider {
     const drop: string[] = [];
     let refreshed = false;
     let busy = 0;
+    let dropped = 0;
     for (;;) {
       try {
         return await this.once(request, drop, refreshed);
@@ -251,6 +261,13 @@ export class OpenAIProvider implements ModelProvider {
         }
         if (error.status === 401 && this.options.plan && !refreshed) {
           refreshed = true;
+          continue;
+        }
+        // A connection that drops before or during the answer is tried again, as Anthropic's client does: a
+        // connection kept open from the call before can be closed by the far end by the time it's reused.
+        if ((error.code === "unreachable" || error.code === "interrupted" || ((error.status ?? 0) >= 500 && error.status !== 503)) && dropped < 2) {
+          dropped++;
+          await new Promise((done) => setTimeout(done, (this.options.backoff ?? 4000) * dropped * 0.25));
           continue;
         }
         const unavailable = error.status === 503 || /usage_unavailable|user_unavailable/.test(error.code ?? "");
@@ -278,8 +295,8 @@ export class OpenAIProvider implements ModelProvider {
         },
         body: JSON.stringify(toRequest(request, this.options.plan, drop)),
       });
-    } catch {
-      throw new OpenAIError(null, "unreachable", "unreachable");
+    } catch (cause) {
+      throw new OpenAIError(null, "unreachable", reason(cause));
     }
     if (!answer.ok || !answer.body) {
       const said = (await answer.json().catch(() => ({}))) as { error?: { code?: string; message?: string; param?: string } };
@@ -291,7 +308,15 @@ export class OpenAIProvider implements ModelProvider {
         said.error?.param ?? null,
       );
     }
-    return toMessage(await readStream(answer.body), request.model);
+    let result: ResponsesResult;
+    try {
+      result = await readStream(answer.body);
+    } catch (cause) {
+      if (cause instanceof OpenAIError) throw cause;
+      // The connection closed partway through the answer.
+      throw new OpenAIError(null, "interrupted", reason(cause));
+    }
+    return toMessage(result, request.model);
   }
 
   /** What went wrong, in words the person can act on. */
@@ -301,7 +326,8 @@ export class OpenAIProvider implements ModelProvider {
     const code = error.code ?? "";
     const plan = this.options.plan;
     const who = plan ? "ChatGPT" : (this.options.service ?? "OpenAI");
-    if (code === "unreachable") return new Error(`Shoji couldn't reach ${who}. Check your internet connection, then try again.`);
+    if (code === "unreachable")
+      return new Error(`Shoji couldn't reach ${who} after 3 tries (${error.message}). Check your internet connection, then try again.`);
     if (code === "subscription_sharing_usage_limit_exceeded")
       return new PlanLimitError(
         "Your ChatGPT plan has reached its limit for Shoji for now. Manage usage in ChatGPT's settings, then carry on.",

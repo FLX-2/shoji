@@ -378,6 +378,7 @@ async function main() {
         plan,
         question: values.question,
         seat: stack.scout,
+        stack,
         provider,
         workspace: new Workspace(root, privateFiles),
         cap,

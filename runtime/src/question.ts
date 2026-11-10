@@ -8,7 +8,8 @@ import * as prompts from "./prompts";
 import type { ModelProvider } from "./provider";
 import { findSkills } from "./skills";
 import { expandCommand } from "./slash";
-import { ROLES, type Role, type Seat } from "./stack";
+import { MODELS } from "./models";
+import { ROLES, type Role, type Seat, type Stack } from "./stack";
 import { READ_TOOLS } from "./tools";
 import type { Workspace } from "./workspace";
 
@@ -22,6 +23,8 @@ export interface QuestionInput {
   question: string;
   /** The stack's scout seat, which reads the code and answers. */
   seat: Seat;
+  /** The thread's whole stack, so a question about which models do the work gets a true answer. */
+  stack?: Stack;
   provider: ModelProvider;
   workspace: Workspace;
   /** Hard spending cap, in dollars. */
@@ -76,7 +79,7 @@ export async function answerQuestion(input: QuestionInput): Promise<ThreadResult
       step,
       seat,
       system: prompts.QUESTION,
-      prompt: `Task: ${task}${projectInstructions(workspace)}\n\nPlan:\n${plan}\n\nThe work so far:\n${shown || "(no changes yet)"}\n\nThe person asks: ${question}${skills.note}`,
+      prompt: `Task: ${task}${projectInstructions(workspace)}${stackNote(input.stack)}\n\nPlan:\n${plan}\n\nThe work so far:\n${shown || "(no changes yet)"}\n\nThe person asks: ${question}${skills.note}`,
       tools: [...READ_TOOLS, ...skills.tools, ...mcp.readOnly],
       mcp,
       skills,
@@ -101,4 +104,11 @@ export async function answerQuestion(input: QuestionInput): Promise<ThreadResult
     if (error instanceof RefusedError) return finish("failed", error.message);
     return finish("failed", error instanceof Error ? error.message : String(error));
   }
+}
+
+/** Which model takes each step of this thread, as the person picked them in Stack. */
+function stackNote(stack: Stack | undefined): string {
+  if (!stack) return "";
+  const named = ROLES.map((role) => `${role[0].toUpperCase()}${role.slice(1)}: ${MODELS[stack[role].model]?.label ?? stack[role].model}`);
+  return `\n\nShoji runs this thread on the person's stack, one model per step: ${named.join(", ")}. You are the Scout, answering.`;
 }

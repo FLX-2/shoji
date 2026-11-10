@@ -346,7 +346,7 @@ function ReceiptPane({ thread }: { thread: LedgerThread }) {
           <ul className="lines">
             {r.lines.map((line, i) => (
               <li key={i}>
-                <span>
+                <span title={`${STEPS[line.step] ?? line.step} · ${modelLabel(line.model)}`}>
                   {STEPS[line.step] ?? line.step}
                   <span className="m"> · {modelLabel(line.model)}</span>
                 </span>
@@ -395,6 +395,6 @@ function compact(tokens: number): string {
 /** A receipt line's cost: dollars, or where it ran when that charged nothing. */
 function lineCost(model: string, cost: number): string {
   if (providerOf(model) === "chatgpt") return "On your ChatGPT plan";
-  if (providerOf(model) === "ollama") return "Free, on this computer";
+  if (providerOf(model) === "ollama") return "On this computer";
   return dollars(cost, 3);
 }
