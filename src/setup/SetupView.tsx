@@ -7,7 +7,9 @@ import { MoneyRow } from "../settings/MoneyRow";
 import type { Prefs } from "../settings/prefs";
 import { Mark } from "../shell/Mark";
 import { describeStack, presetOf, PRESETS, sameStack } from "../stack/lock";
+import { planStack, type ChatGPT } from "../stack/chatgpt";
 import { localStack, type Ollama } from "../stack/ollama";
+import { ChatGPTRow } from "../settings/ChatGPTRow";
 import { OllamaRow } from "../settings/OllamaRow";
 import { formatCost } from "../thread/fold";
 import { NOTES_CAP, notesProgress, type Notes } from "./useNotes";
@@ -18,6 +20,7 @@ interface SetupViewProps {
   /** Reads the key's status again after it changes. */
   onKeyChanged: () => Promise<void>;
   ollama: Ollama;
+  chatgpt: ChatGPT;
   stack: Stack;
   onSaveStack: (stack: Stack) => Promise<void>;
   prefs: Prefs;
@@ -34,12 +37,17 @@ export function SetupView(props: SetupViewProps) {
   const [choice, setChoice] = useState(props.stack);
   const anthropic = !!props.keyStatus?.saved;
   const local = props.ollama.status === "ready" ? localStack(props.ollama.models) : null;
-  const connected = anthropic || !!local;
+  const plan =
+    props.chatgpt.status === "signed-in" && props.chatgpt.models.length ? planStack(props.chatgpt.models) : null;
+  const connected = anthropic || !!local || !!plan;
+  const names = [anthropic && "Anthropic", plan && "ChatGPT", local && "Ollama"].filter(Boolean) as string[];
 
-  // With only Ollama connected, the stack starts on this computer, since no other can run.
+  // Without Anthropic, the stack starts on whichever other provider is connected, since only it can run.
   useEffect(() => {
-    if (!anthropic && local && !sameStack(choice, local)) setChoice(local);
-  }, [anthropic, local, choice]);
+    const other = plan ?? local;
+    if (anthropic || !other) return;
+    if (!sameStack(choice, other) && !(local && sameStack(choice, local))) setChoice(other);
+  }, [anthropic, plan, local, choice]);
 
   const start = async () => {
     if (!sameStack(choice, props.stack)) await props.onSaveStack(choice);
@@ -57,11 +65,14 @@ export function SetupView(props: SetupViewProps) {
             the models and pay the provider directly. Shoji itself is free.
           </p>
         </div>
-        <Models bridge={props.bridge} status={props.keyStatus} onKeyChanged={props.onKeyChanged} ollama={props.ollama} />
+        <Models bridge={props.bridge} status={props.keyStatus} onKeyChanged={props.onKeyChanged} ollama={props.ollama}
+          chatgpt={props.chatgpt}
+        />
         <StackStep
           choice={choice}
           onChoose={setChoice}
           anthropic={anthropic}
+          plan={plan}
           local={local}
           prefs={props.prefs}
           onChange={props.onChange}
@@ -75,7 +86,7 @@ export function SetupView(props: SetupViewProps) {
           onWriteNotes={props.onWriteNotes}
         />
         <div className="suf">
-          <span className="note">{anthropic ? "Anthropic is connected" : local ? "Ollama is connected" : "Connect a provider to start"}</span>
+          <span className="note">{names.length ? `${and(names)} ${names.length > 1 ? "are" : "is"} connected` : "Connect a provider to start"}</span>
           <span className="sp" />
           <button type="button" className="btn solid" disabled={!connected} onClick={start}>
             Start using Shoji
@@ -91,11 +102,13 @@ function Models({
   status,
   onKeyChanged,
   ollama,
+  chatgpt,
 }: {
   bridge: Bridge;
   status: KeyStatus | null;
   onKeyChanged: () => Promise<void>;
   ollama: Ollama;
+  chatgpt: ChatGPT;
 }) {
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -111,8 +124,8 @@ function Models({
       <div className="suhd">
         <h3>Connect your models</h3>
         <p>
-          Connect either, or both. Your key stays in the system keychain and is sent only to Anthropic. Ollama runs models
-          on this computer. You can change these later in Settings.
+          Connect any of them. Your key stays in the system keychain and is sent only to Anthropic. ChatGPT runs on your
+          Plus or Pro plan. Ollama runs models on this computer. You can change these later in Settings.
         </p>
       </div>
       {status?.fromEnv && !saved && (
@@ -168,6 +181,7 @@ function Models({
             </form>
           )}
         </div>
+        <ChatGPTRow chatgpt={chatgpt} onManageUsage={() => void bridge.chatgptManageUsage().catch(() => {})} setup />
         <OllamaRow ollama={ollama} setup />
       </div>
     </section>
@@ -186,6 +200,7 @@ function StackStep({
   choice,
   onChoose,
   anthropic,
+  plan,
   local,
   prefs,
   onChange,
@@ -194,6 +209,8 @@ function StackStep({
   onChoose: (stack: Stack) => void;
   /** Whether Anthropic is connected, so its stacks can run. */
   anthropic: boolean;
+  /** A stack on the person's ChatGPT plan, when they're signed in. */
+  plan: Stack | null;
   /** A stack on Ollama's models, when Ollama has some. */
   local: Stack | null;
   prefs: Prefs;
@@ -222,6 +239,11 @@ function StackStep({
               {PRESETS[name]}
             </button>
           ))}
+        {plan && (
+          <button type="button" role="radio" aria-checked={sameStack(choice, plan)} onClick={() => onChoose(plan)}>
+            On my ChatGPT plan
+          </button>
+        )}
         {local && (
           <button type="button" role="radio" aria-checked={sameStack(choice, local)} onClick={() => onChoose(local)}>
             On this computer
@@ -427,4 +449,9 @@ function NotesRow({
       </div>
     </div>
   );
+}
+
+/** "Anthropic, ChatGPT and Ollama". */
+function and(words: string[]): string {
+  return words.length < 2 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 }

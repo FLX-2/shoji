@@ -1,4 +1,5 @@
-import { MODELS } from "../../runtime/src/models";
+import { foundModelsIn } from "../../runtime/src/found";
+import { applyFound, MODELS, NAMED } from "../../runtime/src/models";
 import { parseStack, ROLES, STACKS, type Role, type Seat, type Stack, type StackName } from "../../runtime/src/stack";
 
 /** One saved choice of models. */
@@ -31,6 +32,9 @@ export function parseLock(text: string): StackLock {
   const value: unknown = JSON.parse(text);
   const versions = (value as { versions?: unknown } | null)?.versions;
   if (!Array.isArray(versions)) throw new Error("stack.lock has no list of versions.");
+  // A stack can name models on the person's own connections, Ollama's or their ChatGPT plan's, which are known
+  // here before Ollama answers or the plan lists them.
+  applyFound(NAMED, Object.assign({}, ...versions.map((v: { stack?: unknown } | null) => foundModelsIn(v?.stack))));
   return {
     versions: versions.map((v: { at?: unknown; stack?: unknown }) => {
       if (typeof v?.at !== "number") throw new Error("A version in stack.lock has no time.");

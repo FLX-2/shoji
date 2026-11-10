@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { applyCatalog, BUILT_IN } from "../../runtime/src/models";
+import type { ReactElement } from "react";
+import { applyCatalog, BUILT_IN, MODELS, providerOf } from "../../runtime/src/models";
 import { ModelPick, modelGroups, priceLine } from "./ModelPick";
+import { ReachContext } from "./reach";
+
+/** With only Anthropic connected, as on a fresh install with a key. */
+const anthropic = (id: string) => providerOf(id) === "anthropic";
+const anthropicGroups = () => modelGroups(Object.keys(MODELS).filter(anthropic));
+const renderPick = (pick: ReactElement) => render(<ReachContext.Provider value={anthropic}>{pick}</ReachContext.Provider>);
 
 /** A catalog with more models than three, as it will hold once new ones come out. */
 const GROWN = {
@@ -23,12 +30,12 @@ describe("choosing a role's model", () => {
   });
 
   it("lists the built-in models flat, dearest first, with their prices", () => {
-    expect(modelGroups().map((g) => g.ids)).toEqual([["claude-opus-5-5"], ["claude-sonnet-5-5"], ["claude-haiku-5-5"]]);
+    expect(anthropicGroups().map((g) => g.ids)).toEqual([["claude-opus-5-5"], ["claude-sonnet-5-5"], ["claude-haiku-5-5"]]);
     expect(priceLine("claude-opus-5-5")).toBe("$4 in, $20 out");
     expect(priceLine("claude-haiku-5-5")).toBe("$0.10 in, $0.50 out");
 
     const pick = vi.fn();
-    render(<ModelPick label="Build model" value="claude-sonnet-5-5" onPick={pick} />);
+    renderPick(<ModelPick label="Build model" value="claude-sonnet-5-5" onPick={pick} />);
     const button = screen.getByRole("button", { name: "Build model" });
     expect(button.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(button);
@@ -50,7 +57,7 @@ describe("choosing a role's model", () => {
 
   it("moves through the list with the keyboard, and Escape leaves the pick as it was", () => {
     const pick = vi.fn();
-    render(<ModelPick label="Plan model" value="claude-opus-5-5" onPick={pick} />);
+    renderPick(<ModelPick label="Plan model" value="claude-opus-5-5" onPick={pick} />);
     fireEvent.click(screen.getByRole("button", { name: "Plan model" }));
     const list = screen.getByRole("listbox", { name: "Plan model" });
     expect(document.activeElement).toBe(list);
@@ -70,7 +77,7 @@ describe("choosing a role's model", () => {
 
   it("groups a longer list by family, newest first in each, and finds a model by name", () => {
     applyCatalog(GROWN);
-    expect(modelGroups().map((g) => [g.family, g.ids])).toEqual([
+    expect(anthropicGroups().map((g) => [g.family, g.ids])).toEqual([
       ["Fable", ["claude-fable-5-1"]],
       ["Opus", ["claude-opus-5-5", "claude-opus-5", "claude-opus-4-8"]],
       ["Sonnet", ["claude-sonnet-6", "claude-sonnet-5-5", "claude-sonnet-5"]],
@@ -78,7 +85,7 @@ describe("choosing a role's model", () => {
     ]);
 
     const pick = vi.fn();
-    render(<ModelPick label="Review model" value="claude-haiku-5-5" onPick={pick} />);
+    renderPick(<ModelPick label="Review model" value="claude-haiku-5-5" onPick={pick} />);
     fireEvent.click(screen.getByRole("button", { name: "Review model" }));
     const list = screen.getByRole("listbox", { name: "Review model" });
     expect(
@@ -97,6 +104,18 @@ describe("choosing a role's model", () => {
     ).toEqual(["Sonnet 6", "Sonnet 5.5", "Sonnet 5"]);
     fireEvent.keyDown(find, { key: "Enter" });
     expect(pick).toHaveBeenCalledWith("claude-sonnet-6");
+  });
+
+  it("adds OpenAI's models in a group of their own, dearest first, once its key is saved", () => {
+    expect(modelGroups().map((g) => [g.family, g.ids])).toContainEqual([
+      "OpenAI",
+      ["openai/gpt-6-astra", "openai/gpt-6.1-sol", "openai/gpt-6.1-terra", "openai/gpt-6-luna"],
+    ]);
+    render(<ModelPick label="Build model" value="openai/gpt-6.1-sol" onPick={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Build model" }));
+    expect(within(screen.getByRole("listbox")).getByRole("option", { name: /GPT-6.1 Sol/ }).textContent).toBe(
+      "GPT-6.1 Sol$2 in, $10 out",
+    );
   });
 
   it("keeps a built-in model the catalog leaves out", () => {

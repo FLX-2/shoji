@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { applyCatalog, type Catalog, parseCatalog, pricesListed } from "../../runtime/src/models";
 import { locale } from "../shell/locale";
 
-/** The list lives in Shoji's own repository, so a new model or price ships without a release. */
-export const CATALOG_URL = "https://raw.githubusercontent.com/FLX-2/shoji/main/catalog/models.json";
+/** The list lives in Shoji's own repository, so a new model or price ships without a release. From v0.2 it names
+ *  other providers' models, which v0.1 can't read, so v0.1 keeps catalog/models.json and later versions read this. */
+export const CATALOG_URL = "https://raw.githubusercontent.com/FLX-2/shoji/main/catalog/v2/models.json";
 
 const STORE = "shoji.catalog";
 /** The list is checked at most once a day. */

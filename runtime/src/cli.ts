@@ -1,20 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
-import readline from "node:readline";
 import { parseArgs } from "node:util";
 import { readAttachments } from "./attachments";
 import type { RuntimeEvent } from "./events";
 import { hasChanges, isGitRepo } from "./git";
 import { Browser, findBrowser } from "./browser";
 import { connectMcp, type Mcp, parseMcpServers, transportFor } from "./mcp";
-import { applyCatalog, applyFound, MODELS, parseCatalog } from "./models";
-import { ollamaModelsIn } from "./ollama";
+import { applyCatalog, applyFound, MODELS, NAMED, parseCatalog } from "./models";
+import { foundModelsIn } from "./found";
 import { writeNotes, type NotesEvent } from "./notes";
 import { runThread } from "./pipeline";
 import { NO_PREVIEW, previewFor } from "./preview";
 import { comparer } from "./compare";
 import { defaultChecks } from "./project";
 import { connect, unreachable } from "./connect";
+import { inbox } from "./inbox";
 import { answerQuestion } from "./question";
 import { describeStacks, parseStack, ROLES, type Stack, STACKS, type StackName } from "./stack";
 import { describeBriefing, finished, runTrial, type TrialEvent, type TrialTask } from "./trial";
@@ -104,21 +104,27 @@ function fail(message: string): never {
   process.exit(2);
 }
 
-let answers: AsyncIterator<string> | undefined;
-
 /** Waits for the person's answer about a command: a JSON line from the app, or y or n at a terminal.
  *  An answer that never comes, because the input closed, is no. */
 async function askPerson(command: string, json: boolean | undefined): Promise<boolean> {
   if (!json) process.stderr.write(`Allow \`${command}\` to run? [y/N] `);
-  answers ??= readline.createInterface({ input: process.stdin, terminal: false })[Symbol.asyncIterator]();
-  const { value, done } = await answers.next();
-  if (done) return false;
+  const value = await inbox().next("answer");
+  if (value === null) return false;
   if (!json) return /^\s*y(es)?\s*$/i.test(value);
   try {
     return (JSON.parse(value) as { allow?: unknown }).allow === true;
   } catch {
     return false;
   }
+}
+
+/** Asks the app for a fresh ChatGPT token, and waits for it. Null when the app says the person signed out. */
+async function renewFromApp(): Promise<{ token: string; expires: number } | null> {
+  process.stdout.write(`${JSON.stringify({ type: "token-request", provider: "chatgpt" })}\n`);
+  const line = await inbox().next("token");
+  if (line === null) return null;
+  const value = JSON.parse(line) as { token?: string; expires?: number };
+  return typeof value.token === "string" ? { token: value.token, expires: value.expires ?? 0 } : null;
 }
 
 /** The attached files, read now so one Shoji can't send stops the run before it spends. */
@@ -264,8 +270,8 @@ async function main() {
   let stack: Stack;
   if (values["stack-json"] !== undefined) {
     try {
-      // A stack's Ollama models are known by their names alone, wherever the app found them.
-      applyFound("stack", ollamaModelsIn(JSON.parse(values["stack-json"])));
+      // A stack's Ollama and ChatGPT models are known by their names alone, wherever the app found them.
+      applyFound(NAMED, foundModelsIn(JSON.parse(values["stack-json"])));
       stack = parseStack(values["stack-json"]);
     } catch (e) {
       fail(e instanceof Error ? e.message : String(e));
@@ -274,7 +280,11 @@ async function main() {
   else fail(`Unknown stack "${values.stack}". Choose ${Object.keys(STACKS).join(", ")}.`);
   const cap = Number(values.cap);
   if (!(cap > 0)) fail("--cap must be a positive number of dollars.");
-  const provider = connect(process.env, { anthropicUrl: values["base-url"] });
+  const provider = connect(process.env, {
+    anthropicUrl: values["base-url"],
+    // In the app, a ChatGPT token about to run out is renewed by asking the app, which keeps the sign-in.
+    ...(values.json && { renew: renewFromApp }),
+  });
   // Notes use only Scout's model; every other run may use any role's.
   const used = values.notes ? [stack.scout.model] : ROLES.map((role) => stack[role].model);
   const missing = unreachable(provider, used);

@@ -8,6 +8,7 @@ import { diffOf, discardWork } from "./git";
 import { projectInstructions, projectNotes } from "./instructions";
 import { holdToLook, lookBlocks } from "./look";
 import { BudgetExceeded, Meter, RefusedError } from "./meter";
+import { PlanLimitError } from "./openai";
 import * as prompts from "./prompts";
 import { type Mcp, NO_MCP } from "./mcp";
 import { NO_PREVIEW, type Preview } from "./preview";
@@ -314,7 +315,8 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     }
     return finish(status);
   } catch (error) {
-    if (error instanceof BudgetExceeded) return finish("stopped", error.message);
+    // A plan out of room for now stops the thread as its own limit does, so it can carry on later.
+    if (error instanceof BudgetExceeded || error instanceof PlanLimitError) return finish("stopped", error.message);
     if (error instanceof RefusedError) return finish("failed", error.message);
     return finish("failed", error instanceof Error ? error.message : String(error));
   }

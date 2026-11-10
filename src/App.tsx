@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { MODELS, providerOf } from "../runtime/src/models";
+import { MODELS, providerOf, type ModelId } from "../runtime/src/models";
 import { ROLES } from "../runtime/src/stack";
 import { LimitAsk, type Ask } from "./budget/LimitAsk";
 import { spentOn } from "./budget/daily";
@@ -24,6 +24,9 @@ import { readMcpServers, SETTINGS_PAGES, type SettingsPage, SettingsView } from 
 import { SetupView } from "./setup/SetupView";
 import { notesProgress, useNotes } from "./setup/useNotes";
 import { useModelCatalog } from "./stack/catalog";
+import { useChatGPT } from "./stack/chatgpt";
+import { useOpenRouter } from "./stack/openrouter";
+import { ReachContext } from "./stack/reach";
 import { useOllama } from "./stack/ollama";
 import { StackView } from "./stack/StackView";
 import { estimateCost, tierOf, tierStack, TIERS, type Tier } from "./stack/tier";
@@ -76,6 +79,8 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("look");
   const catalog = useModelCatalog(prefs.updateModels);
   const ollama = useOllama(given);
+  const chatgpt = useChatGPT(given);
+  const openrouter = useOpenRouter(given);
   // The models there at first are known ones; only a model the list brings later is new.
   useEffect(() => {
     if (!prefs.seenModels) setPrefs({ seenModels: Object.keys(MODELS) });
@@ -145,6 +150,14 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   // open until it's finished, even once the key is saved along the way.
   const [inSetup, setInSetup] = useState(false);
   const refreshKey = useCallback(() => bridge.keyStatus().then(setKeyStatus), [bridge]);
+  const [openaiKey, setOpenAIKey] = useState<KeyStatus | null>(null);
+  const refreshOpenAIKey = useCallback(
+    () => bridge.keyStatus("openai").then(setOpenAIKey, () => setOpenAIKey({ saved: false, fromEnv: false })),
+    [bridge],
+  );
+  useEffect(() => {
+    refreshOpenAIKey();
+  }, [refreshOpenAIKey]);
   useEffect(() => {
     bridge.keyStatus().then(
       (status) => {
@@ -262,8 +275,32 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   };
 
   const anthropicKey = !!keyStatus && (keyStatus.saved || keyStatus.fromEnv);
-  // A stack on this computer alone needs no key. Ollama not running is said when the thread starts.
-  const hasKey = anthropicKey || ROLES.every((role) => providerOf(stack.stack[role].model) !== "anthropic");
+  // Each step's provider must be connected: Anthropic by its key, ChatGPT by a sign-in. Ollama not running is said
+  // when the thread starts.
+  const openaiConnected = !!openaiKey && (openaiKey.saved || openaiKey.fromEnv);
+  const unconnected = ROLES.map((role) => providerOf(stack.stack[role].model)).find((provider) =>
+    provider === "anthropic"
+      ? !anthropicKey
+      : provider === "chatgpt"
+        ? chatgpt.status === "signed-out"
+        : provider === "openai"
+          ? !openaiConnected
+          : provider === "openrouter"
+            ? openrouter.status === "disconnected"
+            : false,
+  );
+  // Lists offer Anthropic's models always, as Setup asks for its key, and others once their provider is connected.
+  const reaches = useCallback(
+    (model: ModelId) => {
+      const provider = providerOf(model);
+      if (provider === "openai") return openaiConnected;
+      if (provider === "chatgpt") return chatgpt.status === "signed-in";
+      if (provider === "openrouter") return openrouter.status === "connected";
+      return true;
+    },
+    [openaiConnected, chatgpt.status, openrouter.status],
+  );
+  const hasKey = !unconnected;
   // Scheduled tasks start by themselves, never past the daily limit, since nobody may be here to say yes.
   useSchedules(
     prefs.schedules,
@@ -528,6 +565,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     draft: homeDraft,
     repo: prefs.repo,
     hasKey,
+    unconnected,
     onPickProject: pickProject,
     projects: projects.map((p) => p.repo),
     starters: (prefs.repo && prefs.starters[prefs.repo]) || [],
@@ -699,7 +737,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     ];
   };
 
-  return (
+  const view = (
     <div
       className="app"
       data-state={running ? "running" : "idle"}
@@ -753,6 +791,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
             keyStatus={keyStatus}
             onKeyChanged={refreshKey}
             ollama={ollama}
+            chatgpt={chatgpt}
             stack={stack.stack}
             onSaveStack={stack.save}
             prefs={prefs}
@@ -987,6 +1026,12 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 onOpenStack={() => setSection("stack")}
                 keyStatus={keyStatus}
                 ollama={ollama}
+                chatgpt={chatgpt}
+                openaiKey={openaiKey}
+                openrouter={openrouter}
+                onSaveOpenAIKey={(key) => bridge.saveKey(key, "openai").then(refreshOpenAIKey)}
+                onForgetOpenAIKey={() => bridge.forgetKey("openai").then(refreshOpenAIKey)}
+                onManageUsage={() => void bridge.chatgptManageUsage().catch(() => {})}
                 onSaveKey={(key) => bridge.saveKey(key).then(refreshKey)}
                 onForgetKey={() => bridge.forgetKey().then(refreshKey)}
                 onRunSetup={() => setInSetup(true)}
@@ -1048,6 +1093,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       )}
     </div>
   );
+  return <ReachContext.Provider value={reaches}>{view}</ReachContext.Provider>;
 }
 
 export default App;

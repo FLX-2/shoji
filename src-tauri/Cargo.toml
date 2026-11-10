@@ -31,6 +31,13 @@ tauri-plugin-updater = "2"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
 portable-pty = "0.9"
+reqwest = { version = "0.13", features = ["json", "form"] }
+sha2 = "0.10"
+base64 = "0.22"
+getrandom = "0.3"
+url = "2"
+jsonwebtoken = "9"
+tokio = { version = "1", features = ["net", "sync", "time", "io-util", "macros"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

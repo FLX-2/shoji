@@ -33,7 +33,7 @@ describe("the model list", () => {
 
     applyCatalog(null);
     expect(MODELS).toEqual(BUILT_IN);
-    expect(pricesListed()).toBe("2026-10-28");
+    expect(pricesListed()).toBe("2026-11-10");
   });
 
   it("refuses a list it can't trust, whole", () => {
@@ -53,12 +53,24 @@ describe("the model list", () => {
     );
     expect(broken((l) => (l.models["claude-sonnet-6"].label = "Sonnet\n6"))).toThrow(/names a model/);
     expect(() => parseCatalog(null)).toThrow();
+    // A model OpenRouter offers free may say so, since its id does.
+    const routedFree = { label: "Vendor: Small", input: 0, output: 0, cacheRead: 0 };
+    expect(parseCatalog({ ...LIST, models: { "openrouter/vendor/small:free": routedFree } }).models).toHaveProperty(
+      "openrouter/vendor/small:free",
+    );
+    expect(() => parseCatalog({ ...LIST, models: { "openrouter/vendor/small": routedFree } })).toThrow(/prices/);
   });
 
   it("is published in the repository, the same as the built-in list so a new install starts current", () => {
-    const file = path.join(__dirname, "../../catalog/models.json");
+    const file = path.join(__dirname, "../../catalog/v2/models.json");
     const published = parseCatalog(JSON.parse(fs.readFileSync(file, "utf8")));
     expect(published.models).toEqual(BUILT_IN);
-    expect(published.updated).toBe("2026-10-28");
+    expect(published.updated).toBe("2026-11-10");
+  });
+
+  it("keeps v0.1's list to Anthropic's models, which is all v0.1 reads", () => {
+    const file = path.join(__dirname, "../../catalog/models.json");
+    const published = JSON.parse(fs.readFileSync(file, "utf8"));
+    expect(Object.keys(published.models).every((id) => id.startsWith("claude-"))).toBe(true);
   });
 });
