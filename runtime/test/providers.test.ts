@@ -115,5 +115,8 @@ describe("providers", () => {
     // Ollama needs no key, so it's always there to try.
     expect(unreachable(none, ["ollama/gemma4"])).toBeNull();
     expect(unreachable(connect({ ANTHROPIC_API_KEY: " sk-test " }), ["claude-haiku-5-5"])).toBeNull();
+    expect(unreachable(none, ["openrouter/vendor/large"])).toMatch(/connected to OpenRouter/);
+    expect(unreachable(connect({ SHOJI_OPENROUTER_KEY: "sk-or" }), ["openrouter/vendor/large"])).toBeNull();
+    expect(unreachable(connect({ SHOJI_OPENAI_KEY: "sk-test" }), ["openai/gpt-6.1-sol"])).toBeNull();
   });
 });

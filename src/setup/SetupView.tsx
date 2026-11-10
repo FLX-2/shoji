@@ -7,7 +7,9 @@ import { MoneyRow } from "../settings/MoneyRow";
 import type { Prefs } from "../settings/prefs";
 import { Mark } from "../shell/Mark";
 import { describeStack, presetOf, PRESETS, ROLE_NAMES, sameStack, seatLabel } from "../stack/lock";
+import { planStack, type ChatGPT } from "../stack/chatgpt";
 import { localStack, type Ollama } from "../stack/ollama";
+import { ChatGPTRow } from "../settings/ChatGPTRow";
 import { OllamaRow } from "../settings/OllamaRow";
 import { formatCost } from "../thread/fold";
 import { NOTES_CAP, notesProgress, type Notes } from "./useNotes";
@@ -18,6 +20,7 @@ interface SetupViewProps {
   /** Reads the key's status again after it changes. */
   onKeyChanged: () => Promise<void>;
   ollama: Ollama;
+  chatgpt: ChatGPT;
   stack: Stack;
   onSaveStack: (stack: Stack) => Promise<void>;
   prefs: Prefs;
@@ -37,11 +40,14 @@ export function SetupView(props: SetupViewProps) {
   const [choice, setChoice] = useState(props.stack);
   const anthropic = !!props.keyStatus?.saved;
   const local = props.ollama.status === "ready" ? localStack(props.ollama.models) : null;
-  const connected = anthropic || !!local;
+  const plan =
+    props.chatgpt.status === "signed-in" && props.chatgpt.models.length ? planStack(props.chatgpt.models) : null;
+  const connected = anthropic || !!local || !!plan;
+  const names = [anthropic && "Anthropic", plan && "ChatGPT", local && "Ollama"].filter(Boolean) as string[];
 
   const next = async () => {
-    // With only Ollama connected, the stack starts on this computer, since no other can run.
-    if (step === 1 && !anthropic && local) setChoice(local);
+    // Without Anthropic, the stack starts on whichever other provider is connected, since only it can run.
+    if (step === 1 && !anthropic) setChoice((plan ?? local)!);
     if (step === 2 && !sameStack(choice, props.stack)) await props.onSaveStack(choice);
     setStep(step + 1);
   };
@@ -62,13 +68,20 @@ export function SetupView(props: SetupViewProps) {
 
         {step === 0 && <Welcome onStart={() => setStep(1)} />}
         {step === 1 && (
-          <Models bridge={props.bridge} status={props.keyStatus} onKeyChanged={props.onKeyChanged} ollama={props.ollama} />
+          <Models
+            bridge={props.bridge}
+            status={props.keyStatus}
+            onKeyChanged={props.onKeyChanged}
+            ollama={props.ollama}
+            chatgpt={props.chatgpt}
+          />
         )}
         {step === 2 && (
           <StackStep
             choice={choice}
             onChoose={setChoice}
             anthropic={anthropic}
+            plan={plan}
             local={local}
             prefs={props.prefs}
             onChange={props.onChange}
@@ -93,7 +106,7 @@ export function SetupView(props: SetupViewProps) {
             <span className="sp" />
             {step === 1 && (
               <span className="note">
-                {anthropic ? "Anthropic is connected" : local ? "Ollama is connected" : "Connect a provider to go on"}
+                {names.length ? `${and(names)} ${names.length > 1 ? "are" : "is"} connected` : "Connect a provider to go on"}
               </span>
             )}
             {step < STEPS.length ? (
@@ -126,7 +139,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
       <ol className="suplan">
         <li>
           <b>Connect models</b>
-          <span>Your own Anthropic key, or Ollama on this computer</span>
+          <span>Your Anthropic key, your ChatGPT plan, or Ollama on this computer</span>
         </li>
         <li>
           <b>Choose a starting stack</b>
@@ -153,11 +166,13 @@ function Models({
   status,
   onKeyChanged,
   ollama,
+  chatgpt,
 }: {
   bridge: Bridge;
   status: KeyStatus | null;
   onKeyChanged: () => Promise<void>;
   ollama: Ollama;
+  chatgpt: ChatGPT;
 }) {
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -173,8 +188,8 @@ function Models({
       <div className="suhd">
         <h2>Connect your models</h2>
         <p>
-          Connect either, or both. Your key stays in the system keychain and is sent only to Anthropic. Ollama runs models
-          on this computer. You can change these later in Settings.
+          Connect any of them. Your key stays in the system keychain and is sent only to Anthropic. ChatGPT runs on your
+          Plus or Pro plan. Ollama runs models on this computer. You can change these later in Settings.
         </p>
       </div>
       {status?.fromEnv && !saved && (
@@ -230,6 +245,7 @@ function Models({
             </form>
           )}
         </div>
+        <ChatGPTRow chatgpt={chatgpt} onManageUsage={() => void bridge.chatgptManageUsage().catch(() => {})} setup />
         <OllamaRow ollama={ollama} setup />
       </div>
     </div>
@@ -248,6 +264,7 @@ function StackStep({
   choice,
   onChoose,
   anthropic,
+  plan,
   local,
   prefs,
   onChange,
@@ -256,6 +273,8 @@ function StackStep({
   onChoose: (stack: Stack) => void;
   /** Whether Anthropic is connected, so its stacks can run. */
   anthropic: boolean;
+  /** A stack on the person's ChatGPT plan, when they're signed in. */
+  plan: Stack | null;
   /** A stack on Ollama's models, when Ollama has some. */
   local: Stack | null;
   prefs: Prefs;
@@ -284,6 +303,11 @@ function StackStep({
               {PRESETS[name]}
             </button>
           ))}
+        {plan && (
+          <button type="button" role="radio" aria-checked={sameStack(choice, plan)} onClick={() => onChoose(plan)}>
+            On my ChatGPT plan
+          </button>
+        )}
         {local && (
           <button type="button" role="radio" aria-checked={sameStack(choice, local)} onClick={() => onChoose(local)}>
             On this computer
@@ -487,4 +511,9 @@ function NotesRow({
       </div>
     </div>
   );
+}
+
+/** "Anthropic, ChatGPT and Ollama". */
+function and(words: string[]): string {
+  return words.length < 2 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 }

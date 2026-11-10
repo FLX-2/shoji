@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { MODELS, PROVIDER_NAMES, providerOf, type ModelId } from "../../runtime/src/models";
+import { useReaches } from "./reach";
 
 /** Past this many models the list gets a box to narrow it by name. */
 const FILTER_FROM = 9;
@@ -17,9 +18,12 @@ export function modelGroups(ids: ModelId[] = Object.keys(MODELS)): { family: str
   const families = new Map<string, ModelId[]>();
   for (const id of ids) families.set(familyOf(id), [...(families.get(familyOf(id)) ?? []), id]);
   const newest = (a: ModelId, b: ModelId) => MODELS[b].label.localeCompare(MODELS[a].label, "en", { numeric: true });
+  // Other providers' names don't say which is newer, so their models go dearest first.
+  const order = (a: ModelId, b: ModelId) =>
+    providerOf(a) === "anthropic" ? newest(a, b) : MODELS[b].output - MODELS[a].output || newest(a, b);
   const dearest = (members: ModelId[]) => Math.max(...members.map((id) => MODELS[id].output));
   return [...families]
-    .map(([family, members]) => ({ family, ids: members.sort(newest) }))
+    .map(([family, members]) => ({ family, ids: members.sort(order) }))
     .sort((a, b) => dearest(b.ids) - dearest(a.ids) || a.family.localeCompare(b.family));
 }
 
@@ -27,7 +31,11 @@ export function modelGroups(ids: ModelId[] = Object.keys(MODELS)): { family: str
 export const priceLine = (id: ModelId) =>
   MODELS[id].billing === "local"
     ? "Free, on this computer"
-    : `${dollars(MODELS[id].input)} in, ${dollars(MODELS[id].output)} out`;
+    : MODELS[id].billing === "plan"
+      ? "Using your ChatGPT plan"
+      : MODELS[id].input === 0 && MODELS[id].output === 0
+        ? "Free on OpenRouter"
+        : `${dollars(MODELS[id].input)} in, ${dollars(MODELS[id].output)} out`;
 
 const dollars = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
 
@@ -56,8 +64,9 @@ export function ModelPick({
   const list = useRef<HTMLUListElement>(null);
   const field = useRef<HTMLInputElement>(null);
   const id = useId();
+  const reaches = useReaches();
 
-  const all = Object.keys(MODELS);
+  const all = Object.keys(MODELS).filter((m) => reaches(m) || m === value);
   const filtering = all.length >= FILTER_FROM;
   const wanted = filter.trim().toLowerCase();
   const groups = modelGroups(all.filter((m) => !wanted || MODELS[m].label.toLowerCase().includes(wanted)));

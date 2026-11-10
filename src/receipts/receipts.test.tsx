@@ -213,6 +213,21 @@ describe("the Receipts view", () => {
     expect(within(pane).getByText("Scout")).toBeTruthy();
   });
 
+  it("says a step on a ChatGPT plan or on this computer charged nothing, in place of dollars", async () => {
+    const free = (c: LedgerCall) => ({ ...c, cost: 0 });
+    await openReceipts([
+      thread(1, "Run it on the plan", [
+        run("task", "ready", [
+          free(call("plan", "plan", "chatgpt/gpt-5.5")),
+          free(call("build", "build", "ollama/gemma4:31b")),
+        ]),
+      ]),
+    ]);
+    const pane = screen.getByRole("complementary", { name: "Receipt" });
+    expect(within(pane).getByText("On your ChatGPT plan")).toBeTruthy();
+    expect(within(pane).getByText("Free, on this computer")).toBeTruthy();
+  });
+
   it("shows each day's spend, and one project at a time when there are several", async () => {
     await openReceipts([
       thread(2, "Fix the docs nav", [run("task", "ready", [call("build", "build", "x")])], { repo: "/work/docs" }),

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { applyFound, type ModelId } from "../../runtime/src/models";
-import { ollamaModel } from "../../runtime/src/ollama";
+import { ollamaModel } from "../../runtime/src/found";
 import type { Stack } from "../../runtime/src/stack";
 import type { Bridge } from "../bridge";
 

@@ -1,6 +1,8 @@
+mod chatgpt;
 mod keys;
 mod ledger;
 mod ollama;
+mod openrouter;
 mod push;
 mod updates;
 #[cfg(unix)]
@@ -91,6 +93,85 @@ fn use_shell_key(provider: Option<String>) -> Result<(), String> {
 #[tauri::command]
 fn forget_key(provider: Option<String>) -> Result<(), String> {
     keys::forget(keys::keyed(provider.as_deref().unwrap_or("anthropic"))?)
+}
+
+/// Every key a run of this stack gets, and the ChatGPT sign-in's token when a role is on the plan.
+fn run_keys(app: &AppHandle, stack: &serde_json::Value) -> Result<Vec<(String, String)>, String> {
+    let mut env = keys::run_env(stack, keys::any)?;
+    if chatgpt::uses_plan(stack) {
+        env.extend(chatgpt::run_env(&app.state::<chatgpt::Store>().load())?);
+    }
+    Ok(env)
+}
+
+/// Hands a running run a fresh ChatGPT token on its input, or says the person signed out.
+fn renew_for(app: AppHandle, id: u64) {
+    tauri::async_runtime::spawn(async move {
+        let reply = match app.state::<chatgpt::Store>().token().await {
+            Ok(Some((token, expires))) => serde_json::json!({ "token": token, "expires": expires }),
+            _ => serde_json::json!({ "signedOut": true }),
+        };
+        if let Some(going) = app.state::<Run>().live.lock().unwrap().get_mut(&id) {
+            let _ = going.child.write(format!("{reply}\n").as_bytes());
+        }
+    });
+}
+
+/// Opens a web address in the person's browser.
+fn open_in_browser(url: &str) -> Result<(), String> {
+    let mut command = if cfg!(target_os = "macos") {
+        Command::new("open")
+    } else if cfg!(windows) {
+        // Unlike start or explorer, this keeps every & in the address.
+        let mut c = Command::new("rundll32");
+        c.arg("url.dll,FileProtocolHandler");
+        c
+    } else {
+        Command::new("xdg-open")
+    };
+    command.arg(url).spawn().map(|_| ()).map_err(|_| "Shoji couldn't open your browser.".to_string())
+}
+
+#[tauri::command]
+fn chatgpt_status(store: State<chatgpt::Store>) -> chatgpt::Status {
+    store.status()
+}
+
+/// Signs in with ChatGPT in the browser. Waits until the person allows Shoji, says no, or five minutes pass.
+#[tauri::command]
+async fn chatgpt_sign_in(store: State<'_, chatgpt::Store>) -> Result<chatgpt::Status, String> {
+    store.sign_in(open_in_browser).await
+}
+
+/// Signs out of ChatGPT. Returns a note when ChatGPT didn't confirm the sign-out on its side.
+#[tauri::command]
+async fn chatgpt_sign_out(store: State<'_, chatgpt::Store>) -> Result<Option<String>, String> {
+    store.sign_out().await
+}
+
+/// Opens ChatGPT's settings, where the person sees and manages their plan's usage.
+#[tauri::command]
+fn chatgpt_manage_usage() -> Result<(), String> {
+    open_in_browser(chatgpt::USAGE_PAGE)
+}
+
+/// Connects OpenRouter in the browser and keeps the key it hands back in the keychain.
+#[tauri::command]
+async fn openrouter_connect() -> Result<(), String> {
+    let key = openrouter::connect(open_in_browser).await?;
+    keys::save(keys::keyed("openrouter")?, &key)
+}
+
+/// The models OpenRouter lists that can use tools, dearest first.
+#[tauri::command]
+async fn openrouter_models() -> Result<Vec<openrouter::Listed>, String> {
+    openrouter::models().await
+}
+
+/// The models the person's ChatGPT plan offers. Empty when signed out.
+#[tauri::command]
+async fn chatgpt_models(store: State<'_, chatgpt::Store>) -> Result<Vec<chatgpt::PlanModel>, String> {
+    store.models().await
 }
 
 /// The models pulled into Ollama on this computer that can call tools, largest first.
@@ -291,7 +372,7 @@ fn start_run(
             return Err("This thread is already running.".into());
         }
     }
-    let keys = keys::run_env(&request.stack, keys::any)?;
+    let keys = run_keys(&app, &request.stack)?;
 
     // Every event is kept on disk, so receipts have each call's tokens and cost.
     let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -423,6 +504,11 @@ fn watch(app: AppHandle, mut events: Receiver<CommandEvent>, id: u64, entry: i64
             match event {
                 CommandEvent::Stdout(line) => {
                     if let Ok(event) = serde_json::from_slice::<serde_json::Value>(&line) {
+                        // A run on the ChatGPT plan asks for a fresh token when its own nears its end.
+                        if event["type"] == "token-request" {
+                            renew_for(app.clone(), id);
+                            continue;
+                        }
                         noted(app.state::<Ledger>().record(entry, &event, now_ms()));
                         let _ = app.emit("runtime-event", RunEvent { run: id, event });
                     }
@@ -474,7 +560,7 @@ fn start_trial(
     request: TrialRequest,
 ) -> Result<u64, String> {
     let mut live = run.live.lock().unwrap();
-    let keys = keys::run_env(&request.stack, keys::any)?;
+    let keys = run_keys(&app, &request.stack)?;
     let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let runs = data.join("runs");
     fs::create_dir_all(&runs).map_err(|e| e.to_string())?;
@@ -551,7 +637,7 @@ fn start_notes(
         return Ok(None);
     }
     let mut live = run.live.lock().unwrap();
-    let keys = keys::run_env(&request.stack, keys::any)?;
+    let keys = run_keys(&app, &request.stack)?;
     let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let runs = data.join("runs");
     fs::create_dir_all(&runs).map_err(|e| e.to_string())?;
@@ -1166,6 +1252,7 @@ pub fn run() {
                 Ledger::open(&path).map_err(|e| e.to_string())
             })?;
             app.manage(ledger);
+            app.manage(chatgpt::Store::new(data.join("chatgpt.json")));
             #[cfg(target_os = "macos")]
             if let Some(window) = app.get_webview_window("main") {
                 titlebar::keep_buttons_centred(&window);
@@ -1178,6 +1265,13 @@ pub fn run() {
             use_shell_key,
             forget_key,
             ollama_models,
+            chatgpt_status,
+            chatgpt_sign_in,
+            chatgpt_sign_out,
+            chatgpt_models,
+            chatgpt_manage_usage,
+            openrouter_connect,
+            openrouter_models,
             pick_project,
             pick_attachments,
             save_attachment,

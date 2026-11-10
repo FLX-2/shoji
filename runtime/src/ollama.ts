@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { apiName, MODELS, type ModelId, type ModelInfo } from "./models";
+import { apiName, MODELS, type ModelId } from "./models";
 import type { ModelProvider, ModelRequest } from "./provider";
 
 /** Where Ollama listens unless OLLAMA_HOST, the setting Ollama itself reads, says otherwise. */
@@ -20,34 +20,6 @@ export function ollamaUrl(host: string | undefined): string {
   } catch {
     return OLLAMA_DEFAULT;
   }
-}
-
-/** The most a model's name may run to in Shoji's lists. */
-const LONGEST_LABEL = 40;
-
-/** A model pulled into Ollama, as Shoji lists it: by its own name, free, on this computer. */
-export function ollamaModel(name: string): [ModelId, ModelInfo] {
-  const label = name.replace(/:latest$/, "");
-  return [
-    `ollama/${name}`,
-    {
-      label: label.length > LONGEST_LABEL ? `${label.slice(0, LONGEST_LABEL - 1)}…` : label,
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      billing: "local",
-    },
-  ];
-}
-
-/** The Ollama models a stack names, so a run knows them however the app found them. */
-export function ollamaModelsIn(stack: unknown): Record<ModelId, ModelInfo> {
-  const seats = typeof stack === "object" && stack !== null ? Object.values(stack) : [];
-  const names = seats.flatMap((seat) => {
-    const model = (seat as { model?: unknown } | null)?.model;
-    return typeof model === "string" && model.startsWith("ollama/") && model.length > 7 ? [apiName(model)] : [];
-  });
-  return Object.fromEntries(names.map(ollamaModel));
 }
 
 /** What went wrong with a call to Ollama, in words the person can act on. */

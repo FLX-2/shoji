@@ -1,10 +1,14 @@
+import type { ChatGPT } from "../stack/chatgpt";
 import type { Ollama } from "../stack/ollama";
+import { ChatGPTRow } from "./ChatGPTRow";
+import { OpenRouterRow } from "./OpenRouterRow";
+import type { OpenRouter } from "../stack/openrouter";
 import { OllamaRow } from "./OllamaRow";
 import { useState } from "react";
 import { type McpServer, parseMcpServers } from "../../runtime/src/mcpConfig";
 import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import type { Stack } from "../../runtime/src/stack";
-import type { KeyStatus } from "../bridge";
+import type { KeyedProvider, KeyStatus } from "../bridge";
 import {
   AccentRow,
   BackgroundRow,
@@ -34,6 +38,12 @@ interface SettingsViewProps {
   onOpenStack: () => void;
   keyStatus: KeyStatus | null;
   ollama: Ollama;
+  chatgpt: ChatGPT;
+  onManageUsage: () => void;
+  openaiKey: KeyStatus | null;
+  openrouter: OpenRouter;
+  onSaveOpenAIKey: (key: string) => Promise<void>;
+  onForgetOpenAIKey: () => Promise<void>;
   onSaveKey: (key: string) => Promise<void>;
   onForgetKey: () => Promise<void>;
   onRunSetup: () => void;
@@ -63,6 +73,12 @@ export function SettingsView({
   onOpenStack,
   keyStatus,
   ollama,
+  chatgpt,
+  onManageUsage,
+  openaiKey,
+  openrouter,
+  onSaveOpenAIKey,
+  onForgetOpenAIKey,
   onSaveKey,
   onForgetKey,
   onRunSetup,
@@ -166,6 +182,14 @@ export function SettingsView({
                 {shown.id === "models" && (
                   <>
                     <KeyRow status={keyStatus} onSave={onSaveKey} onForget={onForgetKey} />
+                    <ChatGPTRow chatgpt={chatgpt} onManageUsage={onManageUsage} />
+                    <KeyRow
+                      provider="openai"
+                      status={openaiKey}
+                      onSave={onSaveOpenAIKey}
+                      onForget={onForgetOpenAIKey}
+                    />
+                    <OpenRouterRow openrouter={openrouter} />
                     <OllamaRow ollama={ollama} />
                     <div className="srow">
                       <div>
@@ -262,11 +286,19 @@ function Shortcuts() {
   ));
 }
 
+const KEY_ROWS = {
+  anthropic: { name: "Anthropic", placeholder: "sk-ant-…" },
+  openai: { name: "OpenAI", placeholder: "sk-…" },
+  openrouter: { name: "OpenRouter", placeholder: "sk-or-…" },
+} as const;
+
 function KeyRow({
+  provider = "anthropic",
   status,
   onSave,
   onForget,
 }: {
+  provider?: KeyedProvider;
   status: KeyStatus | null;
   onSave: (key: string) => Promise<void>;
   onForget: () => Promise<void>;
@@ -274,6 +306,8 @@ function KeyRow({
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const { name, placeholder } = KEY_ROWS[provider];
+  const field = `s-key-${provider}`;
   const attempt = (work: Promise<void>) =>
     work.then(
       () => setError(null),
@@ -282,15 +316,17 @@ function KeyRow({
 
   return (
     <div className="srow">
-      <label htmlFor="s-key">
-        <b>Anthropic API key</b>
+      <label htmlFor={field}>
+        <b>{name} API key</b>
         <span className="d">
           {error ??
             (status?.saved
-              ? "Saved in your system keychain. Shoji sends it only to Anthropic."
+              ? `Saved in your system keychain. Shoji sends it only to ${name}.`
               : status?.fromEnv
                 ? "Using the key from your shell. Save one here so Shoji has it however it opens."
-                : "Kept in your system keychain. Shoji sends it only to Anthropic.")}
+                : provider === "openai"
+                  ? "For OpenAI's models at API prices. Kept in your system keychain and sent only to OpenAI."
+                  : `Kept in your system keychain. Shoji sends it only to ${name}.`)}
         </span>
       </label>
       {status?.saved ? (
@@ -327,11 +363,11 @@ function KeyRow({
           }}
         >
           <input
-            id="s-key"
+            id={field}
             type="password"
             autoComplete="off"
             spellCheck={false}
-            placeholder="sk-ant-…"
+            placeholder={placeholder}
             value={key}
             onChange={(e) => setKey(e.target.value)}
           />

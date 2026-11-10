@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { applyFound, MODELS } from "../../runtime/src/models";
+import { applyFound, MODELS, NAMED } from "../../runtime/src/models";
 import { STACKS } from "../../runtime/src/stack";
 import App from "../App";
 import { fakeBridge } from "../test/fakeBridge";
@@ -19,6 +19,7 @@ describe("Ollama", () => {
     cleanup();
     localStorage.clear();
     applyFound("ollama", {});
+    applyFound(NAMED, {});
   });
 
   it("lets setup go on with models on this computer alone, on a stack that runs there", async () => {
@@ -71,7 +72,7 @@ describe("Ollama", () => {
     applyFound("ollama", {
       "ollama/gemma4:31b": { label: "gemma4:31b", input: 0, output: 0, cacheRead: 0, billing: "local" },
     });
-    expect(modelGroups().map((g) => g.family)).toEqual(["Opus", "Sonnet", "Haiku", "Ollama"]);
+    expect(modelGroups().map((g) => g.family)).toEqual(["OpenAI", "Opus", "Sonnet", "Haiku", "Ollama"]);
     expect(priceLine("ollama/gemma4:31b")).toBe("Free, on this computer");
     // Haiku is Anthropic's cheapest, so a draft keeps it rather than moving to a free model.
     expect(tierStack(STACKS.balanced, "draft").review.model).toBe("claude-haiku-5-5");

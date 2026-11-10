@@ -46,12 +46,16 @@ export interface ModelInfo {
 
 /** Listed prices on 28 Oct 2026. Cache writes cost 1.25x input. A downloaded catalog can add to these
  *  and change their prices, but never take one away. */
-const BUILT_IN_LISTED = "2026-10-28";
+const BUILT_IN_LISTED = "2026-11-10";
 
 export const BUILT_IN: Readonly<Record<string, ModelInfo>> = {
   "claude-opus-5-5": { label: "Opus 5.5", input: 4, output: 20, cacheRead: 0.2 },
   "claude-sonnet-5-5": { label: "Sonnet 5.5", input: 2, output: 10, cacheRead: 0.2 },
   "claude-haiku-5-5": { label: "Haiku 5.5", input: 0.1, output: 0.5, cacheRead: 0.01 },
+  "openai/gpt-6-astra": { label: "GPT-6 Astra", input: 10, output: 50, cacheRead: 1 },
+  "openai/gpt-6.1-sol": { label: "GPT-6.1 Sol", input: 2, output: 10, cacheRead: 0.1 },
+  "openai/gpt-6.1-terra": { label: "GPT-6.1 Terra", input: 1, output: 5, cacheRead: 0.05 },
+  "openai/gpt-6-luna": { label: "GPT-6 Luna", input: 0.1, output: 0.5, cacheRead: 0.01 },
 };
 
 /** A model's API id, such as claude-sonnet-5-5: one of MODELS' keys. */
@@ -109,8 +113,9 @@ export function parseCatalog(value: unknown): Catalog {
     if (billing !== undefined && !BILLINGS.includes(billing as string)) {
       throw new Error(`The model list's billing for ${id} isn't one Shoji knows.`);
     }
-    // Only a model that charges nothing may be listed as free.
-    const free = billing !== undefined;
+    // Only a model that charges nothing may be listed as free: one on the person's computer or plan, or one
+    // OpenRouter offers free, which its id says.
+    const free = billing !== undefined || /^openrouter\/.+:free$/.test(id);
     if (!price(input, free) || !price(output, free) || !price(cacheRead, true)) {
       throw new Error(`The model list's prices for ${id} aren't usable.`);
     }
@@ -127,9 +132,13 @@ const found = new Map<string, Record<ModelId, ModelInfo>>();
 /** The day the prices in MODELS were listed, as YYYY-MM-DD. */
 export const pricesListed = () => listed;
 
+/** Where a saved stack's own models are found. They go under every other source's, which know their names. */
+export const NAMED = "named";
+
 function rebuild() {
   for (const id of Object.keys(MODELS)) delete MODELS[id];
-  Object.assign(MODELS, BUILT_IN, listedModels, ...found.values());
+  const others = [...found].filter(([where]) => where !== NAMED).map(([, models]) => models);
+  Object.assign(MODELS, BUILT_IN, listedModels, found.get(NAMED) ?? {}, ...others);
 }
 
 /** Puts a catalog's models and prices in place of the last one's, over the built-in list. */
