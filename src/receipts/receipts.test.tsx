@@ -225,7 +225,7 @@ describe("the Receipts view", () => {
     ]);
     const pane = screen.getByRole("complementary", { name: "Receipt" });
     expect(within(pane).getByText("On your ChatGPT plan")).toBeTruthy();
-    expect(within(pane).getByText("Free, on this computer")).toBeTruthy();
+    expect(within(pane).getByText("On this computer")).toBeTruthy();
   });
 
   it("shows each day's spend, and one project at a time when there are several", async () => {

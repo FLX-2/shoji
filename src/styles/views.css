@@ -2621,6 +2621,19 @@ button.rrow:focus-visible {
   gap: var(--s-3);
 }
 
+/* A step and its model stay on one line; a long model name gives way before the cost does. */
+.rpane .lines li > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rpane .lines li > .n {
+  flex: none;
+  white-space: nowrap;
+}
+
 .rpane .lines .m {
   color: var(--z6);
 }
@@ -2758,7 +2771,7 @@ button.rrow:focus-visible {
   z-index: 5;
   top: calc(100% + 4px);
   right: 0;
-  width: 272px;
+  width: 304px;
   display: flex;
   flex-direction: column;
   border: 1px solid rgba(var(--ink-rgb), 0.14);
@@ -2805,13 +2818,16 @@ button.rrow:focus-visible {
   color: var(--z6);
 }
 
+/* The name comes first: when it and the price don't both fit, the price drops below it. */
 .mlist [role="option"] {
+  position: relative;
   cursor: pointer;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto 12px;
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 10px;
-  padding: 6px 8px;
+  column-gap: 10px;
+  row-gap: 1px;
+  padding: 6px 30px 6px 8px;
   border-radius: 3px;
 }
 
@@ -2820,6 +2836,8 @@ button.rrow:focus-visible {
 }
 
 .mlist [role="option"] b {
+  flex: 1 0 auto;
+  max-width: 100%;
   font-weight: 500;
   font-size: var(--t-md);
   color: var(--z8);
@@ -2834,6 +2852,7 @@ button.rrow:focus-visible {
 }
 
 .mlist [role="option"] span {
+  margin-left: auto;
   font-size: var(--t-sm);
   color: var(--z7);
   font-variant-numeric: tabular-nums;
@@ -2841,7 +2860,9 @@ button.rrow:focus-visible {
 }
 
 .mlist .tick {
-  align-self: center;
+  position: absolute;
+  top: calc(50% - 6px);
+  right: 8px;
   width: 12px;
   height: 12px;
   fill: none;
