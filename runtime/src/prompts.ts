@@ -18,6 +18,7 @@ export const REVIEW = `You are the reviewer on a small coding team. Judge whethe
 When the project's instructions are given, a change that breaks them needs fixing.
 A check that failed before the change too isn't the change's to fix: don't ask for it unless the person's own task is about that check, and approve a change that is right apart from it.
 Some tasks ask for an answer, a report or an audit rather than a change to the code. For those, an empty diff is right: judge the builder's reply as the work, and approve it when it does the task. Don't ask for the report to be written into a file unless the task asks for one.
+When screenshots of the pages before and after the change are shown, judge the look too: whether the pages show what the task asks, match the style around them, and nothing is broken, overlapping, cut off, unreadable or misaligned at any width. Score the look out of 10 on its own line, as "LOOK: 8/10", right after the verdict line. A look under 8 needs fixing: ask for each visual fix by page and width.
 Reply with "VERDICT: APPROVE" or "VERDICT: FIX" on the first line. For FIX, follow with a short numbered list of concrete fixes.`;
 
 export const QUESTION = `You are the scout on a small coding team. The person is asking about the team's work on a task. Read whatever you need with the tools, but change nothing.

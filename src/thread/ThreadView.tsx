@@ -30,6 +30,7 @@ import {
   foldRun,
   formatCost,
   modelName,
+  lookScore,
   reviewNotes,
   stepLabel,
   type RunView,
@@ -1108,11 +1109,11 @@ function Work({
     output &&
       step.role === "review" &&
       (approves(output) ? (
-        <Item key="out" icon={ICONS.note} summary="The review approved it">
+        <Item key="out" icon={ICONS.note} summary={`The review approved it${lookSaid(output)}`}>
           {reviewNotes(output) && <Markdown className="text" text={reviewNotes(output)} />}
         </Item>
       ) : (
-        <Item key="out" icon={ICONS.note} summary="The review asked for fixes" open>
+        <Item key="out" icon={ICONS.note} summary={`The review asked for fixes${lookSaid(output)}`} open>
           <Markdown className="text" text={reviewNotes(output)} />
         </Item>
       )),
@@ -1126,6 +1127,12 @@ function Work({
       {items}
     </div>
   );
+}
+
+/** The look score, for the review's summary line, when it judged the pages. */
+function lookSaid(review: string): string {
+  const score = lookScore(review);
+  return score === undefined ? "" : ` · the look scored ${score} of 10`;
 }
 
 function Checks({ checks }: { checks: CheckResult[] }) {

@@ -11,7 +11,7 @@ import { applyCatalog, MODELS, parseCatalog } from "./models";
 import { writeNotes, type NotesEvent } from "./notes";
 import { runThread } from "./pipeline";
 import { NO_PREVIEW, previewFor } from "./preview";
-import { compareBeforeAndAfter } from "./compare";
+import { comparer } from "./compare";
 import { defaultChecks } from "./project";
 import { AnthropicProvider } from "./provider";
 import { answerQuestion } from "./question";
@@ -85,6 +85,9 @@ Options:
   --shots-dir <folder>
                       With --dev-command, after a run that changed the pages Build looked at,
                       save each at every width as it was before the thread and as it is now
+  --look-review       With --shots-dir, Review sees those pages before and after the change at
+                      360 and 1280 px, scores the look out of 10, and sends a look under 8 back
+                      to Build
   --log <file>        Append every event to a JSON lines file
   --json              Print events as JSON lines, for the app
   --allow-dirty       Run even if the project has uncommitted changes
@@ -213,6 +216,7 @@ async function main() {
       "mcp-json": { type: "string" },
       "dev-command": { type: "string" },
       "shots-dir": { type: "string" },
+      "look-review": { type: "boolean", default: false },
       cap: { type: "string", default: "0.50" },
       check: { type: "string", multiple: true },
       changes: { type: "string" },
@@ -341,6 +345,17 @@ async function main() {
   // Started only when Build first looks at a page.
   const browser = values["dev-command"] ? findBrowser() : null;
   const preview = browser ? previewFor(root, values["dev-command"]!, () => Browser.launch(browser)) : NO_PREVIEW;
+  // The pages Build looked at, before and after its work. Each page's before is shot once, for Review and the person.
+  const pages =
+    values["shots-dir"] && browser
+      ? comparer({
+          root,
+          devCommand: values["dev-command"]!,
+          after: preview,
+          launch: () => Browser.launch(browser),
+          dir: values["shots-dir"],
+        })
+      : undefined;
   try {
     if (values.question !== undefined) {
       const result = await answerQuestion({
@@ -380,20 +395,14 @@ async function main() {
       emit,
       mcp,
       preview,
+      ...(pages && values["look-review"] && { look: () => pages.take() }),
     });
     process.exitCode = result.status === "ready" || result.status === "planned" ? 0 : 1;
     // The pages Build looked at, before and after its work, for the person to compare. No model is called.
     const changed = (result.status === "ready" || result.status === "needs-work") && result.diff.trim() !== "";
-    if (values["shots-dir"] && browser && changed && preview.looked().length) {
+    if (pages && changed && preview.looked().length) {
       emit({ type: "compare", status: "running" });
-      const comparison = await compareBeforeAndAfter({
-        root,
-        devCommand: values["dev-command"]!,
-        after: preview,
-        launch: () => Browser.launch(browser),
-        dir: values["shots-dir"],
-      });
-      emit({ type: "compare", status: "done", ...comparison });
+      emit({ type: "compare", status: "done", ...(await pages.take()) });
     }
   } finally {
     await Promise.all([mcp.close(), preview.close()]);

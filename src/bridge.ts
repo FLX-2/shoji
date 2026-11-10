@@ -37,6 +37,8 @@ export interface RunRequest {
   mcpServers?: { mcpServers: Record<string, Omit<McpServer, "name">> };
   /** The project's dev command, when Build may start it to look at pages. */
   devCommand?: string;
+  /** With `devCommand`: Review sees the pages Build looked at, before and after, and scores the look. */
+  lookReview?: boolean;
   /** What the person asked for, as the thread shows it, kept so a reopened thread shows it again. */
   ask?: string;
   /** For a new thread that carries on a committed one: the branch its copy starts from. */
@@ -98,6 +100,8 @@ export interface Carried {
   mcpServers?: McpServer[];
   /** The dev command Build may start in a project to look at its pages, or "" when it doesn't look. */
   devCommandFor?: (repo: string) => string;
+  /** Review sees the pages Build looked at and scores the look. */
+  lookReview?: boolean;
 }
 
 /** Servers in the shape the runtime's --mcp-json reads. */
@@ -114,12 +118,12 @@ export function carrying(bridge: Bridge, carried: () => Carried): Bridge {
   return {
     ...bridge,
     startRun: (request) => {
-      const { mcpServers, devCommandFor } = carried();
+      const { mcpServers, devCommandFor, lookReview } = carried();
       const devCommand = devCommandFor?.(request.repo);
       return bridge.startRun({
         ...add(request),
         ...(mcpServers?.length && { mcpServers: serversJson(mcpServers) }),
-        ...(devCommand && { devCommand }),
+        ...(devCommand && { devCommand, ...(lookReview && { lookReview }) }),
       });
     },
     startTrial: (request) => bridge.startTrial(add(request)),
