@@ -43,14 +43,11 @@ export function SetupView(props: SetupViewProps) {
   const names = [anthropic && "Anthropic", plan && "ChatGPT", local && "Ollama"].filter(Boolean) as string[];
 
   // Without Anthropic, the stack starts on whichever other provider is connected, since only it can run.
-  useEffect(() => {
-    const other = plan ?? local;
-    if (anthropic || !other) return;
-    if (!sameStack(choice, other) && !(local && sameStack(choice, local))) setChoice(other);
-  }, [anthropic, plan, local, choice]);
+  const runs = (stack: Stack | null) => !!stack && sameStack(choice, stack);
+  const picked = anthropic || runs(plan) || runs(local) ? choice : (plan ?? local ?? choice);
 
   const start = async () => {
-    if (!sameStack(choice, props.stack)) await props.onSaveStack(choice);
+    if (!sameStack(picked, props.stack)) await props.onSaveStack(picked);
     props.onDone();
   };
 
@@ -69,7 +66,7 @@ export function SetupView(props: SetupViewProps) {
           chatgpt={props.chatgpt}
         />
         <StackStep
-          choice={choice}
+          choice={picked}
           onChoose={setChoice}
           anthropic={anthropic}
           plan={plan}
