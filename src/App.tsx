@@ -797,7 +797,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
             prefs={prefs}
             onChange={setPrefs}
             notes={notes.notes}
-            onWriteNotes={(repo) => notes.start(repo, stack.stack)}
+            onWriteNotes={(repo, picked) => notes.start(repo, picked)}
             onDone={() => {
               setPrefs({ setupDone: true });
               setInSetup(false);

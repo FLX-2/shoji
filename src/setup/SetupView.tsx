@@ -27,7 +27,8 @@ interface SetupViewProps {
   onChange: (change: Partial<Prefs>) => void;
   /** The project notes Scout is writing or last wrote, if any. */
   notes: Notes | null;
-  onWriteNotes: (repo: string) => void;
+  /** Starts Scout on the project's notes, on the stack picked here. */
+  onWriteNotes: (repo: string, stack: Stack) => void;
   onDone: () => void;
 }
 
@@ -78,9 +79,10 @@ export function SetupView(props: SetupViewProps) {
           bridge={props.bridge}
           repo={props.prefs.repo}
           onChange={props.onChange}
-          scout={MODELS[props.stack.scout.model].label}
+          scout={MODELS[picked.scout.model].label}
+          free={!!MODELS[picked.scout.model].billing}
           notes={props.notes}
-          onWriteNotes={props.onWriteNotes}
+          onWriteNotes={(repo) => props.onWriteNotes(repo, picked)}
         />
         <div className="suf">
           <span className="note">{names.length ? `${and(names)} ${names.length > 1 ? "are" : "is"} connected` : "Connect a provider to start"}</span>
@@ -275,6 +277,7 @@ function Project({
   repo,
   onChange,
   scout,
+  free,
   notes,
   onWriteNotes,
 }: {
@@ -283,6 +286,8 @@ function Project({
   onChange: (change: Partial<Prefs>) => void;
   /** The Scout seat's model, which reads the project for its notes. */
   scout: string;
+  /** Whether that model costs nothing: it runs on this computer or on a plan. */
+  free: boolean;
   notes: Notes | null;
   onWriteNotes: (repo: string) => void;
 }) {
@@ -374,6 +379,7 @@ function Project({
         <NotesRow
           repo={repo}
           scout={scout}
+          free={free}
           notes={notes?.repo === repo ? notes : null}
           onWrite={() => onWriteNotes(repo)}
         />
@@ -386,11 +392,13 @@ function Project({
 function NotesRow({
   repo,
   scout,
+  free,
   notes,
   onWrite,
 }: {
   repo: string;
   scout: string;
+  free: boolean;
   notes: Notes | null;
   onWrite: () => void;
 }) {
@@ -406,7 +414,7 @@ function NotesRow({
     description = "This project already has a SHOJI.md. Plan reads it before every task.";
     action = <span className="pill">found</span>;
   } else if (result?.status === "ready") {
-    description = `Written to SHOJI.md for ${formatCost(result.cost)}. Edit it any time. Git ignores it, so it stays out of your commits.`;
+    description = `Written to SHOJI.md${free ? "" : ` for ${formatCost(result.cost)}`}. Edit it any time. Git ignores it, so it stays out of your commits.`;
     action = (
       <span className="pill">
         <span className="dot ok" aria-hidden="true" />
@@ -425,7 +433,7 @@ function NotesRow({
     description =
       failed ??
       ended ??
-      `${scout} reads the project once and writes SHOJI.md: its commands and conventions. Plan reads it before every task. It stops at $${NOTES_CAP.toFixed(2)}.`;
+      `${scout} reads the project once and writes SHOJI.md: its commands and conventions. Plan reads it before every task.${free ? "" : ` It stops at $${NOTES_CAP.toFixed(2)}.`}`;
     action = (
       <button type="button" className="btn sm" onClick={onWrite}>
         {failed || ended ? "Try again" : "Write notes"}

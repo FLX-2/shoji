@@ -41,6 +41,19 @@ describe("Ollama", () => {
     );
   });
 
+  it("has setup's notes written by the local Scout, with no spending limit to name", async () => {
+    const fake = fakeBridge({ saved: false, fromEnv: false });
+    fake.ollama.models = ["gemma4:31b", "qwen3:4b"];
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page" }));
+    render(<App bridge={fake.bridge} />);
+    await screen.findByText("Project notes");
+    expect(
+      screen.getByText("qwen3:4b reads the project once and writes SHOJI.md: its commands and conventions. Plan reads it before every task."),
+    ).toBeTruthy();
+    await click("Write notes");
+    expect(fake.calls.notes.at(-1)!.stack).toEqual(localStack(["ollama/gemma4:31b", "ollama/qwen3:4b"]));
+  });
+
   it("says in Settings what Ollama has, and how to get it when it isn't running", async () => {
     const fake = fakeBridge();
     render(<App bridge={fake.bridge} />);
