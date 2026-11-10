@@ -13,9 +13,9 @@ import { runThread } from "./pipeline";
 import { NO_PREVIEW, previewFor } from "./preview";
 import { comparer } from "./compare";
 import { defaultChecks } from "./project";
-import { AnthropicProvider } from "./provider";
+import { connect, unreachable } from "./connect";
 import { answerQuestion } from "./question";
-import { describeStacks, parseStack, type Stack, STACKS, type StackName } from "./stack";
+import { describeStacks, parseStack, ROLES, type Stack, STACKS, type StackName } from "./stack";
 import { describeBriefing, finished, runTrial, type TrialEvent, type TrialTask } from "./trial";
 import { DEFAULT_PRIVATE, Workspace } from "./workspace";
 
@@ -96,7 +96,7 @@ Options:
 Stacks (model and effort for each role):
 ${describeStacks()}
 
-The API key comes from SHOJI_API_KEY or ANTHROPIC_API_KEY.`;
+Anthropic's API key comes from SHOJI_API_KEY or ANTHROPIC_API_KEY.`;
 
 function fail(message: string): never {
   process.stderr.write(`${message}\n`);
@@ -271,8 +271,11 @@ async function main() {
   else fail(`Unknown stack "${values.stack}". Choose ${Object.keys(STACKS).join(", ")}.`);
   const cap = Number(values.cap);
   if (!(cap > 0)) fail("--cap must be a positive number of dollars.");
-  const apiKey = process.env.SHOJI_API_KEY || process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) fail("Set SHOJI_API_KEY or ANTHROPIC_API_KEY.");
+  const provider = connect(process.env, { anthropicUrl: values["base-url"] });
+  // Notes use only Scout's model; every other run may use any role's.
+  const used = values.notes ? [stack.scout.model] : ROLES.map((role) => stack[role].model);
+  const missing = unreachable(provider, used);
+  if (missing) fail(missing);
 
   const continuing = [
     values.changes !== undefined,
@@ -298,7 +301,6 @@ async function main() {
     if (values.json) process.stdout.write(`${line}\n`);
     else if (text) process.stdout.write(`${text}\n`);
   };
-  const provider = new AnthropicProvider(apiKey, values["base-url"]);
 
   const privateFiles = values.private ?? DEFAULT_PRIVATE;
 
