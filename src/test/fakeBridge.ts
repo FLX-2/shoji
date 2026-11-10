@@ -67,6 +67,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   const picked: string[] = [];
   /** The newer release GitHub lists, if any, and what installing it fails with; tests set these. */
   const release = { update: null as AvailableUpdate | null, installError: null as string | null, checks: 0, installs: 0 };
+  /** Ollama's tool-ready models, largest first, or null when it isn't running; tests set it. */
+  const ollama = { models: null as string[] | null };
   let runs = 0;
   let threads = 0;
 
@@ -84,6 +86,10 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     forgetKey: async () => {
       calls.forgot++;
       key = { ...key, saved: false };
+    },
+    ollamaModels: async () => {
+      if (!ollama.models) throw new Error("Ollama isn't running on this computer.");
+      return ollama.models.map((name, i) => ({ name, size: 1000 - i }));
     },
     pickProject: async () => "/work/pricing-page",
     pickAttachments: async () => [...picked],
@@ -265,6 +271,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     files,
     picked,
     release,
+    ollama,
     /** Sends events from the latest run. */
     emit: (...events: RuntimeEvent[]) => act(() => events.forEach((event) => onEvent.forEach((h) => h(runs, event)))),
     /** Sends trial events from the latest run. */

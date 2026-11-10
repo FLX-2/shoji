@@ -9,6 +9,12 @@ import type { Stack } from "../runtime/src/stack";
 import type { TrialEvent, TrialTask } from "../runtime/src/trial";
 import type { SlashCommand } from "./shell/mention";
 
+/** A model pulled into Ollama: its name, such as gemma4:31b, and its size on disk in bytes. */
+export interface PulledModel {
+  name: string;
+  size: number;
+}
+
 export interface KeyStatus {
   saved: boolean;
   /** A key from SHOJI_API_KEY or ANTHROPIC_API_KEY, which only a shell-launched app sees. */
@@ -211,6 +217,9 @@ export const bridge = {
   /** Saves the key the app found in its environment to the keychain. The key never reaches this side. */
   useShellKey: () => invoke<void>("use_shell_key"),
   forgetKey: () => invoke<void>("forget_key"),
+  /** The models pulled into Ollama on this computer that can use tools, largest first. Fails when Ollama
+   *  isn't running. */
+  ollamaModels: () => invoke<PulledModel[]>("ollama_models"),
   pickProject: () => invoke<string | null>("pick_project"),
   /** Asks for screenshots or files to attach to a task. Empty when the person cancels. */
   pickAttachments: () => invoke<string[]>("pick_attachments"),

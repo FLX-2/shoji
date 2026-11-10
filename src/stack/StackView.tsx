@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { EFFORTS, MODELS, type ModelId } from "../../runtime/src/models";
+import { EFFORTS, isFound, MODELS, type ModelId } from "../../runtime/src/models";
 import { ROLES, STACKS, type Role, type Seat, type Stack, type StackName } from "../../runtime/src/stack";
 import type { Bridge, LedgerThread, TrialRequest } from "../bridge";
 import {
@@ -71,7 +71,8 @@ export function StackView({
   const edit = (next: Stack) => setDraft(sameStack(next, stack) ? null : next);
   const seat = (role: Role, change: Partial<Seat>) => edit({ ...shown, [role]: { ...shown[role], ...change } });
   // New models from the list that nobody has tried or set aside yet.
-  const fresh = Object.keys(MODELS).filter((id) => !seenModels.includes(id));
+  // Only the list's news: a model the person pulled themselves is no surprise to them.
+  const fresh = Object.keys(MODELS).filter((id) => !seenModels.includes(id) && !isFound(id));
   const usedIn = (s: Stack) => ROLES.map((role) => s[role].model);
   // Puts a new model on the roles it most likely suits, and brings Trial into view: nothing runs until Run trial.
   const tryModel = (model: ModelId) => {
@@ -229,6 +230,8 @@ export function StackView({
               </div>
               {modelGroups()
                 .flatMap((g) => g.ids)
+                // Models on this computer cost nothing, so they have no prices to list.
+                .filter((model) => MODELS[model].billing !== "local")
                 .map((model) => (
                   <div key={model} className="prow" role="row">
                     <span role="cell">{MODELS[model].label}</span>

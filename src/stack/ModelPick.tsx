@@ -1,11 +1,13 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { MODELS, type ModelId } from "../../runtime/src/models";
+import { MODELS, PROVIDER_NAMES, providerOf, type ModelId } from "../../runtime/src/models";
 
 /** Past this many models the list gets a box to narrow it by name. */
 const FILTER_FROM = 9;
 
-/** A model's family, such as Opus: the first word of its name. */
-export const familyOf = (id: ModelId) => MODELS[id].label.split(" ")[0];
+/** A model's family, such as Opus: the first word of an Anthropic model's name, or else its provider, since
+ *  other providers name their models in ways that don't group. */
+export const familyOf = (id: ModelId) =>
+  providerOf(id) === "anthropic" ? MODELS[id].label.split(" ")[0] : PROVIDER_NAMES[providerOf(id)];
 
 /**
  * Every model Shoji knows, in families: the family with the dearest model first, and in each family the newest
@@ -22,7 +24,10 @@ export function modelGroups(ids: ModelId[] = Object.keys(MODELS)): { family: str
 }
 
 /** A model's prices, as "$4 in, $20 out": dollars per million tokens. */
-export const priceLine = (id: ModelId) => `${dollars(MODELS[id].input)} in, ${dollars(MODELS[id].output)} out`;
+export const priceLine = (id: ModelId) =>
+  MODELS[id].billing === "local"
+    ? "Free, on this computer"
+    : `${dollars(MODELS[id].input)} in, ${dollars(MODELS[id].output)} out`;
 
 const dollars = (n: number) => `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
 
