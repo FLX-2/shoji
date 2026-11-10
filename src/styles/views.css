@@ -4253,6 +4253,11 @@ button.rrow:focus-visible {
   white-space: nowrap;
 }
 
+/* A note that stays is given room for one line; a wrapped line would leave a gap before its action. */
+.toast.stays {
+  max-width: min(720px, calc(100vw - 32px));
+}
+
 .toast.problem > span,
 .toast.stays > span {
   white-space: normal;
