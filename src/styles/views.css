@@ -610,12 +610,46 @@
 }
 
 .tpane {
+  position: relative;
   min-width: 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
   border-left: 1px solid var(--hair);
   background: var(--pane);
+}
+
+/* The panel's left edge, which drags to resize it: a hit area over the hairline that lights on hover. */
+.presize {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.presize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background var(--d-quick) var(--e-out);
+}
+
+.presize:hover::after,
+.presize:active::after,
+.presize:focus-visible::after {
+  background: rgba(var(--ink-rgb), 0.24);
+}
+
+.presize:focus-visible {
+  outline: none;
 }
 
 /* The panel's tabs, level with the thread's title. */
@@ -3838,6 +3872,7 @@ button.rrow:focus-visible {
 }
 
 .review.cmdask code {
+  overflow-wrap: anywhere;
   font-family: var(--mono);
   font-size: var(--t-sm);
   color: var(--z10);
@@ -3845,6 +3880,25 @@ button.rrow:focus-visible {
   border: 1px solid var(--hair);
   border-radius: 3px;
   padding: 1px 5px;
+}
+
+/* A long or many-line command, in full, wrapped to the card and scrolled past a dozen lines. */
+.review.cmdask .cmd {
+  flex-basis: 100%;
+  min-width: 0;
+  max-height: 240px;
+  overflow: auto;
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  line-height: 1.55;
+  color: var(--z10);
+  background: var(--z2);
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* Threads: the person's threads in a pane beside the one on show, joined on a hairline. */

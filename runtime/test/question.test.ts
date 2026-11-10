@@ -22,6 +22,7 @@ describe("a question about the work", () => {
       plan: "Change the greeting.",
       question: "Does it still export a default?",
       seat: STACKS.balanced.scout,
+      stack: STACKS.balanced,
       provider,
       workspace: new Workspace(root, [".env"]),
       cap: 0.1,
@@ -33,6 +34,8 @@ describe("a question about the work", () => {
     const prompt = JSON.stringify(provider.requests[0].messages[0]);
     expect(prompt).toContain("The person asks: Does it still export a default?");
     expect(prompt).toContain("+export default 'hello, shoji';");
+    // "Which model is this?" gets a true answer: the stack is named.
+    expect(prompt).toContain("one model per step: Scout: Haiku 5.5, Plan: Opus 5.5, Build: Sonnet 5.5, Review: Haiku 5.5. You are the Scout");
     expect(prompt).not.toContain("other-secret");
     expect(events.find((e) => e.type === "step" && e.status === "done")).toMatchObject({
       step: "answer",

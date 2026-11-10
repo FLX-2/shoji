@@ -66,4 +66,23 @@ describe("asking about a thread's work", () => {
     expect(document.querySelector(".tbar .stage")?.textContent).toBe("Ready to accept");
     expect(screen.getByRole("radio", { name: "Request changes" })).toBeTruthy();
   });
+  it("answers a question sent as changes, rather than planning again", async () => {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", planFirst: true }));
+    const fake = fakeBridge();
+    render(<App bridge={fake.bridge} />);
+    const task = await screen.findByRole("textbox", { name: "Task" });
+    fireEvent.change(task, { target: { value: "Add annual pricing" } });
+    await act(async () => {
+      fireEvent.keyDown(task, { key: "Enter" });
+    });
+    fake.emit(result("planned", "1. Price cards yearly."));
+    await act(async () => fake.exit(0));
+
+    const box = screen.getByRole("textbox", { name: "Plan changes" });
+    fireEvent.change(box, { target: { value: "what model is being used right now" } });
+    await act(async () => {
+      fireEvent.keyDown(box, { key: "Enter" });
+    });
+    expect(fake.calls.starts[1].changes).toMatchObject({ kind: "question", notes: "what model is being used right now" });
+  });
 });

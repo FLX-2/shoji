@@ -37,6 +37,8 @@ import {
   type StepView,
   type ToolUse,
 } from "./fold";
+import { readsAsQuestion } from "./asks";
+import { PanelResizer, panelColumns, usePanelWidth } from "./PanelResizer";
 import { Markdown } from "./Markdown";
 import { PreviewView } from "./PreviewView";
 import type { useTerminals } from "./useTerminals";
@@ -259,6 +261,7 @@ export function ThreadView({
     [turnCount],
   );
   usePanelKeys(changePanel);
+  const [panelWidth, setPanelWidth] = usePanelWidth();
   // Held here so the chosen file outlives closing Code.
   const [chosenFile, setChosenFile] = useState<string | null>(null);
   const openFile = (path: string) => {
@@ -390,7 +393,10 @@ export function ThreadView({
   );
 
   return (
-    <section className="thread">
+    <section
+      className="thread"
+      {...(panel.open && panelWidth !== null && { style: { gridTemplateColumns: panelColumns(panelWidth) } })}
+    >
       <div className="convo">
         <div className="tbar solid">
           {renaming && onRenamed ? (
@@ -615,7 +621,11 @@ export function ThreadView({
             }
             blocked={spent >= thread.cap}
             onSend={(notes) =>
-              (say === "question" || thread.committed ? onQuestion : planned ? onReplan : onRequestChanges)(notes)
+              (say === "question" || thread.committed || readsAsQuestion(notes)
+                ? onQuestion
+                : planned
+                  ? onReplan
+                  : onRequestChanges)(notes)
             }
             files={files}
             commands={commands}
@@ -671,6 +681,7 @@ export function ThreadView({
       </button>
       {panel.open && (
         <aside className="tpane" id="side-panel" aria-label="Side panel">
+          <PanelResizer width={panelWidth} onWidth={setPanelWidth} />
           <div className="tph solid">
             <div className="seg" role="tablist" aria-label="Side panel">
               {PANES.map((p) => (
@@ -778,6 +789,11 @@ function CommandAsk({
           {step ?? "Shoji"} wants to use <code>{command}</code> from an MCP server. Tools that only look run on their
           own; anything that could change something waits for you.
         </p>
+      ) : command.includes("\n") || command.length > 80 ? (
+        <>
+          <p>{step ?? "Shoji"} wants to run this command. Checks run on their own; anything else waits for you.</p>
+          <pre className="cmd">{command}</pre>
+        </>
       ) : (
         <p>
           {step ?? "Shoji"} wants to run <code>{command}</code>. Checks run on their own; anything else waits for you.

@@ -495,6 +495,15 @@ describe("a thread in the app", () => {
     expect(screen.getByText("Looked at /pricing at 360px")).toBeTruthy();
   });
 
+  it("shows a long command in full inside the card, wrapped, rather than off its edge", async () => {
+    const fake = await startThread();
+    const command = "python - <<'PY'\nfrom pathlib import Path\nfor p in Path('src').glob('*.tsx'): print(p)\nPY";
+    fake.emit(running("build", "build", SONNET), { type: "ask", step: "build", command });
+    const ask = screen.getByRole("alertdialog", { name: "Allow this command?" });
+    expect(ask.textContent).toContain("Build wants to run this command.");
+    expect(ask.querySelector("pre.cmd")?.textContent).toBe(command);
+  });
+
   it("waits for the person before a command beyond the checks, and remembers one always allowed", async () => {
     const fake = await startThread();
     fake.emit(running("build", "build", SONNET), { type: "ask", step: "build", command: "npm install" });
