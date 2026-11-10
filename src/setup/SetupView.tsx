@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { MODELS } from "../../runtime/src/models";
+import { MODELS, providerOf } from "../../runtime/src/models";
 import { ROLES, STACKS, type Stack, type StackName } from "../../runtime/src/stack";
 import type { Bridge, KeyStatus } from "../bridge";
 import { folderName } from "../home/HomeView";
@@ -7,6 +7,8 @@ import { MoneyRow } from "../settings/MoneyRow";
 import type { Prefs } from "../settings/prefs";
 import { Mark } from "../shell/Mark";
 import { describeStack, presetOf, PRESETS, ROLE_NAMES, sameStack, seatLabel } from "../stack/lock";
+import { localStack, type Ollama } from "../stack/ollama";
+import { OllamaRow } from "../settings/OllamaRow";
 import { formatCost } from "../thread/fold";
 import { NOTES_CAP, notesProgress, type Notes } from "./useNotes";
 
@@ -15,6 +17,7 @@ interface SetupViewProps {
   keyStatus: KeyStatus | null;
   /** Reads the key's status again after it changes. */
   onKeyChanged: () => Promise<void>;
+  ollama: Ollama;
   stack: Stack;
   onSaveStack: (stack: Stack) => Promise<void>;
   prefs: Prefs;
@@ -32,9 +35,13 @@ const STEPS = ["Models", "Stack", "Project"];
 export function SetupView(props: SetupViewProps) {
   const [step, setStep] = useState(0);
   const [choice, setChoice] = useState(props.stack);
-  const connected = !!props.keyStatus?.saved;
+  const anthropic = !!props.keyStatus?.saved;
+  const local = props.ollama.status === "ready" ? localStack(props.ollama.models) : null;
+  const connected = anthropic || !!local;
 
   const next = async () => {
+    // With only Ollama connected, the stack starts on this computer, since no other can run.
+    if (step === 1 && !anthropic && local) setChoice(local);
     if (step === 2 && !sameStack(choice, props.stack)) await props.onSaveStack(choice);
     setStep(step + 1);
   };
@@ -54,8 +61,19 @@ export function SetupView(props: SetupViewProps) {
         )}
 
         {step === 0 && <Welcome onStart={() => setStep(1)} />}
-        {step === 1 && <Models bridge={props.bridge} status={props.keyStatus} onKeyChanged={props.onKeyChanged} />}
-        {step === 2 && <StackStep choice={choice} onChoose={setChoice} prefs={props.prefs} onChange={props.onChange} />}
+        {step === 1 && (
+          <Models bridge={props.bridge} status={props.keyStatus} onKeyChanged={props.onKeyChanged} ollama={props.ollama} />
+        )}
+        {step === 2 && (
+          <StackStep
+            choice={choice}
+            onChoose={setChoice}
+            anthropic={anthropic}
+            local={local}
+            prefs={props.prefs}
+            onChange={props.onChange}
+          />
+        )}
         {step === 3 && (
           <Project
             bridge={props.bridge}
@@ -74,7 +92,9 @@ export function SetupView(props: SetupViewProps) {
             </button>
             <span className="sp" />
             {step === 1 && (
-              <span className="note">{connected ? "Anthropic is connected" : "Connect Anthropic to go on"}</span>
+              <span className="note">
+                {anthropic ? "Anthropic is connected" : local ? "Ollama is connected" : "Connect a provider to go on"}
+              </span>
             )}
             {step < STEPS.length ? (
               <button type="button" className="btn solid" disabled={step === 1 && !connected} onClick={next}>
@@ -106,7 +126,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
       <ol className="suplan">
         <li>
           <b>Connect models</b>
-          <span>Your own Anthropic key</span>
+          <span>Your own Anthropic key, or Ollama on this computer</span>
         </li>
         <li>
           <b>Choose a starting stack</b>
@@ -132,10 +152,12 @@ function Models({
   bridge,
   status,
   onKeyChanged,
+  ollama,
 }: {
   bridge: Bridge;
   status: KeyStatus | null;
   onKeyChanged: () => Promise<void>;
+  ollama: Ollama;
 }) {
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +172,10 @@ function Models({
     <div className="sup">
       <div className="suhd">
         <h2>Connect your models</h2>
-        <p>Your key stays in the system keychain and is sent only to Anthropic. You can change it later in Settings.</p>
+        <p>
+          Connect either, or both. Your key stays in the system keychain and is sent only to Anthropic. Ollama runs models
+          on this computer. You can change these later in Settings.
+        </p>
       </div>
       {status?.fromEnv && !saved && (
         <div className="found">
@@ -205,25 +230,34 @@ function Models({
             </form>
           )}
         </div>
+        <OllamaRow ollama={ollama} setup />
       </div>
     </div>
   );
 }
 
+/** Anthropic's models, which its key reaches. */
 function modelNames() {
-  return Object.values(MODELS)
-    .map((m) => m.label)
+  return Object.entries(MODELS)
+    .filter(([id]) => providerOf(id) === "anthropic")
+    .map(([, m]) => m.label)
     .join(", ");
 }
 
 function StackStep({
   choice,
   onChoose,
+  anthropic,
+  local,
   prefs,
   onChange,
 }: {
   choice: Stack;
   onChoose: (stack: Stack) => void;
+  /** Whether Anthropic is connected, so its stacks can run. */
+  anthropic: boolean;
+  /** A stack on Ollama's models, when Ollama has some. */
+  local: Stack | null;
   prefs: Prefs;
   onChange: (change: Partial<Prefs>) => void;
 }) {
@@ -238,17 +272,23 @@ function StackStep({
         </p>
       </div>
       <div className="seg" role="radiogroup" aria-label="Starting stack">
-        {(Object.keys(STACKS) as StackName[]).map((name) => (
-          <button
-            key={name}
-            type="button"
-            role="radio"
-            aria-checked={preset === name}
-            onClick={() => onChoose(STACKS[name])}
-          >
-            {PRESETS[name]}
+        {anthropic &&
+          (Object.keys(STACKS) as StackName[]).map((name) => (
+            <button
+              key={name}
+              type="button"
+              role="radio"
+              aria-checked={preset === name}
+              onClick={() => onChoose(STACKS[name])}
+            >
+              {PRESETS[name]}
+            </button>
+          ))}
+        {local && (
+          <button type="button" role="radio" aria-checked={sameStack(choice, local)} onClick={() => onChoose(local)}>
+            On this computer
           </button>
-        ))}
+        )}
       </div>
       <div className="card">
         {ROLES.map((role) => (

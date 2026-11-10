@@ -1,5 +1,6 @@
 mod keys;
 mod ledger;
+mod ollama;
 mod push;
 mod updates;
 #[cfg(unix)]
@@ -90,6 +91,15 @@ fn use_shell_key(provider: Option<String>) -> Result<(), String> {
 #[tauri::command]
 fn forget_key(provider: Option<String>) -> Result<(), String> {
     keys::forget(keys::keyed(provider.as_deref().unwrap_or("anthropic"))?)
+}
+
+/// The models pulled into Ollama on this computer that can call tools, largest first.
+#[tauri::command]
+async fn ollama_models() -> Result<Vec<ollama::Pulled>, String> {
+    let host = std::env::var("OLLAMA_HOST").ok();
+    tauri::async_runtime::spawn_blocking(move || ollama::pulled(host.as_deref()))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -1167,6 +1177,7 @@ pub fn run() {
             save_key,
             use_shell_key,
             forget_key,
+            ollama_models,
             pick_project,
             pick_attachments,
             save_attachment,
