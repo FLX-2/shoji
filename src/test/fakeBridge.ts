@@ -3,7 +3,7 @@ import type { RuntimeEvent } from "../../runtime/src/events";
 import type { NotesEvent } from "../../runtime/src/notes";
 import type { TrialEvent } from "../../runtime/src/trial";
 import type { SlashCommand } from "../shell/mention";
-import type { AvailableUpdate, Bridge, KeyStatus, LedgerThread, NotesRequest, RunExit, RunRequest, TrialRequest } from "../bridge";
+import type { AvailableUpdate, Bridge, FoundProject, KeyStatus, LedgerThread, NotesRequest, RunExit, RunRequest, TrialRequest } from "../bridge";
 
 /** Stands in for the Rust side: records what the app asks for and plays back runtime events. */
 export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
@@ -25,6 +25,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   const logs: Record<number, RuntimeEvent[]> = {};
   /** stack.lock as the app would find it on disk. */
   const files = { stackLock: null as string | null, hasNotes: false };
+  /** Projects "found" in Claude Code and Codex. */
+  const found: FoundProject[] = [];
   const onEvent: ((run: number, event: RuntimeEvent) => void)[] = [];
   const onTrialEvent: ((run: number, event: TrialEvent) => void)[] = [];
   const onNotesEvent: ((run: number, event: NotesEvent) => void)[] = [];
@@ -86,6 +88,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       key = { ...key, saved: false };
     },
     pickProject: async () => "/work/pricing-page",
+    foundProjects: async () => found.map((f) => ({ ...f })),
     pickAttachments: async () => [...picked],
     saveAttachment: async (name, bytes) => {
       calls.pasted.push({ name, bytes });
@@ -263,6 +266,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     ledger,
     logs,
     files,
+    found,
     picked,
     release,
     /** Sends events from the latest run. */

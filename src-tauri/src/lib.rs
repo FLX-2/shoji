@@ -1,3 +1,4 @@
+mod found;
 mod ledger;
 mod push;
 mod updates;
@@ -114,6 +115,16 @@ fn forget_key() -> Result<(), String> {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(e.to_string()),
     }
+}
+
+/// Git projects the person worked on with Claude Code or Codex, for setup to offer.
+#[tauri::command]
+async fn found_projects() -> Vec<found::FoundProject> {
+    let Some(home) = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }) else { return vec![] };
+    let codex = std::env::var_os("CODEX_HOME").filter(|d| !d.is_empty()).map(std::path::PathBuf::from);
+    tauri::async_runtime::spawn_blocking(move || found::found_in(Path::new(&home), codex))
+        .await
+        .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -1204,6 +1215,7 @@ pub fn run() {
             use_shell_key,
             forget_key,
             pick_project,
+            found_projects,
             pick_attachments,
             save_attachment,
             start_run,

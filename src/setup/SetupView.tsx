@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { MODELS } from "../../runtime/src/models";
-import { ROLES, STACKS, type Stack, type StackName } from "../../runtime/src/stack";
-import type { Bridge, KeyStatus } from "../bridge";
+import { STACKS, type Stack, type StackName } from "../../runtime/src/stack";
+import type { Bridge, FoundProject, KeyStatus } from "../bridge";
 import { folderName } from "../home/HomeView";
 import { MoneyRow } from "../settings/MoneyRow";
 import type { Prefs } from "../settings/prefs";
 import { Mark } from "../shell/Mark";
-import { describeStack, presetOf, PRESETS, ROLE_NAMES, sameStack, seatLabel } from "../stack/lock";
+import { describeStack, presetOf, PRESETS, sameStack } from "../stack/lock";
 import { formatCost } from "../thread/fold";
 import { NOTES_CAP, notesProgress, type Notes } from "./useNotes";
 
@@ -25,106 +25,47 @@ interface SetupViewProps {
   onDone: () => void;
 }
 
-// Look isn't a step: its defaults are calm, and Settings has it for later.
-const STEPS = ["Models", "Stack", "Project"];
-
-/** The first run: connect a model provider, take a starting stack and open a project. */
+/** The first run, on one page: connect a model provider, take a starting stack and open a project. Look isn't
+ *  here: its defaults are calm, and Settings has it for later. */
 export function SetupView(props: SetupViewProps) {
-  const [step, setStep] = useState(0);
   const [choice, setChoice] = useState(props.stack);
   const connected = !!props.keyStatus?.saved;
 
-  const next = async () => {
-    if (step === 2 && !sameStack(choice, props.stack)) await props.onSaveStack(choice);
-    setStep(step + 1);
+  const start = async () => {
+    if (!sameStack(choice, props.stack)) await props.onSaveStack(choice);
+    props.onDone();
   };
 
   return (
     <section className="setup" aria-label="Setup">
       <div className="su">
-        {step > 0 && (
-          <ol className="sust">
-            {STEPS.map((name, i) => (
-              <li key={name} className={i + 1 < step ? "done" : i + 1 === step ? "on" : undefined}>
-                <i aria-hidden="true">{i + 1 < step ? "✓" : i + 1}</i>
-                {name}
-              </li>
-            ))}
-          </ol>
-        )}
-
-        {step === 0 && <Welcome onStart={() => setStep(1)} />}
-        {step === 1 && <Models bridge={props.bridge} status={props.keyStatus} onKeyChanged={props.onKeyChanged} />}
-        {step === 2 && <StackStep choice={choice} onChoose={setChoice} prefs={props.prefs} onChange={props.onChange} />}
-        {step === 3 && (
-          <Project
-            bridge={props.bridge}
-            repo={props.prefs.repo}
-            onChange={props.onChange}
-            scout={MODELS[props.stack.scout.model].label}
-            notes={props.notes}
-            onWriteNotes={props.onWriteNotes}
-          />
-        )}
-
-        {step > 0 && (
-          <div className="suf">
-            <button type="button" className="btn" onClick={() => setStep(step - 1)}>
-              Back
-            </button>
-            <span className="sp" />
-            {step === 1 && (
-              <span className="note">{connected ? "Anthropic is connected" : "Connect Anthropic to go on"}</span>
-            )}
-            {step < STEPS.length ? (
-              <button type="button" className="btn solid" disabled={step === 1 && !connected} onClick={next}>
-                Continue
-              </button>
-            ) : (
-              <button type="button" className="btn solid" onClick={props.onDone}>
-                Start using Shoji
-              </button>
-            )}
-          </div>
-        )}
+        <div className="suw">
+          <Mark className="sumk" large />
+          <h2>The right model for every step.</h2>
+          <p>
+            Shoji plans, builds and checks your work with a small team of models, each chosen for its step. You bring
+            the models and pay the provider directly. Shoji itself is free.
+          </p>
+        </div>
+        <Models bridge={props.bridge} status={props.keyStatus} onKeyChanged={props.onKeyChanged} />
+        <StackStep choice={choice} onChoose={setChoice} prefs={props.prefs} onChange={props.onChange} />
+        <Project
+          bridge={props.bridge}
+          repo={props.prefs.repo}
+          onChange={props.onChange}
+          scout={MODELS[props.stack.scout.model].label}
+          notes={props.notes}
+          onWriteNotes={props.onWriteNotes}
+        />
+        <div className="suf">
+          <span className="note">{connected ? "Anthropic is connected" : "Connect Anthropic to start"}</span>
+          <span className="sp" />
+          <button type="button" className="btn solid" disabled={!connected} onClick={start}>
+            Start using Shoji
+          </button>
+        </div>
       </div>
     </section>
-  );
-}
-
-function Welcome({ onStart }: { onStart: () => void }) {
-  return (
-    <div className="sup">
-      <div className="suw">
-        <Mark className="sumk" large />
-        <h2>The right model for every step.</h2>
-        <p>
-          Shoji plans, builds and checks your work with a small team of models, each chosen for its step. You bring the
-          models and pay the provider directly. Shoji itself is free.
-        </p>
-      </div>
-      <ol className="suplan">
-        <li>
-          <b>Connect models</b>
-          <span>Your own Anthropic key</span>
-        </li>
-        <li>
-          <b>Choose a starting stack</b>
-          <span>Which model takes which step</span>
-        </li>
-        <li>
-          <b>Open a project</b>
-          <span>A git repository on this computer</span>
-        </li>
-      </ol>
-      <div className="suf">
-        <span className="note">About three minutes</span>
-        <span className="sp" />
-        <button type="button" className="btn solid" onClick={onStart}>
-          Set up Shoji
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -147,9 +88,9 @@ function Models({
     );
 
   return (
-    <div className="sup">
+    <section className="sup" aria-label="Models">
       <div className="suhd">
-        <h2>Connect your models</h2>
+        <h3>Connect your models</h3>
         <p>Your key stays in the system keychain and is sent only to Anthropic. You can change it later in Settings.</p>
       </div>
       {status?.fromEnv && !saved && (
@@ -206,7 +147,7 @@ function Models({
           )}
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -229,9 +170,9 @@ function StackStep({
 }) {
   const preset = presetOf(choice);
   return (
-    <div className="sup">
+    <section className="sup" aria-label="Stack">
       <div className="suhd">
-        <h2>Your starting stack</h2>
+        <h3>Your starting stack</h3>
         <p>
           Each step of a task goes to the model that does it best for the price. Shoji never switches a model without
           asking, and you can change any of them in Stack.
@@ -248,17 +189,6 @@ function StackStep({
           >
             {PRESETS[name]}
           </button>
-        ))}
-      </div>
-      <div className="card">
-        {ROLES.map((role) => (
-          <div key={role} className="srow">
-            <div>
-              <b>{ROLE_NAMES[role].label}</b>
-              <span className="d">{ROLE_NAMES[role].does}</span>
-            </div>
-            <span className="mpick">{seatLabel(choice[role])}</span>
-          </div>
         ))}
       </div>
       <p className="note">{describeStack(choice)}</p>
@@ -278,7 +208,7 @@ function StackStep({
           onChange={(dailyLimit) => onChange({ dailyLimit })}
         />
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -301,6 +231,7 @@ function Project({
   onWriteNotes: (repo: string) => void;
 }) {
   const [recent, setRecent] = useState<string[]>([]);
+  const [found, setFound] = useState<FoundProject[]>([]);
   const [check, setCheck] = useState<Check>(null);
 
   useEffect(() => {
@@ -308,6 +239,10 @@ function Project({
       .ledgerThreads()
       .then((threads) => setRecent([...new Set(threads.map((t) => t.repo))].slice(0, 4)))
       .catch(() => setRecent([]));
+    bridge
+      .foundProjects()
+      .then(setFound)
+      .catch(() => setFound([]));
   }, [bridge]);
 
   // Checks whichever project is chosen, including one chosen before setup.
@@ -336,23 +271,31 @@ function Project({
 
   const choose = (path: string) => onChange({ repo: path });
 
-  const folders = repo && !recent.includes(repo) ? [repo, ...recent] : recent;
+  // Shoji's own projects first, then those found in Claude Code and Codex, each once.
+  const mine = repo && !recent.includes(repo) ? [repo, ...recent] : recent;
+  const folders: { path: string; from?: string }[] = [
+    ...mine.map((path) => ({ path })),
+    ...found.filter((f) => !mine.includes(f.path)).map(({ path, from }) => ({ path, from })),
+  ];
   return (
-    <div className="sup">
+    <section className="sup" aria-label="Project">
       <div className="suhd">
-        <h2>Open a project</h2>
-        <p>Shoji works in a git repository on this computer. It commits only when you accept, and never pushes.</p>
+        <h3>Open a project</h3>
+        <p>
+          Shoji works in a git repository on this computer. It commits only when you accept, and never pushes.
+          {found.length > 0 && " Projects you worked on in Claude Code or Codex are listed too."}
+        </p>
       </div>
       {folders.length > 0 && (
         <div className="card">
-          {folders.map((path) => (
+          {folders.map(({ path, from }) => (
             <button key={path} type="button" className="proj" aria-pressed={path === repo} onClick={() => choose(path)}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M3 6h6l2 2h10v11H3z" />
               </svg>
               <span>
                 <b>{folderName(path)}</b>
-                <span className="d">{path}</span>
+                <span className="d">{from ? `${from} · ${path}` : path}</span>
               </span>
             </button>
           ))}
@@ -379,7 +322,7 @@ function Project({
           onWrite={() => onWriteNotes(repo)}
         />
       )}
-    </div>
+    </section>
   );
 }
 
