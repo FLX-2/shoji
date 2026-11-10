@@ -1,3 +1,4 @@
+mod keys;
 mod ledger;
 mod push;
 mod updates;
@@ -29,10 +30,6 @@ use ledger::{Ledger, ThreadRecord};
 use server::Servers;
 use terminal::Terminals;
 
-/// Where the Anthropic key lives in the system keychain.
-const KEY_SERVICE: &str = "app.shoji.desktop";
-const KEY_ACCOUNT: &str = "anthropic";
-
 /// A runtime process that's going: its run in the ledger, and the thread it works on.
 struct Live {
     child: CommandChild,
@@ -59,21 +56,6 @@ fn noted<T>(result: rusqlite::Result<T>) -> Option<T> {
     result.map_err(|e| eprintln!("ledger: {e}")).ok()
 }
 
-fn key_entry() -> keyring::Result<keyring::Entry> {
-    keyring::Entry::new(KEY_SERVICE, KEY_ACCOUNT)
-}
-
-fn saved_key() -> Option<String> {
-    key_entry().and_then(|entry| entry.get_password()).ok()
-}
-
-/// A key from the shell, for development. An app opened from the Dock or Start menu won't see one.
-fn env_key() -> Option<String> {
-    ["SHOJI_API_KEY", "ANTHROPIC_API_KEY"]
-        .iter()
-        .find_map(|name| std::env::var(name).ok().filter(|value| !value.is_empty()))
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct KeyStatus {
@@ -81,39 +63,33 @@ struct KeyStatus {
     from_env: bool,
 }
 
+/// Whether a provider's key is saved, or found in the shell. Without a provider, Anthropic's.
 #[tauri::command]
-fn key_status() -> KeyStatus {
-    KeyStatus {
-        saved: saved_key().is_some(),
-        from_env: env_key().is_some(),
-    }
+fn key_status(provider: Option<String>) -> Result<KeyStatus, String> {
+    let keyed = keys::keyed(provider.as_deref().unwrap_or("anthropic"))?;
+    Ok(KeyStatus {
+        saved: keys::saved(keyed).is_some(),
+        from_env: keys::from_shell(keyed).is_some(),
+    })
 }
 
 #[tauri::command]
-fn save_key(key: String) -> Result<(), String> {
-    let key = key.trim();
-    if key.is_empty() {
-        return Err("Paste a key first.".into());
-    }
-    key_entry()
-        .and_then(|entry| entry.set_password(key))
-        .map_err(|e| e.to_string())
+fn save_key(key: String, provider: Option<String>) -> Result<(), String> {
+    keys::save(keys::keyed(provider.as_deref().unwrap_or("anthropic"))?, &key)
 }
 
 /// Keeps the key from the shell in the keychain, so Shoji has it however it's opened. The key itself
 /// never goes to the window.
 #[tauri::command]
-fn use_shell_key() -> Result<(), String> {
-    let key = env_key().ok_or("No key was found in the shell.")?;
-    save_key(key)
+fn use_shell_key(provider: Option<String>) -> Result<(), String> {
+    let keyed = keys::keyed(provider.as_deref().unwrap_or("anthropic"))?;
+    let key = keys::from_shell(keyed).ok_or("No key was found in the shell.")?;
+    keys::save(keyed, &key)
 }
 
 #[tauri::command]
-fn forget_key() -> Result<(), String> {
-    match key_entry().and_then(|entry| entry.delete_credential()) {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(e.to_string()),
-    }
+fn forget_key(provider: Option<String>) -> Result<(), String> {
+    keys::forget(keys::keyed(provider.as_deref().unwrap_or("anthropic"))?)
 }
 
 #[tauri::command]
@@ -305,9 +281,7 @@ fn start_run(
             return Err("This thread is already running.".into());
         }
     }
-    let key = saved_key()
-        .or_else(env_key)
-        .ok_or("Add your Anthropic API key in Settings first.")?;
+    let keys = keys::run_env(&request.stack, keys::any)?;
 
     // Every event is kept on disk, so receipts have each call's tokens and cost.
     let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
@@ -406,7 +380,7 @@ fn start_run(
         let command = app.shell().sidecar("shoji-runtime").map_err(|e| e.to_string())?;
         let spawned = command
             .args(args)
-            .env("SHOJI_API_KEY", key)
+            .envs(keys)
             .spawn()
             .map_err(|e| {
                 noted(ledger.end_run(ids.1, "failed"));
@@ -490,9 +464,7 @@ fn start_trial(
     request: TrialRequest,
 ) -> Result<u64, String> {
     let mut live = run.live.lock().unwrap();
-    let key = saved_key()
-        .or_else(env_key)
-        .ok_or("Add your Anthropic API key in Settings first.")?;
+    let keys = keys::run_env(&request.stack, keys::any)?;
     let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let runs = data.join("runs");
     fs::create_dir_all(&runs).map_err(|e| e.to_string())?;
@@ -529,7 +501,7 @@ fn start_trial(
     let command = app.shell().sidecar("shoji-runtime").map_err(|e| e.to_string())?;
     let (events, child) = command
         .args(args)
-        .env("SHOJI_API_KEY", key)
+        .envs(keys)
         .spawn()
         .map_err(|e| {
             noted(ledger.end_run(entry, "failed"));
@@ -569,9 +541,7 @@ fn start_notes(
         return Ok(None);
     }
     let mut live = run.live.lock().unwrap();
-    let key = saved_key()
-        .or_else(env_key)
-        .ok_or("Add your Anthropic API key in Settings first.")?;
+    let keys = keys::run_env(&request.stack, keys::any)?;
     let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let runs = data.join("runs");
     fs::create_dir_all(&runs).map_err(|e| e.to_string())?;
@@ -604,7 +574,7 @@ fn start_notes(
     let command = app.shell().sidecar("shoji-runtime").map_err(|e| e.to_string())?;
     let (events, child) = command
         .args(args)
-        .env("SHOJI_API_KEY", key)
+        .envs(keys)
         .spawn()
         .map_err(|e| {
             noted(ledger.end_run(entry, "failed"));

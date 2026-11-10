@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { MODELS, type Effort, type ModelId } from "./models";
+import { apiName, MODELS, PROVIDER_NAMES, providerOf, type Effort, type ModelId, type ProviderId } from "./models";
 
 export interface ModelRequest {
   model: ModelId;
@@ -10,9 +10,35 @@ export interface ModelRequest {
   maxTokens: number;
 }
 
-/** Where model calls go. M1 talks to Anthropic only; other providers arrive with the M2 gateway. */
+/**
+ * Where model calls go. Shoji's roles speak Anthropic's message format, the format the runtime started in, and
+ * a provider with another format translates both ways inside its own send.
+ */
 export interface ModelProvider {
   send(request: ModelRequest): Promise<Anthropic.Message>;
+}
+
+export class NotConnectedError extends Error {}
+
+/** The message for a model whose provider isn't connected. */
+export const notConnected = (provider: ProviderId) =>
+  `Shoji isn't connected to ${PROVIDER_NAMES[provider]}. Connect it in Settings, or pick another model in Stack.`;
+
+/** Every provider the person has connected. Each call goes to the provider of the model it names. */
+export class Providers implements ModelProvider {
+  constructor(private connected: Partial<Record<ProviderId, ModelProvider>>) {}
+
+  /** Whether a model's provider is connected, so a run can stop before it starts instead of partway. */
+  reaches(model: ModelId): boolean {
+    return this.connected[providerOf(model)] !== undefined;
+  }
+
+  send(request: ModelRequest) {
+    const provider = providerOf(request.model);
+    const connected = this.connected[provider];
+    if (!connected) return Promise.reject(new NotConnectedError(notConnected(provider)));
+    return connected.send(request);
+  }
 }
 
 export const KEY_REJECTED = "Anthropic didn't accept your API key. Check it in Settings.";
@@ -56,7 +82,7 @@ export class AnthropicProvider implements ModelProvider {
   async send({ model, effort, system, messages, tools, maxTokens }: ModelRequest) {
     try {
       return await this.client.messages.create({
-        model,
+        model: apiName(model),
         max_tokens: maxTokens,
         system,
         messages,
