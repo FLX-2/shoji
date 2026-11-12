@@ -22,7 +22,7 @@ const call = (cost: number): LedgerCall => ({
   seconds: 1,
 });
 
-const finished = (status: ThreadResult["status"], review: string): RuntimeEvent[] => [
+const finished = (status: ThreadResult["status"], review: string, cost = 0.02): RuntimeEvent[] => [
   { type: "step", step: "build", role: "build", model: SONNET, status: "running" },
   { type: "step", step: "build", role: "build", model: SONNET, status: "done", output: "Changed the footer." },
   {
@@ -34,8 +34,8 @@ const finished = (status: ThreadResult["status"], review: string): RuntimeEvent[
       review,
       checks: [],
       escalated: false,
-      cost: 0.02,
-      costByRole: { scout: 0, plan: 0, build: 0.02, review: 0 },
+      cost,
+      costByRole: { scout: 0, plan: 0, build: cost, review: 0 },
     },
   },
 ];
@@ -223,6 +223,88 @@ describe("the thread list", () => {
         notes: "Move it below the fold",
       },
     });
+  });
+
+  /** A thread that was given more once, so it has spent more than the limit new threads get. */
+  async function openGivenMore(runs: LedgerThread["runs"], prefs: object = {}) {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", cap: 0.5, ...prefs }));
+    const fake = fakeBridge();
+    fake.ledger.push({ ...ledger(Date.now())[1], runs });
+    fake.logs[20] = finished("stopped", "", 0.45);
+    fake.logs[21] = finished("ready", "VERDICT: APPROVE", 0.25);
+    await act(async () => {
+      render(<App bridge={fake.bridge} />);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Threads" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Fix the footer/ }));
+    });
+    return fake;
+  }
+  const given = (caps: [number, number] | []): LedgerThread["runs"] => [
+    { id: 20, kind: "task", startedAt: 0, status: "stopped", calls: [call(0.45)], ...(caps.length && { cap: caps[0] }) },
+    {
+      id: 21,
+      kind: "changes",
+      startedAt: 1,
+      status: "ready",
+      ask: "Keep going",
+      calls: [call(0.25)],
+      ...(caps.length && { cap: caps[1] }),
+    },
+  ];
+  const write = async (text: string) => {
+    const notes = screen.getByRole("textbox", { name: "Changes" });
+    fireEvent.change(notes, { target: { value: text } });
+    await act(async () => {
+      fireEvent.keyDown(notes, { key: "Enter" });
+    });
+    return notes as HTMLTextAreaElement;
+  };
+
+  it("reopens a thread with the limit it was given, so what's left of it can still be spent", async () => {
+    // Started with $0.50 and stopped at $0.45; Keep going raised the limit to $1, and $0.70 is spent.
+    const fake = await openGivenMore(given([0.5, 0.55]));
+    expect(screen.queryByText(/limit is spent/)).toBeNull();
+    expect(screen.queryByText(/more$/)).toBeNull();
+    await write("Move it below the fold");
+    expect(fake.calls.starts).toHaveLength(1);
+    expect(fake.calls.starts[0].cap).toBeCloseTo(0.3);
+  });
+
+  it("lets a thread that has spent its limit carry on, with as much more as Keep going gives", async () => {
+    // From before the limit was kept: it reads as what the thread has spent.
+    const fake = await openGivenMore(given([]));
+    expect(screen.getByText(/the \$0\.70 limit is spent/)).toBeTruthy();
+    expect(screen.getByText("Up to $0.50 more")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Send, up to $0.50 more" })).toBeTruthy();
+    const notes = await write("Move it below the fold");
+    expect(fake.calls.starts).toHaveLength(1);
+    expect(fake.calls.starts[0]).toMatchObject({ ask: "Move it below the fold", changes: { thread: 2 } });
+    expect(fake.calls.starts[0].cap).toBeCloseTo(0.5);
+    expect(notes.value).toBe("");
+  });
+
+  it("asks before a spent thread's next run could take the day past its limit, and keeps what was written", async () => {
+    const fake = await openGivenMore(given([]), { dailyLimit: 0.4 });
+    fireEvent.click(screen.getByRole("radio", { name: "Ask a question" }));
+    const box = screen.getByRole("textbox", { name: "Question" }) as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: "Why did the footer move?" } });
+    await act(async () => {
+      fireEvent.keyDown(box, { key: "Enter" });
+    });
+    const ask = screen.getByRole("alertdialog");
+    expect(ask.textContent).toContain("Carrying this thread on may spend up to $0.50");
+    expect(fake.calls.starts).toHaveLength(0);
+    expect(box.value).toBe("Why did the footer move?");
+    await act(async () => {
+      fireEvent.click(within(ask).getByRole("button", { name: "Start anyway" }));
+    });
+    expect(fake.calls.starts).toHaveLength(1);
+    expect(fake.calls.starts[0]).toMatchObject({ changes: { thread: 2, kind: "question" } });
+    expect(fake.calls.starts[0].cap).toBeCloseTo(0.5);
   });
 
   it("runs threads side by side, each in its own copy, and stops only the one on show", async () => {

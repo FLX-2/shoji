@@ -54,6 +54,8 @@ const MIGRATIONS: &[&str] = &["
     ALTER TABLE threads ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE threads ADD COLUMN archived_at INTEGER;
     ALTER TABLE threads ADD COLUMN discarded_at INTEGER;
+", "
+    ALTER TABLE runs ADD COLUMN cap REAL;
 "];
 
 pub struct Ledger(Mutex<Connection>);
@@ -109,6 +111,9 @@ pub struct RunRecord {
     pub status: Option<String>,
     /// What the person asked for in this run, as the thread shows it; none for runs from before it was kept.
     pub ask: Option<String>,
+    /// Dollars the run was allowed: what was left of its thread's limit when it started. None for runs from
+    /// before it was kept, and for trials and project notes.
+    pub cap: Option<f64>,
     pub calls: Vec<CallRecord>,
 }
 
@@ -211,6 +216,15 @@ impl Ledger {
             .lock()
             .unwrap()
             .execute("UPDATE runs SET ask = ?2 WHERE id = ?1", params![run, ask])?;
+        Ok(())
+    }
+
+    /// Keeps what a run was allowed to spend, so a reopened thread knows the limit it was given.
+    pub fn note_cap(&self, run: i64, cap: f64) -> Result<()> {
+        self.0
+            .lock()
+            .unwrap()
+            .execute("UPDATE runs SET cap = ?2 WHERE id = ?1", params![run, cap])?;
         Ok(())
     }
 
@@ -337,7 +351,7 @@ impl Ledger {
             })?
             .collect::<Result<Vec<_>>>()?;
         let mut runs = conn.prepare(
-            "SELECT id, kind, started_at, status, ask FROM runs WHERE thread_id = ?1 ORDER BY started_at, id",
+            "SELECT id, kind, started_at, status, ask, cap FROM runs WHERE thread_id = ?1 ORDER BY started_at, id",
         )?;
         let mut calls = conn.prepare(
             "SELECT at, role, step, model, effort, input_tokens, output_tokens, cache_write_tokens,
@@ -353,6 +367,7 @@ impl Ledger {
                         started_at: row.get(2)?,
                         status: row.get(3)?,
                         ask: row.get(4)?,
+                        cap: row.get(5)?,
                         calls: Vec::new(),
                     })
                 })?
@@ -497,6 +512,7 @@ mod tests {
             .unwrap();
         ledger.end_run(changes, "stopped").unwrap();
         ledger.note_ask(changes, "Make it blue").unwrap();
+        ledger.note_cap(changes, 0.43).unwrap();
         ledger.commit(thread, "abc1234", 3000).unwrap();
         assert_eq!(ledger.workdir_of(thread).unwrap(), None);
         ledger.note_workdir(thread, "/data/worktrees/app/add-a-toggle").unwrap();
@@ -517,6 +533,7 @@ mod tests {
         assert_eq!(t.runs[0].status.as_deref(), Some("ready"));
         assert_eq!(t.runs[1].status.as_deref(), Some("stopped"));
         assert_eq!((t.runs[0].ask.as_deref(), t.runs[1].ask.as_deref()), (None, Some("Make it blue")));
+        assert_eq!((t.runs[0].cap, t.runs[1].cap), (None, Some(0.43)));
         let calls = &t.runs[0].calls;
         assert_eq!(calls.len(), 2);
         assert_eq!(

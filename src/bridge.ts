@@ -242,6 +242,9 @@ export interface LedgerRun {
   status: "ready" | "needs-work" | "stopped" | "failed" | "interrupted" | "planned" | "answered" | null;
   /** What the person asked for in the run; missing for runs from before it was kept. */
   ask?: string | null;
+  /** Dollars the run was allowed: what was left of its thread's limit when it started. Missing for runs from
+   *  before it was kept. */
+  cap?: number | null;
   calls: LedgerCall[];
 }
 

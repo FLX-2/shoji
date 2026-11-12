@@ -279,7 +279,11 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
     [shown, carryOnHeld],
   );
 
-  const requestChanges = useCallback((notes: string) => carryOn(notes, notes, "changes"), [carryOn]);
+  /** Asks for changes to the work. `extra` raises the thread's limit first, for a thread that has spent it. */
+  const requestChanges = useCallback(
+    (notes: string, extra = 0) => carryOn(notes, notes, "changes", extra),
+    [carryOn],
+  );
 
   /** Raises the thread's limit by `extra` dollars and picks the work up where it stopped. */
   const keepGoing = useCallback((extra: number) => carryOn("Keep going", KEEP_GOING, "changes", extra), [carryOn]);
@@ -298,14 +302,18 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
     [thread, carryOn],
   );
 
-  /** Picks the work up where a run stopped or broke off, within what's left of the thread's limit. */
-  const resume = useCallback(() => carryOn("Pick up where it stopped", RESUME, "changes"), [carryOn]);
+  /** Picks the work up where a run stopped or broke off, within what's left of the thread's limit, or with
+   *  `extra` more when none is left. */
+  const resume = useCallback(
+    (extra = 0) => carryOn("Pick up where it stopped", RESUME, "changes", extra),
+    [carryOn],
+  );
 
   /** Builds the plan the person read and approved. */
   const build = useCallback(() => carryOn("Build it", "", "build"), [carryOn]);
 
   /** Plans again from the person's notes on the plan, and pauses again. */
-  const replan = useCallback((notes: string) => carryOn(notes, notes, "replan"), [carryOn]);
+  const replan = useCallback((notes: string, extra = 0) => carryOn(notes, notes, "replan", extra), [carryOn]);
 
   /** Does one step again on another model: plans again, builds the plan again from the start, or reviews the
    *  work again, with `extra` more to spend. The thread's stack keeps the new model for that role. */
@@ -323,7 +331,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
   );
 
   /** Asks about the work. The answer changes nothing, so the thread stays where it was. */
-  const question = useCallback((text: string) => carryOn(text, text, "question"), [carryOn]);
+  const question = useCallback((text: string, extra = 0) => carryOn(text, text, "question", extra), [carryOn]);
 
   const stop = useCallback(async () => {
     const live = liveRun();

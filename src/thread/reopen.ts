@@ -53,9 +53,22 @@ function stackOf(saved: string): Stack {
   }
 }
 
+const runCost = (run: LedgerThread["runs"][number]) => run.calls.reduce((sum, call) => sum + call.cost, 0);
+
+/**
+ * The limit a thread was last given: what its latest run was allowed, on top of what the runs before it spent.
+ * Undefined for a thread from before each run's allowance was kept.
+ */
+export function savedCap(record: LedgerThread): number | undefined {
+  const last = record.runs.findLastIndex((run) => typeof run.cap === "number");
+  if (last < 0) return undefined;
+  return record.runs.slice(0, last).reduce((sum, run) => sum + runCost(run), 0) + record.runs[last].cap!;
+}
+
 /**
  * Reads a past thread back from the ledger and its runs' logs, as the thread view shows a live one.
- * It can carry on with the person's current limit, or more if it has already spent more than that.
+ * It keeps the limit it was last given. A thread from before that was kept carries on with the person's
+ * current limit, or with what it has spent when that is more.
  */
 export async function reopen(bridge: Bridge, record: LedgerThread, cap: number): Promise<Thread> {
   const runs = record.runs.filter((r): r is typeof r & { kind: Turn["kind"] } => r.kind in ASKED);
@@ -79,13 +92,13 @@ export async function reopen(bridge: Bridge, record: LedgerThread, cap: number):
       };
     }),
   );
-  const spent = record.runs.reduce((sum, run) => sum + run.calls.reduce((s, c) => s + c.cost, 0), 0);
+  const spent = record.runs.reduce((sum, run) => sum + runCost(run), 0);
   return {
     id: record.id,
     task: record.task,
     repo: record.repo,
     stack: stackOf(record.stack),
-    cap: Math.max(cap, spent),
+    cap: savedCap(record) ?? Math.max(cap, spent),
     branch: record.branch,
     ...(record.workdir && !record.discardedAt && { workdir: record.workdir }),
     ...(record.title && { title: record.title }),
