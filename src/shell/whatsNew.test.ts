@@ -7,6 +7,7 @@ describe("What's new", () => {
     expect(whatsNew("0.2.0", "0.1", true)).toBe(WHATS_NEW["0.2"]);
     expect(whatsNew("0.2.1", "0.2", true)).toBeNull();
     expect(minorOf("0.2.3")).toBe("0.2");
+    expect(whatsNew("0.3.0", "0.2", true)).toBe(WHATS_NEW["0.3"]);
   });
 
   it("says nothing at a first setup, or for a release with no news", () => {

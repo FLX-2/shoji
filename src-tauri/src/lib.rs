@@ -865,10 +865,11 @@ async fn commit_thread(
 }
 
 /// Pushes a committed thread's branch to the project's remote, when the person presses Push and open PR,
-/// and opens the page where they open a pull request for it. Shoji never pushes on its own.
+/// and opens the page where they open a pull request for it, with the receipt as its description unless they
+/// turned that off. Shoji never pushes on its own.
 #[tauri::command]
-async fn push_thread(app: AppHandle, repo: String, branch: String) -> Result<push::Pushed, String> {
-    let pushed = push::push(&repo, &branch)?;
+async fn push_thread(app: AppHandle, repo: String, branch: String, body: Option<String>) -> Result<push::Pushed, String> {
+    let pushed = push::push(&repo, &branch, body.as_deref())?;
     if let Some(url) = pushed.url.as_deref() {
         #[allow(deprecated)]
         let _ = tauri_plugin_shell::ShellExt::shell(&app).open(url, None);

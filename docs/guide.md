@@ -10,17 +10,20 @@ Everything Shoji does, in detail. For a quick look, start with the [README](../R
 
 ## First run
 
-The first time Shoji opens, one Welcome page connects Anthropic, your ChatGPT plan or Ollama, picks a starting stack and opens a project. Besides the projects Shoji already knows, it offers git projects you worked on in Claude Code or Codex, found from the folder each of their sessions ran in. Nothing else is read from them. The look is in Settings. The project must be a git repo with at least one commit, and git needs your `user.name` and `user.email` set so Shoji can commit under your name.
+The first time Shoji opens, one Welcome page connects a provider, picks a starting stack and opens a project. You can start without paying: your ChatGPT plan, Ollama, OpenRouter's free models and Gemini's free tier each carry setup through by themselves. Use a practice project opens a small sample project with three failing tests and offers fixing them as your first task, so you can see a whole thread before you point Shoji at your own code. Besides the projects Shoji already knows, it offers git projects you worked on in Claude Code or Codex, found from the folder each of their sessions ran in. Nothing else is read from them. The look is in Settings. The project must be a git repo with at least one commit, and git needs your `user.name` and `user.email` set so Shoji can commit under your name.
 
 Connect any of these in Settings, under Models and keys:
 
 - **Anthropic.** Paste an API key. Shoji's default stack runs on Anthropic's models.
 - **ChatGPT.** With ChatGPT Plus or Pro, Continue with ChatGPT signs you in in the browser, and OpenAI's models run on your plan with no API key and no API bill. If the plan's limit is reached, the thread stops and says so; Shoji never switches to paid use by itself. Manage usage opens your ChatGPT settings.
 - **OpenAI.** Paste an API key to run OpenAI's models at API prices.
-- **OpenRouter.** Connect OpenRouter signs you in on OpenRouter's site and hands Shoji a key, billed to your OpenRouter credit. Stack then lists its models that can use tools, at OpenRouter's prices.
+- **OpenRouter.** Connect OpenRouter signs you in on OpenRouter's site and hands Shoji a key, billed to your OpenRouter credit. Stack then lists its models that can use tools, at OpenRouter's prices. Some are free, and OpenRouter limits how many requests they take a day, fewer until you've bought some credit.
+- **Gemini.** Paste a key from [Google AI Studio](https://aistudio.google.com/apikey) and say whether it's on the free tier or paid. On the free tier, steps cost nothing, Google limits how many run a day, and Google may use what Shoji sends to improve its models, so keep it to code you're happy to share. On a paid key Shoji lists the models it can price, at Google's API prices. When the free tier's limit is reached, the thread stops and says so.
 - **Ollama.** Install [Ollama](https://ollama.com) and pull a model that can use tools. Shoji finds it on this computer, at `OLLAMA_HOST` if you set it. It's free, and your code stays on this computer.
 
-Stack lists a provider's models only once it's connected, and its presets include a ready stack for your ChatGPT plan, OpenAI and Ollama. When you start Shoji from a shell, it also uses `SHOJI_API_KEY` or `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `OPENROUTER_API_KEY`.
+Stack lists a provider's models only once it's connected, and its presets include a ready stack for each: On my ChatGPT plan, OpenAI, On this computer, Free on OpenRouter and Gemini. With Ollama and an Anthropic key, Claude checks plans, builds and scouts on your computer and has Haiku review the work, so the only step you pay for is the check. When you start Shoji from a shell, it also uses `SHOJI_API_KEY` or `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY` and `GEMINI_API_KEY`.
+
+A new install starts with a daily limit of $1. Change it in Settings, under Spending.
 
 ## What each part does
 
@@ -47,7 +50,7 @@ A role can run the project's checks at any time. Any other command, such as inst
 
 **Scheduled tasks.** Turn on Repeat under the task box to run a task by itself every day, on weekdays or once a week at a set time, in the open project. Threads lists your scheduled tasks above your threads, where you can pause or remove one. A scheduled task runs while Shoji is open; a time missed while it was closed runs once when it next opens. It never pauses after the plan, and it's skipped, and says why, when it could take the day past your daily limit, since nobody may be there to say yes.
 
-**Receipts.** What each thread cost, step by step, against running everything on one strong model. You can export a month as CSV.
+**Receipts.** What each thread cost, step by step, against running everything on one strong model. Work that charged nothing, on your computer, a plan or a free tier, is compared with what Claude's Balanced stack would have charged for the same tokens. Copy as image puts a receipt on the clipboard as a picture, drawn on your computer, with the task's title, the project's folder name, each step's model and cost, the total and the estimate. It holds no code and no account. You can export a month as CSV.
 
 **Stack.** Which model and effort takes each role, saved to `stack.lock` with its history. A trial replays your latest accepted tasks on another stack, in scratch copies of your project, and reports what changed. Watching compares this week with the four weeks before, and names a model that got slower, more expensive or worse at its role.
 
@@ -61,12 +64,12 @@ Code lists every file the thread changed, with its diff. Accept keeps a file's c
 
 Revert anything you don't want. Accept and commit then commits the rest as one commit on the thread's branch, using your own git name and email, so `user.name` and `user.email` must be set. The message is the task, followed by `Shoji-Models:` and `Shoji-Cost:` lines. The thread's copy is then put away, so you can check the branch out in your project.
 
-Shoji never pushes on its own. Once a thread is committed, Push and open PR pushes its branch to the project's `origin` (or its only remote) with your own git sign-in, then opens the page for a pull request on GitHub, GitLab or Bitbucket. If git would need to ask for a password, the push stops and says so; sign in to your git host in a terminal once, then press it again. Merging is up to you.
+Shoji never pushes on its own. Once a thread is committed, Push and open PR pushes its branch to the project's `origin` (or its only remote) with your own git sign-in, then opens the page for a pull request on GitHub, GitLab or Bitbucket. On GitHub and GitLab the description starts as the thread's receipt: each step's model and cost, the total and Review's verdict, with no code, task or file names. Change it before you open the pull request, or turn it off in Settings, under Data, with Receipt in pull requests. If git would need to ask for a password, the push stops and says so; sign in to your git host in a terminal once, then press it again. Merging is up to you.
 
 ## Your data
 
 - Your API keys stay in the system keychain. Shoji sends each only to its own provider. A ChatGPT sign-in is kept in a file only your user can read, and signing out revokes it.
-- Your code goes only to the model provider, and only what a role reads or you attach.
+- Your code goes only to the model provider, and only what a role reads or you attach. Free tiers can come with other terms: Google may use what a free-tier Gemini key sends to improve its models, and a free model on OpenRouter follows its own provider's policy.
 - **Private files** never go at all. By default those are env files and keys: `.env`, `.env.*` (but not `.env.example`), `*.pem`, `*.key`, `id_rsa*`, `id_ed25519*` and `.npmrc`. No role can read, change, list or search them, and the reviewer's diff leaves them out. Edit the list in Settings, under Data, with patterns as in `.gitignore`.
 - MCP servers get only what a role sends their tools. Shoji passes a server the environment a program needs plus what you set in its `env`, never your API key. The JSON you paste, tokens included, stays on this computer.
 - Receipts and run logs stay on your computer. There is no Shoji server, and Shoji sends no usage data.

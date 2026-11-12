@@ -2,6 +2,7 @@
  *  saying has no entry, and says nothing. */
 export const WHATS_NEW: Record<string, string> = {
   "0.2": "Shoji 0.2 runs more models: ChatGPT, OpenAI, OpenRouter and Ollama.",
+  "0.3": "Shoji 0.3 adds free ways to run: Gemini's free tier, OpenRouter's free models and Claude checks.",
 };
 
 /** "0.2" for 0.2.3. Point releases share their minor release's news. */

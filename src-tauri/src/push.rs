@@ -53,13 +53,26 @@ fn host_and_path(address: &str) -> Option<(String, String)> {
     (!host.is_empty() && path.contains('/')).then(|| (host.to_string(), path.to_string()))
 }
 
-/// The page that opens a pull request for a branch on GitHub, GitLab or Bitbucket.
-fn new_pull_request(address: &str, branch: &str) -> Option<String> {
+/// Text made safe for a link's query, keeping only the characters a URL never reads as anything else.
+fn query(text: &str) -> String {
+    text.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
+/// The page that opens a pull request for a branch on GitHub, GitLab or Bitbucket, with its description filled
+/// in on the hosts that take one from the link.
+fn new_pull_request(address: &str, branch: &str, body: Option<&str>) -> Option<String> {
     let (host, path) = host_and_path(address)?;
     if host.contains("github") {
-        Some(format!("https://{host}/{path}/compare/{branch}?expand=1"))
+        let body = body.map(|b| format!("&body={}", query(b))).unwrap_or_default();
+        Some(format!("https://{host}/{path}/compare/{branch}?expand=1{body}"))
     } else if host.contains("gitlab") {
-        Some(format!("https://{host}/{path}/-/merge_requests/new?merge_request%5Bsource_branch%5D={branch}"))
+        let body = body.map(|b| format!("&merge_request%5Bdescription%5D={}", query(b))).unwrap_or_default();
+        Some(format!("https://{host}/{path}/-/merge_requests/new?merge_request%5Bsource_branch%5D={branch}{body}"))
     } else if host.contains("bitbucket") {
         Some(format!("https://{host}/{path}/pull-requests/new?source={branch}"))
     } else {
@@ -68,7 +81,8 @@ fn new_pull_request(address: &str, branch: &str) -> Option<String> {
 }
 
 /// Pushes the branch to the project's remote with the person's own git sign-in, and finds the pull request page.
-pub fn push(repo: &str, branch: &str) -> Result<Pushed, String> {
+/// With a description, the page Shoji builds wins over the one the host prints, since only it carries the text.
+pub fn push(repo: &str, branch: &str, body: Option<&str>) -> Result<Pushed, String> {
     let remote = remote(repo)?;
     let mut command = Command::new("git");
     command
@@ -89,7 +103,8 @@ pub fn push(repo: &str, branch: &str) -> Result<Pushed, String> {
         return Err(refused(&said));
     }
     let address = git(repo, &["remote", "get-url", &remote]).unwrap_or_default();
-    let url = printed_url(&said).or_else(|| new_pull_request(&address, branch));
+    let built = || new_pull_request(&address, branch, body);
+    let url = if body.is_some() { built().or_else(|| printed_url(&said)) } else { printed_url(&said).or_else(built) };
     Ok(Pushed { remote, url })
 }
 
@@ -135,7 +150,7 @@ mod tests {
 
     #[test]
     fn finds_the_pull_request_page_for_each_host() {
-        let page = |address: &str| new_pull_request(address, "shoji/add-a-faq");
+        let page = |address: &str| new_pull_request(address, "shoji/add-a-faq", None);
         assert_eq!(
             page("git@github.com:FLX-2/shoji.git").as_deref(),
             Some("https://github.com/FLX-2/shoji/compare/shoji/add-a-faq?expand=1")
@@ -157,6 +172,22 @@ mod tests {
     }
 
     #[test]
+    fn fills_in_the_description_where_the_host_takes_one() {
+        let body = Some("Plan · $0.031\n**Total** & more");
+        assert_eq!(
+            new_pull_request("git@github.com:FLX-2/shoji.git", "shoji/x", body).as_deref(),
+            Some("https://github.com/FLX-2/shoji/compare/shoji/x?expand=1&body=Plan%20%C2%B7%20%240.031%0A%2A%2ATotal%2A%2A%20%26%20more")
+        );
+        assert!(new_pull_request("https://gitlab.com/team/app", "shoji/x", body)
+            .unwrap()
+            .ends_with("source_branch%5D=shoji/x&merge_request%5Bdescription%5D=Plan%20%C2%B7%20%240.031%0A%2A%2ATotal%2A%2A%20%26%20more"));
+        assert_eq!(
+            new_pull_request("https://bitbucket.org/team/app.git", "shoji/x", body).as_deref(),
+            Some("https://bitbucket.org/team/app/pull-requests/new?source=shoji/x")
+        );
+    }
+
+    #[test]
     fn takes_the_page_the_host_prints() {
         let said = "remote: \nremote: Create a pull request for 'shoji/x' on GitHub by visiting:\nremote:      https://github.com/a/b/pull/new/shoji/x        \nremote: \n";
         assert_eq!(printed_url(said).as_deref(), Some("https://github.com/a/b/pull/new/shoji/x"));
@@ -172,7 +203,7 @@ mod tests {
         fs::write(repo.join("a.txt"), "a\n").unwrap();
         let root = repo.display().to_string();
         git(&dir.display().to_string(), &["init", "--quiet", "--bare", &bare.display().to_string()]).unwrap();
-        assert!(push(&root, "main").is_err());
+        assert!(push(&root, "main", None).is_err());
         for args in [
             &["init", "--quiet", "-b", "main"][..],
             &["-c", "user.email=t@t", "-c", "user.name=t", "add", "."],
@@ -181,10 +212,10 @@ mod tests {
         ] {
             git(&root, args).unwrap();
         }
-        assert!(push(&root, "shoji/add-a-faq").unwrap_err().contains("no remote"));
+        assert!(push(&root, "shoji/add-a-faq", None).unwrap_err().contains("no remote"));
         git(&root, &["remote", "add", "origin", &bare.display().to_string()]).unwrap();
 
-        let pushed = push(&root, "shoji/add-a-faq").unwrap();
+        let pushed = push(&root, "shoji/add-a-faq", None).unwrap();
         assert_eq!(pushed, Pushed { remote: "origin".into(), url: None });
         let bare = bare.display().to_string();
         assert!(git(&bare, &["rev-parse", "--verify", "--quiet", "refs/heads/shoji/add-a-faq"]).is_ok());

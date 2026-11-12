@@ -1,6 +1,6 @@
 [package]
 name = "shoji"
-version = "0.2.0"
+version = "0.3.0"
 description = "The right model for every step."
 authors = ["FLX-2"]
 license = "MIT"
