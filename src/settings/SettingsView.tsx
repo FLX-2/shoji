@@ -3,6 +3,8 @@ import type { Ollama } from "../stack/ollama";
 import { ChatGPTRow } from "./ChatGPTRow";
 import { OpenRouterRow } from "./OpenRouterRow";
 import type { OpenRouter } from "../stack/openrouter";
+import { GeminiRow } from "./GeminiRow";
+import type { Gemini } from "../stack/gemini";
 import { OllamaRow } from "./OllamaRow";
 import { useState } from "react";
 import { type McpServer, parseMcpServers } from "../../runtime/src/mcpConfig";
@@ -42,6 +44,7 @@ interface SettingsViewProps {
   onManageUsage: () => void;
   openaiKey: KeyStatus | null;
   openrouter: OpenRouter;
+  gemini: Gemini;
   onSaveOpenAIKey: (key: string) => Promise<void>;
   onForgetOpenAIKey: () => Promise<void>;
   onSaveKey: (key: string) => Promise<void>;
@@ -79,6 +82,7 @@ export function SettingsView({
   onManageUsage,
   openaiKey,
   openrouter,
+  gemini,
   onSaveOpenAIKey,
   onForgetOpenAIKey,
   onSaveKey,
@@ -150,6 +154,7 @@ export function SettingsView({
                       onForget={onForgetOpenAIKey}
                     />
                     <OpenRouterRow openrouter={openrouter} />
+                    <GeminiRow gemini={gemini} tier={prefs.geminiTier} onTier={(geminiTier) => onChange({ geminiTier })} />
                     <OllamaRow ollama={ollama} />
                   </div>
                 </section>
@@ -326,6 +331,7 @@ const KEY_ROWS = {
   anthropic: { name: "Anthropic", placeholder: "sk-ant-…" },
   openai: { name: "OpenAI", placeholder: "sk-…" },
   openrouter: { name: "OpenRouter", placeholder: "sk-or-…" },
+  gemini: { name: "Gemini", placeholder: "AIza…" },
 } as const;
 
 function KeyRow({

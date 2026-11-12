@@ -6,7 +6,7 @@ export type Effort = (typeof EFFORTS)[number];
 
 /** Where models run. Anthropic's models keep their bare ids, such as claude-sonnet-5-5. Every other model's id
  *  starts with its provider, such as ollama/qwen3-coder, so no two providers' models can share an id. */
-export const PROVIDERS = ["anthropic", "ollama", "openai", "chatgpt", "openrouter"] as const;
+export const PROVIDERS = ["anthropic", "ollama", "openai", "chatgpt", "openrouter", "gemini"] as const;
 
 export type ProviderId = (typeof PROVIDERS)[number];
 
@@ -16,6 +16,7 @@ export const PROVIDER_NAMES: Readonly<Record<ProviderId, string>> = {
   openai: "OpenAI",
   chatgpt: "ChatGPT",
   openrouter: "OpenRouter",
+  gemini: "Gemini",
 };
 
 /** The provider a model id belongs to. An id with no provider in front is Anthropic's. */
@@ -31,9 +32,11 @@ export const apiName = (id: ModelId): string => (id.includes("/") ? id.slice(id.
 /**
  * How a model's calls are paid for. Unset is per token, from the person's API credit. "local" runs on their own
  * computer and costs nothing. "plan" runs on a subscription they already pay for, such as ChatGPT Plus: it spends
- * no dollars, and its prices are what the same tokens would cost on the provider's API, for comparison.
+ * no dollars, and its prices are what the same tokens would cost on the provider's API, for comparison. "free" is a
+ * provider's free tier, such as Gemini's on a key with no billing: it spends nothing, and the provider may keep and
+ * learn from what's sent. Its prices, too, are the paid API's.
  */
-export type Billing = "local" | "plan";
+export type Billing = "local" | "plan" | "free";
 
 export interface ModelInfo {
   label: string;
@@ -75,7 +78,7 @@ export interface Catalog {
 const MODEL_ID = new RegExp(
   `^(claude-[a-z0-9][a-z0-9.-]{0,60}|(${PROVIDERS.filter((p) => p !== "anthropic").join("|")})/[A-Za-z0-9][A-Za-z0-9._:/-]{0,100})$`,
 );
-const BILLINGS: readonly string[] = ["local", "plan"];
+const BILLINGS: readonly string[] = ["local", "plan", "free"];
 const MOST_MODELS = 50;
 
 /** A price in dollars per million tokens. Free is allowed only where nothing is charged, since the spending

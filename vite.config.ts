@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { configDefaults } from "vitest/config";
 // @ts-expect-error type error without @types/node package
 import process from "node:process";
 // @ts-expect-error type error without @types/node package
@@ -38,6 +39,8 @@ export default defineConfig(() => ({
   test: {
     environment: "jsdom",
     setupFiles: ["src/test/setup.ts"],
+    // The practice project's tests fail on purpose, for a first task to fix. They're Node's, not Shoji's.
+    exclude: [...configDefaults.exclude, "src-tauri/practice/**"],
     // Trial and runtime tests clone repositories and run checks as real processes, which Windows
     // runners can take several seconds over; 5s timed them out there with nothing wrong.
     testTimeout: 20_000,

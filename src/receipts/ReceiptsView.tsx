@@ -396,5 +396,7 @@ function compact(tokens: number): string {
 function lineCost(model: string, cost: number): string {
   if (providerOf(model) === "chatgpt") return "On your ChatGPT plan";
   if (providerOf(model) === "ollama") return "On this computer";
+  if (cost === 0 && providerOf(model) === "gemini") return "On Gemini's free tier";
+  if (cost === 0 && providerOf(model) === "openrouter") return "Free on OpenRouter";
   return dollars(cost, 3);
 }

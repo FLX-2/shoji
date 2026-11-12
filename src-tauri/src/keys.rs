@@ -30,6 +30,12 @@ pub const KEYED: &[Keyed] = &[
         shell_env: &["SHOJI_OPENAI_KEY", "OPENAI_API_KEY"],
     },
     Keyed {
+        id: "gemini",
+        name: "Gemini",
+        run_env: "SHOJI_GEMINI_KEY",
+        shell_env: &["SHOJI_GEMINI_KEY", "GEMINI_API_KEY"],
+    },
+    Keyed {
         id: "openrouter",
         name: "OpenRouter",
         run_env: "SHOJI_OPENROUTER_KEY",

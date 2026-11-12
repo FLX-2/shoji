@@ -28,7 +28,7 @@ export interface PlanModel {
 }
 
 /** The providers Shoji keeps an API key for. */
-export type KeyedProvider = "anthropic" | "openai" | "openrouter";
+export type KeyedProvider = "anthropic" | "openai" | "openrouter" | "gemini";
 
 /** A model OpenRouter lists that can use tools: its id there, its name, and its prices per million tokens. */
 export interface RoutedModel {
@@ -134,12 +134,12 @@ export interface Carried {
   lookReview?: boolean;
 }
 
-/** The OpenRouter models a stack names, with the prices OpenRouter listed. */
+/** The OpenRouter and Gemini models a stack names, with the prices and billing the app found them at. */
 function routedIn(stack: Stack): Record<ModelId, ModelInfo> {
   return Object.fromEntries(
     Object.values(stack)
       .map((seat) => seat.model)
-      .filter((model) => providerOf(model) === "openrouter" && model in MODELS)
+      .filter((model) => ["openrouter", "gemini"].includes(providerOf(model)) && model in MODELS)
       .map((model) => [model, MODELS[model]]),
   );
 }
@@ -153,7 +153,8 @@ function serversJson(servers: McpServer[]) {
 export function carrying(bridge: Bridge, carried: () => Carried): Bridge {
   const add = <T extends { stack: Stack }>(request: T) => {
     const { privateFiles, models } = carried();
-    // The runtime can't ask OpenRouter for its prices, so a stack's OpenRouter models go with the list.
+    // The runtime can't ask OpenRouter for its prices or know the person's Gemini tier, so those models go with
+    // the list.
     const routed = routedIn(request.stack);
     const list =
       models || Object.keys(routed).length
@@ -286,6 +287,10 @@ export const bridge = {
   openrouterConnect: () => invoke<void>("openrouter_connect"),
   /** The models OpenRouter lists that can use tools, dearest first. */
   openrouterModels: () => invoke<RoutedModel[]>("openrouter_models"),
+  /** The Gemini models the person's key can use for a task, by id and Google's name. */
+  geminiModels: () => invoke<{ id: string; name: string }[]>("gemini_models"),
+  /** Makes the bundled practice project the first time, and gives its folder and the first task to offer in it. */
+  practiceProject: () => invoke<[string, string]>("practice_project"),
   /** Opens ChatGPT's settings in the browser, where the person manages their plan's usage. */
   chatgptManageUsage: () => invoke<void>("chatgpt_manage_usage"),
   pickProject: () => invoke<string | null>("pick_project"),

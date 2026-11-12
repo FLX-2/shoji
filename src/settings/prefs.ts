@@ -89,6 +89,8 @@ export interface Prefs {
   hiddenProjects: Record<string, number>;
   /** First tasks Scout's notes suggested, by project folder. */
   starters: Record<string, string[]>;
+  /** Whether the person's Gemini key is on Google's free tier, where steps cost nothing, or billed. */
+  geminiTier: "free" | "paid";
 }
 
 /** The text sizes Look offers, and Ctrl or ⌘ with + and − steps through. */
@@ -98,7 +100,7 @@ export const DEFAULT_PREFS: Prefs = {
   repo: null,
   stack: "balanced",
   cap: 0.5,
-  dailyLimit: 25,
+  dailyLimit: 1,
   planFirst: true,
   theme: "dark",
   motion: true,
@@ -128,6 +130,7 @@ export const DEFAULT_PREFS: Prefs = {
   notify: true,
   listHidden: false,
   foldedGroups: [],
+  geminiTier: "free",
   textSize: 1,
   hiddenProjects: {},
   starters: {},

@@ -11,6 +11,8 @@ export interface DiagnosticsInput {
   openai: KeyStatus | null;
   chatgpt: string;
   openrouter: string;
+  /** Gemini's key status and the tier the person chose. */
+  gemini?: string;
   ollama: { status: string; models: number };
   stack: Stack;
   pricesListed: string;
@@ -48,6 +50,7 @@ export function diagnostics(d: DiagnosticsInput): string {
     `OpenAI key: ${key(d.openai)}`,
     `ChatGPT: ${d.chatgpt}`,
     `OpenRouter: ${d.openrouter}`,
+    ...(d.gemini ? [`Gemini: ${d.gemini}`] : []),
     `Ollama: ${d.ollama.status}, ${d.ollama.models} models that can use tools`,
     `Stack: ${ROLES.map((role) => `${role} ${d.stack[role].model} (${d.stack[role].effort})`).join(", ")}`,
     `Models known: ${Object.keys(MODELS).length}, prices listed ${d.pricesListed}`,

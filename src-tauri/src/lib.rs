@@ -3,7 +3,9 @@ mod chatgpt;
 mod keys;
 mod ledger;
 mod ollama;
+mod gemini;
 mod openrouter;
+mod practice;
 mod push;
 mod updates;
 #[cfg(unix)]
@@ -177,6 +179,21 @@ async fn openrouter_connect() -> Result<(), String> {
 #[tauri::command]
 async fn openrouter_models() -> Result<Vec<openrouter::Listed>, String> {
     openrouter::models().await
+}
+
+/// The practice project, made the first time it's asked for, and the task Home offers first in it.
+#[tauri::command]
+fn practice_project(app: AppHandle) -> Result<(String, String), String> {
+    let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let dir = practice::make(&data)?;
+    Ok((dir.to_string_lossy().into_owned(), practice::FIRST_TASK.to_string()))
+}
+
+/// The Gemini models the person's key can use for a task.
+#[tauri::command]
+async fn gemini_models() -> Result<Vec<gemini::Listed>, String> {
+    let key = keys::any(keys::keyed("gemini")?).ok_or("Add your Gemini API key in Settings first.")?;
+    gemini::models(&key).await
 }
 
 /// The models the person's ChatGPT plan offers. Empty when signed out.
@@ -1289,6 +1306,8 @@ pub fn run() {
             chatgpt_manage_usage,
             openrouter_connect,
             openrouter_models,
+            gemini_models,
+            practice_project,
             pick_project,
             found_projects,
             pick_attachments,

@@ -3335,6 +3335,12 @@ button.rrow:focus-visible {
   justify-self: start;
 }
 
+.sup > .acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
 /* Setup's sections meet on a hairline, one page from key to project. */
 .su > .sup,
 .su > .suf {
