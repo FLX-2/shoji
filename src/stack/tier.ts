@@ -12,14 +12,20 @@ export const TIERS: Record<Tier, { label: string; does: string }> = {
   max: { label: "Max", does: "Build runs on the Plan model" },
 };
 
-/** The next model down by output price from the same provider, or the same one when nothing there is cheaper. A
- *  draft never moves work to another provider, which the person may not have connected. A model that charges
- *  nothing stays put, since price is all that orders the others: so does one this copy no longer lists. */
+/** Who makes a model. OpenRouter carries many makers' models, named openrouter/maker/model; everywhere else the
+ *  provider is the maker. */
+const makerOf = (model: ModelId) =>
+  providerOf(model) === "openrouter" ? model.split("/").slice(0, 2).join("/") : providerOf(model);
+
+/** The next model down by output price from the same maker, or the same one when nothing there is cheaper. A
+ *  draft never moves work to another provider, which the person may not have connected, or on OpenRouter to
+ *  another maker's model, which price alone says nothing about. A model that charges nothing stays put, since
+ *  price is all that orders the others: so does one this copy no longer lists. */
 function cheaper(model: ModelId): ModelId {
   const at = MODELS[model];
   if (!at || at.output === 0) return model;
   const below = Object.keys(MODELS)
-    .filter((m) => providerOf(m) === providerOf(model) && !MODELS[m].billing === !at.billing)
+    .filter((m) => makerOf(m) === makerOf(model) && !MODELS[m].billing === !at.billing)
     .filter((m) => MODELS[m].output > 0 && MODELS[m].output < at.output)
     .sort((a, b) => MODELS[b].output - MODELS[a].output);
   return below[0] ?? model;
