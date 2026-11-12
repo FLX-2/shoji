@@ -42,6 +42,13 @@ interface PreviewViewProps {
 }
 
 /** The project's own dev server, at a phone's, a tablet's and a laptop's width. */
+/**
+ * What the previewed page may do. It runs as it would in a browser, on its own origin, with its scripts, forms,
+ * storage, dialogs and downloads. What's left out is navigating the window it's shown in: a page that breaks
+ * out of frames, or a link that targets the top, would otherwise replace Shoji itself.
+ */
+const SANDBOX = "allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads";
+
 export function PreviewView({
   url: saved,
   onUrl,
@@ -218,6 +225,7 @@ export function PreviewView({
               key={`${reloads}-${freshness}`}
               title={`Preview at ${width} px`}
               src={url}
+              sandbox={SANDBOX}
               style={{
                 width,
                 height: room ? room.height / scale : "100%",
