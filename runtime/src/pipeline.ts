@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { MAX_TOKENS, OUT_OF_TURNS, runAgent, whole } from "./agent";
+import { BUILD_TURNS, MAX_TOKENS, OUT_OF_TURNS, runAgent, whole } from "./agent";
 import { type Attachments, withAttachments } from "./attachments";
 import { runChecks } from "./commands";
 import type { CheckResult, Emit, ThreadResult } from "./events";
@@ -122,6 +122,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
         system,
         prompt: withAttachments(prompt, input.attachments),
         tools,
+        ...(role === "build" && { maxTurns: BUILD_TURNS }),
         mcp: input.mcp,
         skills,
         preview,

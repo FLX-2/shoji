@@ -9,6 +9,13 @@ import type { Workspace } from "./workspace";
 
 export const MAX_TOKENS = 16000;
 
+/** How many times a step may go to its model unless it says otherwise: enough to read around and answer. */
+export const TURNS = 12;
+
+/** Build's turns. Each file it reads or edits and each check it runs takes one, so a task across several files
+ *  needs more than reading does. The thread's spending limit is the guard on how far it goes. */
+export const BUILD_TURNS = 30;
+
 /** What a step answers when it used every turn without finishing. */
 export const OUT_OF_TURNS = "(The step ran out of turns before it finished.)";
 
@@ -76,7 +83,7 @@ export async function runAgent(run: AgentRun): Promise<string> {
     system,
     prompt,
     tools,
-    maxTurns = 12,
+    maxTurns = TURNS,
     onTool,
     ask,
     mcp,
