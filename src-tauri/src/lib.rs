@@ -15,6 +15,7 @@ mod server;
 mod terminal;
 #[cfg(target_os = "macos")]
 mod titlebar;
+mod tree;
 mod worktree;
 
 use std::fs;
@@ -536,6 +537,8 @@ fn start_run(
         let spawned = command
             .args(args)
             .envs(keys)
+            // In a group of its own, so stopping the run stops what the runtime started too.
+            .set_process_group(true)
             .spawn()
             .map_err(|e| {
                 noted(ledger.end_run(ids.1, "failed"));
@@ -661,6 +664,7 @@ fn start_trial(
     let (events, child) = command
         .args(args)
         .envs(keys)
+        .set_process_group(true)
         .spawn()
         .map_err(|e| {
             noted(ledger.end_run(entry, "failed"));
@@ -733,6 +737,7 @@ fn start_notes(
     let (events, child) = command
         .args(args)
         .envs(keys)
+        .set_process_group(true)
         .spawn()
         .map_err(|e| {
             noted(ledger.end_run(entry, "failed"));
@@ -755,11 +760,21 @@ fn answer_ask(run: State<Run>, id: u64, allow: bool) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+/// Ends a run's runtime and everything the runtime started: a check that's mid-run, the dev server Build
+/// looks at pages through, its browser, and the person's MCP servers.
+fn end(going: Live) -> Result<(), String> {
+    // What left the runtime's group is found through the runtime, so before it goes.
+    tree::stop_started_by(going.child.pid());
+    going.child.kill().map_err(|e| e.to_string())
+}
+
+/// Off the window's own thread, since ending a run waits for its runtime to go.
+#[tauri::command(async)]
 fn stop_run(run: State<Run>, ledger: State<Ledger>, id: u64) -> Result<(), String> {
-    if let Some(going) = run.live.lock().unwrap().remove(&id) {
+    let going = run.live.lock().unwrap().remove(&id);
+    if let Some(going) = going {
         noted(ledger.end_run(going.entry, "stopped"));
-        going.child.kill().map_err(|e| e.to_string())?;
+        end(going)?;
     }
     Ok(())
 }
@@ -1381,8 +1396,15 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            // Dev servers are the person's own processes, so they go when Shoji does.
+            // Dev servers are the person's own processes, so they go when Shoji does. So does every run still
+            // going, with what it started: left alone, a runtime carried on, and spent, after the window closed.
+            // Each is marked now as the next launch would mark it, so the thread can be picked up from there.
             if let tauri::RunEvent::Exit = event {
+                let going: Vec<Live> = app.state::<Run>().live.lock().unwrap().drain().map(|(_, live)| live).collect();
+                for live in going {
+                    noted(app.state::<Ledger>().end_run(live.entry, "interrupted"));
+                    let _ = end(live);
+                }
                 app.state::<Servers>().stop_all();
                 app.state::<Terminals>().close_all();
             }
@@ -1392,6 +1414,44 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// How many sleeps of this length are running. The odd length marks them apart from any other test's.
+    #[cfg(target_os = "linux")]
+    fn sleeping(length: &str) -> usize {
+        let found = Command::new("pgrep").args(["-f", &format!("^sleep {length}$")]).output().unwrap().stdout;
+        String::from_utf8_lossy(&found).lines().count()
+    }
+
+    /// `setsid` is how a shell script leaves its group, as the runtime's dev server does, and only Linux is
+    /// sure to have it.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn ending_a_run_ends_what_its_runtime_started_in_its_group_and_out_of_it() {
+        let wait_for = |done: &dyn Fn() -> bool| {
+            let started = std::time::Instant::now();
+            while !done() && started.elapsed() < std::time::Duration::from_secs(8) {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        };
+        let app = tauri::test::mock_builder()
+            .plugin(tauri_plugin_shell::init())
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .unwrap();
+        // Stands in for the runtime: a check with a child of its own, and a dev server that left the group.
+        let (_events, child) = app
+            .shell()
+            .command("sh")
+            .args(["-c", "sh -c 'sleep 3143 & sleep 3143; wait' & setsid sh -c 'sleep 3143 & sleep 3143; wait' & wait"])
+            .set_process_group(true)
+            .spawn()
+            .unwrap();
+        wait_for(&|| sleeping("3143") == 4);
+        assert_eq!(sleeping("3143"), 4);
+
+        end(Live { child, entry: 0, thread: 0 }).unwrap();
+        wait_for(&|| sleeping("3143") == 0);
+        assert_eq!(sleeping("3143"), 0, "something the runtime started outlived the run");
+    }
 
     #[test]
     fn a_thread_starts_one_run_at_a_time_and_is_free_again_when_the_start_ends() {
