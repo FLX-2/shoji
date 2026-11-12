@@ -1,4 +1,5 @@
 import { MODELS, type ModelId } from "../../runtime/src/models";
+import { STACKS } from "../../runtime/src/stack";
 import type { LedgerCall, LedgerThread } from "../bridge";
 import { stackOf, stackSummary } from "../stack/lock";
 
@@ -34,12 +35,39 @@ export function threadSpend(thread: LedgerThread): number {
   return callsOf(thread).reduce((sum, call) => sum + call.cost, 0);
 }
 
-/** The same calls priced as if every step had run on the baseline model. An estimate: that
- *  model would have taken its own path. A call on a model this version doesn't list keeps its cost. */
+/** Whether a model charges nothing: it runs on this computer, on a plan or a free tier, or OpenRouter offers it
+ *  free. */
+export function chargesNothing(model: string): boolean {
+  // Ollama's and a plan's models are free wherever they came from, even before the app has found them again.
+  if (/^(ollama|chatgpt)\//.test(model)) return true;
+  const info = known(model) ? MODELS[model] : undefined;
+  return !!info && (info.billing !== undefined || (info.input === 0 && info.output === 0));
+}
+
+/** Whether a thread ran free work, so it's compared with Claude rather than with its own Plan model, which also
+ *  charges nothing. */
+export const comparedWithClaude = (thread: LedgerThread) => chargesNothing(baselineModel(thread));
+
+/** The same calls priced on Claude's Balanced stack, each step on the model that stack gives its role. */
+export function claudeCost(thread: LedgerThread): number {
+  const balanced = STACKS.balanced as Record<string, { model: ModelId }>;
+  return callsOf(thread).reduce(
+    (sum, call) => sum + (call.role in balanced ? priceAs(balanced[call.role].model, call) : call.cost),
+    0,
+  );
+}
+
+/** The same calls priced as if every step had run on the baseline model, or for free work on Claude. An estimate:
+ *  that model would have taken its own path. A call on a model this version doesn't list keeps its cost. */
 export function oneModelCost(thread: LedgerThread): number {
+  if (comparedWithClaude(thread)) return claudeCost(thread);
   const baseline = baselineModel(thread);
   return callsOf(thread).reduce((sum, call) => sum + (known(call.model) ? priceAs(baseline, call) : call.cost), 0);
 }
+
+/** What a thread is compared with, by name: its Plan model, or Claude for free work. */
+export const baselineName = (thread: LedgerThread) =>
+  comparedWithClaude(thread) ? "Claude" : modelLabel(baselineModel(thread));
 
 export const accepted = (thread: LedgerThread) => thread.committed !== null;
 
@@ -148,6 +176,8 @@ export interface Receipt {
   total: number;
   oneModel: number;
   baseline: ModelId;
+  /** What the thread is compared with, by name: its Plan model, or Claude for free work. */
+  baselineName: string;
 }
 
 /** A thread's calls, one line per step and model, in the order they ran. */
@@ -169,6 +199,7 @@ export function receipt(thread: LedgerThread): Receipt {
     total: threadSpend(thread),
     oneModel: oneModelCost(thread),
     baseline: baselineModel(thread),
+    baselineName: baselineName(thread),
   };
 }
 

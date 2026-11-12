@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { MODELS, providerOf, type ModelId } from "../../runtime/src/models";
+import { MODELS, providerOf } from "../../runtime/src/models";
+import { chargesNothing } from "../receipts/receipts";
 import { STACKS, type Stack, type StackName } from "../../runtime/src/stack";
 import type { Bridge, FoundProject, KeyStatus } from "../bridge";
 import { folderName } from "../home/HomeView";
@@ -104,7 +105,7 @@ export function SetupView(props: SetupViewProps) {
           starters={props.prefs.starters}
           onChange={props.onChange}
           scout={MODELS[picked.scout.model].label}
-          free={costsNothing(picked.scout.model)}
+          free={chargesNothing(picked.scout.model)}
           notes={props.notes}
           onWriteNotes={(repo) => props.onWriteNotes(repo, picked)}
         />
@@ -508,12 +509,6 @@ function NotesRow({
       </div>
     </div>
   );
-}
-
-/** Whether a model charges nothing: it runs on this computer, on a plan or free tier, or OpenRouter offers it free. */
-function costsNothing(model: ModelId): boolean {
-  const info = MODELS[model];
-  return !!info && (info.billing !== undefined || (info.input === 0 && info.output === 0));
 }
 
 /** "Anthropic, ChatGPT and Ollama". */

@@ -1,5 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { applyFound } from "../../runtime/src/models";
+import { ollamaModel } from "../../runtime/src/found";
+import { cardOf } from "./card";
 import App from "../App";
 import type { LedgerCall, LedgerRun, LedgerThread } from "../bridge";
 import { fakeBridge } from "../test/fakeBridge";
@@ -284,5 +287,103 @@ describe("the Receipts view", () => {
   it("says what Receipts will hold before any thread has run", async () => {
     await openReceipts([]);
     expect(screen.getByText("No receipts yet")).toBeTruthy();
+  });
+
+  describe("free work", () => {
+    const LOCAL = "ollama/gemma4:31b";
+    const checked = JSON.stringify({
+      scout: { model: LOCAL, effort: "low" },
+      plan: { model: LOCAL, effort: "medium" },
+      build: { model: LOCAL, effort: "medium" },
+      review: { model: "claude-haiku-5-5", effort: "low" },
+    });
+    const free = (c: LedgerCall) => ({ ...c, cost: 0 });
+    const work = () =>
+      thread(
+        3,
+        "Fix the basket total",
+        [
+          run("task", "ready", [
+            free(call("scout", "scout", LOCAL)),
+            free(call("plan", "plan", LOCAL)),
+            free(call("build", "build", LOCAL)),
+            call("review", "review", "claude-haiku-5-5"),
+          ]),
+        ],
+        { stack: checked, committed: "c3d4e5f" },
+      );
+
+    afterEach(() => {
+      applyFound("ollama", {});
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    });
+
+    it("is compared with what Claude's Balanced stack would have charged", () => {
+      applyFound("ollama", Object.fromEntries([ollamaModel("gemma4:31b")]));
+      const t = work();
+      expect(receipt(t).baselineName).toBe("Claude");
+      const [scout, plan, build, review] = t.runs[0].calls;
+      expect(oneModelCost(t)).toBeCloseTo(
+        priceAs("claude-haiku-5-5", scout) +
+          priceAs("claude-opus-5-5", plan) +
+          priceAs("claude-sonnet-5-5", build) +
+          priceAs("claude-haiku-5-5", review),
+      );
+      expect(cardOf(t)).toMatchObject({
+        title: "Fix the basket total",
+        meta: "pricing-page · Accepted",
+        lines: [
+          ["Scout · gemma4:31b", "On this computer"],
+          ["Plan · gemma4:31b", "On this computer"],
+          ["Build · gemma4:31b", "On this computer"],
+          ["Review · Haiku 5.5", "<$0.001"],
+        ],
+        compared: ["On Claude, estimated", `$${oneModelCost(t).toFixed(3)}`],
+      });
+    });
+
+    it("says so on the receipt, and copies the receipt as a picture drawn here", async () => {
+      // Shoji keeps the Ollama models it has found, so older threads keep their names while Ollama is closed.
+      localStorage.setItem("shoji.ollama", JSON.stringify(["gemma4:31b"]));
+      await openReceipts([work()]);
+      const pane = screen.getByRole("complementary", { name: "Receipt" });
+      expect(within(pane).getByText("On Claude, estimated")).toBeTruthy();
+      expect(screen.getByText("An estimate, if every step ran on Claude's Balanced stack")).toBeTruthy();
+
+      const drawn: string[] = [];
+      const context = new Proxy({} as Record<string, unknown>, {
+        get: (target, name) =>
+          name === "measureText"
+            ? (text: string) => ({ width: text.length * 10 })
+            : name === "fillText"
+              ? (text: string) => drawn.push(text)
+              : name in target
+                ? target[name as string]
+                : () => {},
+        set: (target, name, value) => {
+          target[name as string] = value;
+          return true;
+        },
+      });
+      vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as never);
+      vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((done) => done(new Blob(["png"])));
+      const write = vi.fn(async () => {});
+      vi.stubGlobal("navigator", { ...navigator, clipboard: { write } });
+      vi.stubGlobal(
+        "ClipboardItem",
+        class {
+          constructor(readonly items: Record<string, Blob>) {}
+        },
+      );
+
+      await act(async () => {
+        fireEvent.click(within(pane).getByRole("button", { name: "Copy as image" }));
+      });
+      expect(write).toHaveBeenCalledTimes(1);
+      expect(within(pane).getByText("Copied as an image")).toBeTruthy();
+      expect(drawn).toContain("Fix the basket total");
+      expect(drawn).toContain("On Claude, estimated");
+    });
   });
 });

@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { providerOf } from "../../runtime/src/models";
 import type { Bridge, LedgerThread } from "../bridge";
 import { folderName } from "../home/HomeView";
 import { SECTIONS } from "../shell/sections";
 import { formatCost } from "../thread/fold";
 import {
-  baselineModel,
+  baselineName,
   dailySpend,
   modelLabel,
   modelsUsed,
@@ -21,6 +20,7 @@ import {
   toCsv,
 } from "./receipts";
 import { threadTitle } from "../thread/title";
+import { copyCard, costWords } from "./card";
 import { locale } from "../shell/locale";
 
 const STEPS: Record<string, string> = {
@@ -123,7 +123,7 @@ export function ReceiptsView({ bridge, onNew, open: first }: { bridge: Bridge; o
   }
 
   const at = all.indexOf(shown);
-  const baselines = new Set(summary.threads.map(baselineModel));
+  const baselines = new Set(summary.threads.map(baselineName));
   // The Project column earns its place only when the month spans more than one project.
   const projects = new Set(summary.threads.map((t) => t.repo)).size > 1;
   const exportCsv = () => {
@@ -183,7 +183,9 @@ export function ReceiptsView({ bridge, onNew, open: first }: { bridge: Bridge; o
               <dd>{formatCost(Math.max(0, summary.saved))}</dd>
               <dd className="s">
                 {baselines.size === 1
-                  ? `An estimate, if every step ran on ${modelLabel([...baselines][0])}`
+                  ? [...baselines][0] === "Claude"
+                    ? "An estimate, if every step ran on Claude's Balanced stack"
+                    : `An estimate, if every step ran on ${[...baselines][0]}`
                   : "An estimate, if every step ran on its thread's Plan model"}
               </dd>
             </div>
@@ -332,6 +334,13 @@ function DailyChart({ days, month }: { days: number[]; month: string }) {
 
 function ReceiptPane({ thread }: { thread: LedgerThread }) {
   const r = receipt(thread);
+  const [shared, setShared] = useState<string | null>(null);
+  useEffect(() => setShared(null), [thread.id]);
+  const share = () =>
+    copyCard(thread).then(
+      () => setShared("Copied as an image"),
+      (e) => setShared(String(e).replace(/^Error: /, "")),
+    );
   const changes = thread.runs.filter(reworked).length;
   return (
     <aside className="rpane" aria-label="Receipt">
@@ -350,7 +359,7 @@ function ReceiptPane({ thread }: { thread: LedgerThread }) {
                   {STEPS[line.step] ?? line.step}
                   <span className="m"> · {modelLabel(line.model)}</span>
                 </span>
-                <span className="n">{lineCost(line.model, line.cost)}</span>
+                <span className="n">{costWords(line.model, line.cost)}</span>
               </li>
             ))}
           </ul>
@@ -368,7 +377,7 @@ function ReceiptPane({ thread }: { thread: LedgerThread }) {
               </li>
             )}
             <li>
-              <span>On {modelLabel(r.baseline)} alone, estimated</span>
+              <span>{r.baselineName === "Claude" ? "On Claude, estimated" : `On ${r.baselineName} alone, estimated`}</span>
               <span className="n">{dollars(r.oneModel, 3)}</span>
             </li>
           </ul>
@@ -382,6 +391,23 @@ function ReceiptPane({ thread }: { thread: LedgerThread }) {
         {thread.committed ? `Accepted as ${thread.committed} on ${thread.branch}` : outcome(thread)}
         {changes > 0 && ` · ${changes} ${changes === 1 ? "request" : "requests"} for changes`}
       </p>
+      {r.lines.length > 0 && (
+        <p className="share">
+          <button
+            type="button"
+            className="btn sm"
+            title="A picture of this receipt, drawn on this computer: the task, each step's model and cost, and the total"
+            onClick={share}
+          >
+            Copy as image
+          </button>
+          {shared && (
+            <span className="note" role="status">
+              {shared}
+            </span>
+          )}
+        </p>
+      )}
     </aside>
   );
 }
@@ -392,11 +418,3 @@ function compact(tokens: number): string {
   return `${Math.round(tokens / 1e5) / 10}M`.replace(".0M", "M");
 }
 
-/** A receipt line's cost: dollars, or where it ran when that charged nothing. */
-function lineCost(model: string, cost: number): string {
-  if (providerOf(model) === "chatgpt") return "On your ChatGPT plan";
-  if (providerOf(model) === "ollama") return "On this computer";
-  if (cost === 0 && providerOf(model) === "gemini") return "On Gemini's free tier";
-  if (cost === 0 && providerOf(model) === "openrouter") return "Free on OpenRouter";
-  return dollars(cost, 3);
-}

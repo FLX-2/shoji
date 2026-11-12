@@ -2690,6 +2690,14 @@ button.rrow:focus-visible {
   color: var(--z10);
 }
 
+/* Copy as image sits under the receipt, with what happened beside it. */
+.rpane .share {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
 /* Stack: each role's model and effort on the left, stack.lock and its history on the right. */
 .stack {
   flex: 1;

@@ -13,7 +13,7 @@ import {
 } from "./bridge";
 import { folderName, type HomeDraft, HomeView } from "./home/HomeView";
 import { startersIn } from "./home/starters";
-import { baselineModel, modelLabel, oneModelCost, routingLine, threadSpend } from "./receipts/receipts";
+import { baselineName, oneModelCost, routingLine, threadSpend } from "./receipts/receipts";
 import { Field } from "./look/Field";
 import { lookStyle } from "./look/LookRows";
 import { useTheme } from "./look/theme";
@@ -1018,7 +1018,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                         line: routingLine(shownRecord),
                         spent: threadSpend(shownRecord),
                         oneModel: oneModelCost(shownRecord),
-                        baseline: modelLabel(baselineModel(shownRecord)).split(" ")[0],
+                        baseline: baselineName(shownRecord).split(" ")[0],
                       },
                       onViewReceipt: () => viewReceipt(shownRecord.id),
                     })}
