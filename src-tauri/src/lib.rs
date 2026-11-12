@@ -1,36 +1,36 @@
-mod found;
 mod chatgpt;
+mod found;
+mod gemini;
 mod keys;
 mod ledger;
 mod ollama;
-mod gemini;
 mod openrouter;
 mod practice;
 mod push;
-mod updates;
+mod server;
 #[cfg(unix)]
 mod shell_path;
 mod slash;
-mod server;
 mod terminal;
 #[cfg(target_os = "macos")]
 mod titlebar;
+mod updates;
 mod worktree;
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Component, Path};
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::collections::HashMap;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use tauri::async_runtime::Receiver;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
-use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 
 use ledger::{Ledger, ThreadRecord};
 use server::Servers;
@@ -81,7 +81,10 @@ fn key_status(provider: Option<String>) -> Result<KeyStatus, String> {
 
 #[tauri::command]
 fn save_key(key: String, provider: Option<String>) -> Result<(), String> {
-    keys::save(keys::keyed(provider.as_deref().unwrap_or("anthropic"))?, &key)
+    keys::save(
+        keys::keyed(provider.as_deref().unwrap_or("anthropic"))?,
+        &key,
+    )
 }
 
 /// Keeps the key from the shell in the keychain, so Shoji has it however it's opened. The key itself
@@ -101,8 +104,12 @@ fn forget_key(provider: Option<String>) -> Result<(), String> {
 /// Git projects the person worked on with Claude Code or Codex, for setup to offer.
 #[tauri::command]
 async fn found_projects() -> Vec<found::FoundProject> {
-    let Some(home) = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }) else { return vec![] };
-    let codex = std::env::var_os("CODEX_HOME").filter(|d| !d.is_empty()).map(std::path::PathBuf::from);
+    let Some(home) = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }) else {
+        return vec![];
+    };
+    let codex = std::env::var_os("CODEX_HOME")
+        .filter(|d| !d.is_empty())
+        .map(std::path::PathBuf::from);
     tauri::async_runtime::spawn_blocking(move || found::found_in(Path::new(&home), codex))
         .await
         .unwrap_or_default()
@@ -142,7 +149,11 @@ fn open_in_browser(url: &str) -> Result<(), String> {
     } else {
         Command::new("xdg-open")
     };
-    command.arg(url).spawn().map(|_| ()).map_err(|_| "Shoji couldn't open your browser.".to_string())
+    command
+        .arg(url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|_| "Shoji couldn't open your browser.".to_string())
 }
 
 #[tauri::command]
@@ -186,19 +197,25 @@ async fn openrouter_models() -> Result<Vec<openrouter::Listed>, String> {
 fn practice_project(app: AppHandle) -> Result<(String, String), String> {
     let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let dir = practice::make(&data)?;
-    Ok((dir.to_string_lossy().into_owned(), practice::FIRST_TASK.to_string()))
+    Ok((
+        dir.to_string_lossy().into_owned(),
+        practice::FIRST_TASK.to_string(),
+    ))
 }
 
 /// The Gemini models the person's key can use for a task.
 #[tauri::command]
 async fn gemini_models() -> Result<Vec<gemini::Listed>, String> {
-    let key = keys::any(keys::keyed("gemini")?).ok_or("Add your Gemini API key in Settings first.")?;
+    let key =
+        keys::any(keys::keyed("gemini")?).ok_or("Add your Gemini API key in Settings first.")?;
     gemini::models(&key).await
 }
 
 /// The models the person's ChatGPT plan offers. Empty when signed out.
 #[tauri::command]
-async fn chatgpt_models(store: State<'_, chatgpt::Store>) -> Result<Vec<chatgpt::PlanModel>, String> {
+async fn chatgpt_models(
+    store: State<'_, chatgpt::Store>,
+) -> Result<Vec<chatgpt::PlanModel>, String> {
     store.models().await
 }
 
@@ -258,10 +275,20 @@ fn save_attachment(app: AppHandle, name: String, bytes: Vec<u8>) -> Result<Strin
 fn attachment_name(name: &str) -> String {
     let kept: String = name
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     let kept = kept.trim_start_matches('.');
-    if kept.is_empty() { "pasted.png".into() } else { kept.into() }
+    if kept.is_empty() {
+        "pasted.png".into()
+    } else {
+        kept.into()
+    }
 }
 
 #[derive(Deserialize)]
@@ -308,18 +335,27 @@ fn private_args(patterns: &Option<Vec<String>>) -> Vec<String> {
     match patterns {
         None => vec![],
         Some(list) if list.is_empty() => vec!["--private=".into()],
-        Some(list) => list.iter().map(|pattern| format!("--private={pattern}")).collect(),
+        Some(list) => list
+            .iter()
+            .map(|pattern| format!("--private={pattern}"))
+            .collect(),
     }
 }
 
 /// The runtime's --models-json flag, joined with = so the list can't be read as a flag of its own.
 fn models_args(models: &Option<serde_json::Value>) -> Vec<String> {
-    models.iter().map(|list| format!("--models-json={list}")).collect()
+    models
+        .iter()
+        .map(|list| format!("--models-json={list}"))
+        .collect()
 }
 
 /// The runtime's --mcp-json flag, joined with = in the same way.
 fn mcp_args(servers: &Option<serde_json::Value>) -> Vec<String> {
-    servers.iter().map(|list| format!("--mcp-json={list}")).collect()
+    servers
+        .iter()
+        .map(|list| format!("--mcp-json={list}"))
+        .collect()
 }
 
 #[derive(Serialize)]
@@ -414,13 +450,19 @@ fn start_run(
 
     let repo = request.repo;
     if let Some(changes) = &request.changes {
-        if !ledger.has_thread(changes.thread).map_err(|e| e.to_string())? {
+        if !ledger
+            .has_thread(changes.thread)
+            .map_err(|e| e.to_string())?
+        {
             return Err("That thread isn't in the ledger.".into());
         }
     }
     // Where the work happens: the thread's own copy, made now for a new task.
     let (branch, workdir, made) = match &request.changes {
-        Some(changes) => match ledger.workdir_of(changes.thread).map_err(|e| e.to_string())? {
+        Some(changes) => match ledger
+            .workdir_of(changes.thread)
+            .map_err(|e| e.to_string())?
+        {
             Some(dir) => {
                 worktree::restore(&repo, Path::new(&dir), &changes.branch)?;
                 (on_branch(&dir, &changes.branch)?, Some(dir), false)
@@ -428,7 +470,12 @@ fn start_run(
             None => (on_branch(&repo, &changes.branch)?, None, false),
         },
         None => {
-            let (branch, dir) = worktree::create(&repo, &data.join("worktrees"), &request.task, request.from.as_deref())?;
+            let (branch, dir) = worktree::create(
+                &repo,
+                &data.join("worktrees"),
+                &request.task,
+                request.from.as_deref(),
+            )?;
             (branch, Some(dir.display().to_string()), true)
         }
     };
@@ -436,7 +483,10 @@ fn start_run(
 
     let task = request.task.clone();
     let stack = request.stack.to_string();
-    let thread = request.changes.as_ref().map(|c| (c.thread, c.kind().to_string()));
+    let thread = request
+        .changes
+        .as_ref()
+        .map(|c| (c.thread, c.kind().to_string()));
     let mut args = vec![
         "--json".to_string(),
         "--repo".into(),
@@ -453,16 +503,39 @@ fn start_run(
     if request.plan_only {
         args.push("--plan-only".into());
     }
-    args.extend(request.attachments.iter().map(|file| format!("--attach={file}")));
-    args.extend(request.allowed_commands.iter().map(|command| format!("--allow={command}")));
+    args.extend(
+        request
+            .attachments
+            .iter()
+            .map(|file| format!("--attach={file}")),
+    );
+    args.extend(
+        request
+            .allowed_commands
+            .iter()
+            .map(|command| format!("--allow={command}")),
+    );
     args.extend(private_args(&request.private_files));
     args.extend(models_args(&request.models));
     args.extend(mcp_args(&request.mcp_servers));
     // Joined with = so the command can't be read as a flag of its own.
-    args.extend(request.dev_command.iter().filter(|c| !c.trim().is_empty()).map(|c| format!("--dev-command={c}")));
+    args.extend(
+        request
+            .dev_command
+            .iter()
+            .filter(|c| !c.trim().is_empty())
+            .map(|c| format!("--dev-command={c}")),
+    );
     // Where the pages Build looked at are saved before and after the work, beside the run's log.
-    if request.dev_command.as_deref().is_some_and(|c| !c.trim().is_empty()) {
-        args.push(format!("--shots-dir={}", runs.join(format!("{stamp}-shots")).display()));
+    if request
+        .dev_command
+        .as_deref()
+        .is_some_and(|c| !c.trim().is_empty())
+    {
+        args.push(format!(
+            "--shots-dir={}",
+            runs.join(format!("{stamp}-shots")).display()
+        ));
         if request.look_review {
             args.push("--look-review".into());
         }
@@ -472,8 +545,18 @@ fn start_run(
         fs::write(&plan, &changes.plan).map_err(|e| e.to_string())?;
         args.extend(["--plan-file".into(), plan.display().to_string()]);
         // Joined with = so a command can't be read as a flag of its own.
-        args.extend(changes.failing_before.iter().map(|command| format!("--failing-before={command}")));
-        args.extend(changes.failing_tests_before.iter().map(|name| format!("--failing-test-before={name}")));
+        args.extend(
+            changes
+                .failing_before
+                .iter()
+                .map(|command| format!("--failing-before={command}")),
+        );
+        args.extend(
+            changes
+                .failing_tests_before
+                .iter()
+                .map(|name| format!("--failing-test-before={name}")),
+        );
         if changes.checked_before {
             args.push("--checked-before".into());
         }
@@ -488,10 +571,12 @@ fn start_run(
     // The ledger keeps the thread and run first, so every call the run makes has a home.
     let recorded = match thread {
         Some((thread, kind)) => Ok((thread, kind)),
-        None => ledger.start_thread(&task, &repo, &branch, &stack, stamp).and_then(|thread| {
-            ledger.note_workdir(thread, &dir)?;
-            Ok((thread, "task".to_string()))
-        }),
+        None => ledger
+            .start_thread(&task, &repo, &branch, &stack, stamp)
+            .and_then(|thread| {
+                ledger.note_workdir(thread, &dir)?;
+                Ok((thread, "task".to_string()))
+            }),
     }
     .and_then(|(thread, kind)| {
         let entry = ledger.start_run(thread, &kind, &log.display().to_string(), stamp)?;
@@ -502,15 +587,14 @@ fn start_run(
     })
     .map_err(|e| e.to_string());
     let spawned = recorded.and_then(|ids| {
-        let command = app.shell().sidecar("shoji-runtime").map_err(|e| e.to_string())?;
-        let spawned = command
-            .args(args)
-            .envs(keys)
-            .spawn()
-            .map_err(|e| {
-                noted(ledger.end_run(ids.1, "failed"));
-                e.to_string()
-            })?;
+        let command = app
+            .shell()
+            .sidecar("shoji-runtime")
+            .map_err(|e| e.to_string())?;
+        let spawned = command.args(args).envs(keys).spawn().map_err(|e| {
+            noted(ledger.end_run(ids.1, "failed"));
+            e.to_string()
+        })?;
         Ok((ids, spawned))
     });
     let ((thread, entry), (events, child)) = match spawned {
@@ -525,9 +609,21 @@ fn start_run(
         }
     };
     let id = run.count.fetch_add(1, Ordering::Relaxed) + 1;
-    live.insert(id, Live { child, entry, thread });
+    live.insert(
+        id,
+        Live {
+            child,
+            entry,
+            thread,
+        },
+    );
     watch(app, events, id, entry);
-    Ok(Started { run: id, thread, branch, workdir })
+    Ok(Started {
+        run: id,
+        thread,
+        branch,
+        workdir,
+    })
 }
 
 /// Passes a run's events to the app and the ledger until the runtime exits.
@@ -628,17 +724,23 @@ fn start_trial(
     ];
     args.extend(private);
     args.extend(models);
-    let command = app.shell().sidecar("shoji-runtime").map_err(|e| e.to_string())?;
-    let (events, child) = command
-        .args(args)
-        .envs(keys)
-        .spawn()
-        .map_err(|e| {
-            noted(ledger.end_run(entry, "failed"));
-            e.to_string()
-        })?;
+    let command = app
+        .shell()
+        .sidecar("shoji-runtime")
+        .map_err(|e| e.to_string())?;
+    let (events, child) = command.args(args).envs(keys).spawn().map_err(|e| {
+        noted(ledger.end_run(entry, "failed"));
+        e.to_string()
+    })?;
     let id = run.count.fetch_add(1, Ordering::Relaxed) + 1;
-    live.insert(id, Live { child, entry, thread });
+    live.insert(
+        id,
+        Live {
+            child,
+            entry,
+            thread,
+        },
+    );
     watch(app, events, id, entry);
     Ok(id)
 }
@@ -701,17 +803,23 @@ fn start_notes(
     ];
     args.extend(private);
     args.extend(models);
-    let command = app.shell().sidecar("shoji-runtime").map_err(|e| e.to_string())?;
-    let (events, child) = command
-        .args(args)
-        .envs(keys)
-        .spawn()
-        .map_err(|e| {
-            noted(ledger.end_run(entry, "failed"));
-            e.to_string()
-        })?;
+    let command = app
+        .shell()
+        .sidecar("shoji-runtime")
+        .map_err(|e| e.to_string())?;
+    let (events, child) = command.args(args).envs(keys).spawn().map_err(|e| {
+        noted(ledger.end_run(entry, "failed"));
+        e.to_string()
+    })?;
     let id = run.count.fetch_add(1, Ordering::Relaxed) + 1;
-    live.insert(id, Live { child, entry, thread });
+    live.insert(
+        id,
+        Live {
+            child,
+            entry,
+            thread,
+        },
+    );
     watch(app, events, id, entry);
     Ok(Some(id))
 }
@@ -783,7 +891,10 @@ fn plain_git(said: &str) -> String {
                 Add it as a safe.directory in git, then try again."
             .into();
     }
-    let bare = said.strip_prefix("fatal: ").or_else(|| said.strip_prefix("error: ")).unwrap_or(said);
+    let bare = said
+        .strip_prefix("fatal: ")
+        .or_else(|| said.strip_prefix("error: "))
+        .unwrap_or(said);
     let mut letters = bare.chars();
     match letters.next() {
         Some(first) => first.to_uppercase().chain(letters).collect(),
@@ -865,10 +976,16 @@ async fn commit_thread(
 }
 
 /// Pushes a committed thread's branch to the project's remote, when the person presses Push and open PR,
-/// and opens the page where they open a pull request for it. Shoji never pushes on its own.
+/// and opens the page where they open a pull request for it, with the receipt as its description unless they
+/// turned that off. Shoji never pushes on its own.
 #[tauri::command]
-async fn push_thread(app: AppHandle, repo: String, branch: String) -> Result<push::Pushed, String> {
-    let pushed = push::push(&repo, &branch)?;
+async fn push_thread(
+    app: AppHandle,
+    repo: String,
+    branch: String,
+    body: Option<String>,
+) -> Result<push::Pushed, String> {
+    let pushed = push::push(&repo, &branch, body.as_deref())?;
     if let Some(url) = pushed.url.as_deref() {
         #[allow(deprecated)]
         let _ = tauri_plugin_shell::ShellExt::shell(&app).open(url, None);
@@ -925,7 +1042,10 @@ async fn discard_thread(
         .map_err(|e| e.to_string())?
         .ok_or("Shoji has no record of this thread.")?;
     if place.committed.is_some() {
-        return Err("This thread's work is committed, so its branch holds it. Archive the thread instead.".into());
+        return Err(
+            "This thread's work is committed, so its branch holds it. Archive the thread instead."
+                .into(),
+        );
     }
     let Some(dir) = place.workdir else {
         return Err(format!(
@@ -947,7 +1067,12 @@ async fn discard_thread(
 #[tauri::command]
 fn notify(app: AppHandle, title: String, body: String) -> Result<(), String> {
     use tauri_plugin_notification::NotificationExt;
-    app.notification().builder().title(title).body(body).show().map_err(|e| e.to_string())
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .map_err(|e| e.to_string())
 }
 
 /// Shows how many threads wait for the person on the app's icon: a count on macOS and Linux, a dot on
@@ -973,7 +1098,11 @@ fn waiting_dot() -> tauri::image::Image<'static> {
         for x in 0..SIZE {
             let (dx, dy) = (x as f32 - 7.5, y as f32 - 7.5);
             let inside = dx * dx + dy * dy <= 6.5 * 6.5;
-            rgba.extend_from_slice(if inside { &[0xe3, 0xe0, 0xda, 0xff] } else { &[0, 0, 0, 0] });
+            rgba.extend_from_slice(if inside {
+                &[0xe3, 0xe0, 0xda, 0xff]
+            } else {
+                &[0, 0, 0, 0]
+            });
         }
     }
     tauri::image::Image::new_owned(rgba, SIZE, SIZE)
@@ -982,7 +1111,9 @@ fn waiting_dot() -> tauri::image::Image<'static> {
 /// Scales the whole interface, for the person's text size.
 #[tauri::command]
 fn set_zoom(window: tauri::WebviewWindow, scale: f64) -> Result<(), String> {
-    window.set_zoom(scale.clamp(0.75, 1.5)).map_err(|e| e.to_string())
+    window
+        .set_zoom(scale.clamp(0.75, 1.5))
+        .map_err(|e| e.to_string())
 }
 
 /// Shows a folder in the system's file manager.
@@ -998,13 +1129,22 @@ fn reveal_folder(path: String) -> Result<(), String> {
     } else {
         "xdg-open"
     };
-    Command::new(opener).arg(&path).spawn().map(|_| ()).map_err(|e| e.to_string())
+    Command::new(opener)
+        .arg(&path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// Starts the project's dev server in a thread's copy, with the person's command. Returns its
 /// number; its output arrives as `server-output` and its end as `server-exit`.
 #[tauri::command]
-fn start_server(app: AppHandle, servers: State<Servers>, dir: String, command: String) -> Result<u64, String> {
+fn start_server(
+    app: AppHandle,
+    servers: State<Servers>,
+    dir: String,
+    command: String,
+) -> Result<u64, String> {
     servers.start(&app, &dir, &command)
 }
 
@@ -1016,7 +1156,13 @@ fn stop_server(servers: State<Servers>, id: u64) {
 /// Opens the person's shell in a thread's copy, at the given size. Returns the terminal's
 /// number; what it prints arrives as `terminal-output`, and its end as `terminal-exit`.
 #[tauri::command]
-fn open_terminal(app: AppHandle, terminals: State<Terminals>, dir: String, cols: u16, rows: u16) -> Result<u64, String> {
+fn open_terminal(
+    app: AppHandle,
+    terminals: State<Terminals>,
+    dir: String,
+    cols: u16,
+    rows: u16,
+) -> Result<u64, String> {
     terminals.open(&app, &dir, cols, rows)
 }
 
@@ -1037,7 +1183,11 @@ fn close_terminal(terminals: State<Terminals>, id: u64) {
 
 /// Asks where to save a CSV file, then writes it there. Returns the path, or none if cancelled.
 #[tauri::command]
-async fn export_csv(app: AppHandle, name: String, contents: String) -> Result<Option<String>, String> {
+async fn export_csv(
+    app: AppHandle,
+    name: String,
+    contents: String,
+) -> Result<Option<String>, String> {
     let Some(path) = app
         .dialog()
         .file()
@@ -1056,7 +1206,11 @@ async fn export_csv(app: AppHandle, name: String, contents: String) -> Result<Op
 /// The person's stack choice and its history, as the app wrote it; none before the first choice.
 #[tauri::command]
 fn read_stack_lock(app: AppHandle) -> Result<Option<String>, String> {
-    let path = app.path().app_data_dir().map_err(|e| e.to_string())?.join("stack.lock");
+    let path = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("stack.lock");
     match fs::read_to_string(path) {
         Ok(contents) => Ok(Some(contents)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -1077,9 +1231,20 @@ fn write_stack_lock(app: AppHandle, contents: String) -> Result<(), String> {
 /// A run's events as the runtime wrote them, for reopening a past thread. Only runs the ledger
 /// knows are read, and only from the app's own runs folder.
 #[tauri::command]
-async fn run_events(app: AppHandle, ledger: State<'_, Ledger>, run: i64) -> Result<Vec<serde_json::Value>, String> {
-    let log = ledger.log_of(run).map_err(|e| e.to_string())?.ok_or("Shoji has no record of that run.")?;
-    let runs = app.path().app_data_dir().map_err(|e| e.to_string())?.join("runs");
+async fn run_events(
+    app: AppHandle,
+    ledger: State<'_, Ledger>,
+    run: i64,
+) -> Result<Vec<serde_json::Value>, String> {
+    let log = ledger
+        .log_of(run)
+        .map_err(|e| e.to_string())?
+        .ok_or("Shoji has no record of that run.")?;
+    let runs = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("runs");
     read_events(&runs, Path::new(&log))
 }
 
@@ -1088,15 +1253,24 @@ fn read_events(runs: &Path, log: &Path) -> Result<Vec<serde_json::Value>, String
         return Err("That run's log isn't in Shoji's runs folder.".into());
     }
     // A log that's gone, such as one removed by hand, just shows nothing.
-    let Ok(text) = fs::read_to_string(log) else { return Ok(Vec::new()) };
-    Ok(text.lines().filter_map(|line| serde_json::from_str(line).ok()).collect())
+    let Ok(text) = fs::read_to_string(log) else {
+        return Ok(Vec::new());
+    };
+    Ok(text
+        .lines()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .collect())
 }
 
 /// A screenshot a run saved of a page before or after its work, as PNG bytes. Only PNGs in the app's
 /// own runs folder are read.
 #[tauri::command]
 async fn read_shot(app: AppHandle, path: String) -> Result<tauri::ipc::Response, String> {
-    let runs = app.path().app_data_dir().map_err(|e| e.to_string())?.join("runs");
+    let runs = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("runs");
     shot_bytes(&runs, Path::new(&path)).map(tauri::ipc::Response::new)
 }
 
@@ -1130,11 +1304,16 @@ fn commit(repo: &str, branch: &str, message: &str) -> Result<String, String> {
             e
         }
     })?;
-    Ok(git(repo, &["rev-parse", "--short", "HEAD"])?.trim().to_string())
+    Ok(git(repo, &["rev-parse", "--short", "HEAD"])?
+        .trim()
+        .to_string())
 }
 
 fn names(list: &str) -> Vec<String> {
-    list.lines().filter(|l| !l.is_empty()).map(str::to_string).collect()
+    list.lines()
+        .filter(|l| !l.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 #[derive(Debug, Serialize)]
@@ -1154,10 +1333,25 @@ async fn changes(repo: String) -> Result<ProjectChanges, String> {
 
 fn read_changes(repo: &str) -> Result<ProjectChanges, String> {
     git(repo, &["add", "--all", "--intent-to-add", "."])?;
-    let diff = git(repo, &["diff", "HEAD", "--no-color", "--no-ext-diff", "--no-renames"])?;
-    let changed = names(&git(repo, &["diff", "HEAD", "--name-only", "--no-renames"])?);
+    let diff = git(
+        repo,
+        &[
+            "diff",
+            "HEAD",
+            "--no-color",
+            "--no-ext-diff",
+            "--no-renames",
+        ],
+    )?;
+    let changed = names(&git(
+        repo,
+        &["diff", "HEAD", "--name-only", "--no-renames"],
+    )?);
     let unstaged = names(&git(repo, &["diff", "--name-only", "--no-renames"])?);
-    let accepted = changed.into_iter().filter(|f| !unstaged.contains(f)).collect();
+    let accepted = changed
+        .into_iter()
+        .filter(|f| !unstaged.contains(f))
+        .collect();
     Ok(ProjectChanges { diff, accepted })
 }
 
@@ -1172,7 +1366,16 @@ async fn project_files(repo: String) -> Result<Vec<String>, String> {
 }
 
 fn list_files(repo: &str) -> Result<Vec<String>, String> {
-    let listed = git(repo, &["ls-files", "--cached", "--others", "--exclude-standard", "--deduplicate"])?;
+    let listed = git(
+        repo,
+        &[
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--deduplicate",
+        ],
+    )?;
     let mut files = names(&listed);
     files.sort();
     files.truncate(MOST_FILES);
@@ -1184,7 +1387,10 @@ fn changed_file(repo: &str, path: &str) -> Result<(), String> {
     let inside = Path::new(path)
         .components()
         .all(|c| matches!(c, Component::Normal(_)));
-    let changed = names(&git(repo, &["diff", "HEAD", "--name-only", "--no-renames"])?);
+    let changed = names(&git(
+        repo,
+        &["diff", "HEAD", "--name-only", "--no-renames"],
+    )?);
     if inside && changed.iter().any(|f| f == path) {
         Ok(())
     } else {
@@ -1221,9 +1427,12 @@ async fn write_file(repo: String, path: String, contents: String) -> Result<(), 
 fn editable(repo: &str, path: &str) -> Result<std::path::PathBuf, String> {
     changed_file(repo, path)?;
     let file = Path::new(repo).join(path);
-    let meta = fs::symlink_metadata(&file).map_err(|_| format!("{path} was removed, so there's nothing to edit."))?;
+    let meta = fs::symlink_metadata(&file)
+        .map_err(|_| format!("{path} was removed, so there's nothing to edit."))?;
     if !meta.file_type().is_file() {
-        return Err(format!("{path} isn't a plain file, so it can't be edited here."));
+        return Err(format!(
+            "{path} isn't a plain file, so it can't be edited here."
+        ));
     }
     if meta.len() > MOST_EDITED {
         return Err(format!("{path} is too big to edit here."));
@@ -1240,7 +1449,17 @@ async fn revert_file(repo: String, path: String) -> Result<(), String> {
 fn revert(repo: &str, path: &str) -> Result<(), String> {
     changed_file(repo, path)?;
     if git(repo, &["cat-file", "-e", &format!("HEAD:{path}")]).is_ok() {
-        git(repo, &["restore", "--source=HEAD", "--staged", "--worktree", "--", path])?;
+        git(
+            repo,
+            &[
+                "restore",
+                "--source=HEAD",
+                "--staged",
+                "--worktree",
+                "--",
+                path,
+            ],
+        )?;
     } else {
         git(repo, &["rm", "--cached", "--force", "--quiet", "--", path])?;
         match fs::remove_file(Path::new(repo).join(path)) {
@@ -1281,8 +1500,11 @@ pub fn run() {
             // A ledger that can't be read is set aside, not lost, so the app still opens.
             let ledger = Ledger::open(&path).or_else(|e| {
                 eprintln!("ledger: {e}");
-                fs::rename(&path, data.join(format!("shoji-unreadable-{}.db", now_ms())))
-                    .map_err(|e| e.to_string())?;
+                fs::rename(
+                    &path,
+                    data.join(format!("shoji-unreadable-{}.db", now_ms())),
+                )
+                .map_err(|e| e.to_string())?;
                 Ledger::open(&path).map_err(|e| e.to_string())
             })?;
             app.manage(ledger);
@@ -1374,7 +1596,19 @@ mod tests {
         fs::write(dir.join("b.txt"), "two\n").unwrap();
         git(&root, &["init", "-q"]).unwrap();
         git(&root, &["add", "."]).unwrap();
-        git(&root, &["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "start"]).unwrap();
+        git(
+            &root,
+            &[
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@e",
+                "commit",
+                "-qm",
+                "start",
+            ],
+        )
+        .unwrap();
         root
     }
 
@@ -1384,13 +1618,19 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let said = git(&dir.display().to_string(), &["status"]).unwrap_err();
         if !said.contains("safe.directory") {
-            assert_eq!(said, "This folder isn't a git project. Run git init in it, or open one that is.");
+            assert_eq!(
+                said,
+                "This folder isn't a git project. Run git init in it, or open one that is."
+            );
         }
         let _ = fs::remove_dir_all(&dir);
 
         let locked = plain_git("fatal: Unable to create '/p/.git/index.lock': File exists.");
         assert!(locked.starts_with("Another git command is busy"));
-        assert_eq!(plain_git("fatal: pathspec 'x' did not match any files\n"), "Pathspec 'x' did not match any files");
+        assert_eq!(
+            plain_git("fatal: pathspec 'x' did not match any files\n"),
+            "Pathspec 'x' did not match any files"
+        );
         assert_eq!(plain_git(""), "Git stopped without saying why.");
     }
 
@@ -1420,9 +1660,16 @@ mod tests {
     fn passes_the_model_list_as_one_joined_flag() {
         assert!(models_args(&None).is_empty());
         let list = serde_json::json!({ "version": 1, "models": {} });
-        assert_eq!(models_args(&Some(list)), vec![r#"--models-json={"models":{},"version":1}"#]);
-        let servers = serde_json::json!({ "mcpServers": { "docs": { "url": "https://x.example/mcp" } } });
-        assert_eq!(mcp_args(&Some(servers)), vec![r#"--mcp-json={"mcpServers":{"docs":{"url":"https://x.example/mcp"}}}"#]);
+        assert_eq!(
+            models_args(&Some(list)),
+            vec![r#"--models-json={"models":{},"version":1}"#]
+        );
+        let servers =
+            serde_json::json!({ "mcpServers": { "docs": { "url": "https://x.example/mcp" } } });
+        assert_eq!(
+            mcp_args(&Some(servers)),
+            vec![r#"--mcp-json={"mcpServers":{"docs":{"url":"https://x.example/mcp"}}}"#]
+        );
     }
 
     #[test]
@@ -1430,11 +1677,19 @@ mod tests {
         let runs = std::env::temp_dir().join(format!("shoji-runs-{}", std::process::id()));
         fs::create_dir_all(&runs).unwrap();
         let log = runs.join("1.jsonl");
-        fs::write(&log, "{\"type\":\"tool\"}\nnot json\n{\"type\":\"result\"}\n").unwrap();
+        fs::write(
+            &log,
+            "{\"type\":\"tool\"}\nnot json\n{\"type\":\"result\"}\n",
+        )
+        .unwrap();
         let events = read_events(&runs, &log).unwrap();
         assert_eq!(events.len(), 2);
         assert_eq!(events[1]["type"], "result");
-        assert!(read_events(&runs, &runs.join("gone.jsonl")).unwrap().is_empty());
+        assert!(
+            read_events(&runs, &runs.join("gone.jsonl"))
+                .unwrap()
+                .is_empty()
+        );
         assert!(read_events(&runs, Path::new("/etc/passwd")).is_err());
     }
 
@@ -1456,7 +1711,10 @@ mod tests {
 
     #[test]
     fn keeps_attachment_names_inside_their_folder() {
-        assert_eq!(attachment_name("Screenshot 2026-10-30 at 9.41.png"), "Screenshot-2026-10-30-at-9.41.png");
+        assert_eq!(
+            attachment_name("Screenshot 2026-10-30 at 9.41.png"),
+            "Screenshot-2026-10-30-at-9.41.png"
+        );
         assert_eq!(attachment_name("../../etc/passwd"), "-..-etc-passwd");
         assert_eq!(attachment_name("..\\..\\x.png"), "-..-x.png");
         assert_eq!(attachment_name(""), "pasted.png");
@@ -1482,14 +1740,23 @@ mod tests {
     fn edits_only_changed_plain_files() {
         let root = repo("edit");
         fs::write(Path::new(&root).join("a.txt"), "changed\n").unwrap();
-        let read = |path: &str| tauri::async_runtime::block_on(read_file(root.clone(), path.into()));
-        let write =
-            |path: &str, text: &str| tauri::async_runtime::block_on(write_file(root.clone(), path.into(), text.into()));
+        let read =
+            |path: &str| tauri::async_runtime::block_on(read_file(root.clone(), path.into()));
+        let write = |path: &str, text: &str| {
+            tauri::async_runtime::block_on(write_file(root.clone(), path.into(), text.into()))
+        };
         assert_eq!(read("a.txt").unwrap(), "changed\n");
         write("a.txt", "by hand\n").unwrap();
-        assert_eq!(fs::read_to_string(Path::new(&root).join("a.txt")).unwrap(), "by hand\n");
+        assert_eq!(
+            fs::read_to_string(Path::new(&root).join("a.txt")).unwrap(),
+            "by hand\n"
+        );
         // Unchanged files and paths outside the project aren't the thread's to edit.
-        assert!(read("b.txt").unwrap_err().contains("isn't one of this project's changes"));
+        assert!(
+            read("b.txt")
+                .unwrap_err()
+                .contains("isn't one of this project's changes")
+        );
         assert!(write("../a.txt", "x").is_err());
         fs::write(Path::new(&root).join("bin.dat"), [0xff, 0xfe, 0x00]).unwrap();
         // Code reads the changes first, which marks new files so they count.
@@ -1506,15 +1773,24 @@ mod tests {
 
         revert(&root, "a.txt").unwrap();
         revert(&root, "new.txt").unwrap();
-        assert_eq!(fs::read_to_string(Path::new(&root).join("a.txt")).unwrap(), "one\n");
+        assert_eq!(
+            fs::read_to_string(Path::new(&root).join("a.txt")).unwrap(),
+            "one\n"
+        );
         assert!(!Path::new(&root).join("new.txt").exists());
         assert_eq!(read_changes(&root).unwrap().diff, "");
     }
 
     #[test]
     fn names_a_new_branch_after_the_task() {
-        assert_eq!(slug("Add a FAQ section to the pricing page"), "add-a-faq-section-to-the-pricing-page");
-        assert_eq!(slug("Fix: the café's footer!\nMore detail"), "fix-the-caf-s-footer");
+        assert_eq!(
+            slug("Add a FAQ section to the pricing page"),
+            "add-a-faq-section-to-the-pricing-page"
+        );
+        assert_eq!(
+            slug("Fix: the café's footer!\nMore detail"),
+            "fix-the-caf-s-footer"
+        );
         assert_eq!(slug("…"), "thread");
         assert!(slug(&"word ".repeat(30)).len() <= 40);
     }
@@ -1530,12 +1806,30 @@ mod tests {
         fs::write(Path::new(&root).join("new.txt"), "new\n").unwrap();
         read_changes(&root).unwrap();
 
-        assert!(commit(&root, "other", "x").unwrap_err().contains("Switch back"));
+        assert!(
+            commit(&root, "other", "x")
+                .unwrap_err()
+                .contains("Switch back")
+        );
         let sha = commit(&root, &branch, "Change a\n\nShoji-Cost: $0.0100").unwrap();
-        assert_eq!(git(&root, &["rev-parse", "--short", "HEAD"]).unwrap().trim(), sha);
-        assert_eq!(git(&root, &["log", "-1", "--format=%an %s"]).unwrap().trim(), "Bob Change a");
+        assert_eq!(
+            git(&root, &["rev-parse", "--short", "HEAD"])
+                .unwrap()
+                .trim(),
+            sha
+        );
+        assert_eq!(
+            git(&root, &["log", "-1", "--format=%an %s"])
+                .unwrap()
+                .trim(),
+            "Bob Change a"
+        );
         assert_eq!(git(&root, &["status", "--porcelain"]).unwrap(), "");
-        assert!(commit(&root, &branch, "again").unwrap_err().contains("nothing to commit"));
+        assert!(
+            commit(&root, &branch, "again")
+                .unwrap_err()
+                .contains("nothing to commit")
+        );
     }
 
     #[test]
@@ -1544,6 +1838,9 @@ mod tests {
         fs::write(Path::new(&root).join("a.txt"), "changed\n").unwrap();
         assert!(revert(&root, "b.txt").is_err());
         assert!(revert(&root, "../a.txt").is_err());
-        assert_eq!(fs::read_to_string(Path::new(&root).join("b.txt")).unwrap(), "two\n");
+        assert_eq!(
+            fs::read_to_string(Path::new(&root).join("b.txt")).unwrap(),
+            "two\n"
+        );
     }
 }

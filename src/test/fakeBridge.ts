@@ -45,7 +45,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     accepted: [] as string[],
     reverted: [] as string[],
     commits: [] as { repo: string; branch: string; message: string; thread: number }[],
-    pushes: [] as { repo: string; branch: string }[],
+    pushes: [] as { repo: string; branch: string; body: string | null }[],
     exports: [] as { name: string; contents: string }[],
     lockWrites: [] as string[],
     pasted: [] as { name: string; bytes: number[] }[],
@@ -257,8 +257,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       project.accepted = [];
       return "a1b2c3d";
     },
-    pushThread: async (repo, branch) => {
-      calls.pushes.push({ repo, branch });
+    pushThread: async (repo, branch, body) => {
+      calls.pushes.push({ repo, branch, body: body ?? null });
       if (project.pushError) throw project.pushError;
       return { remote: "origin", url: `https://github.com/bob/app/compare/${branch}?expand=1` };
     },

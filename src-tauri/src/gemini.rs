@@ -13,7 +13,16 @@ pub struct Listed {
 }
 
 /// Words in the ids of Gemini models made for something other than a conversation with tools.
-const NOT_FOR_TASKS: &[&str] = &["image", "tts", "embedding", "live", "audio", "robotics", "computer-use", "veo"];
+const NOT_FOR_TASKS: &[&str] = &[
+    "image",
+    "tts",
+    "embedding",
+    "live",
+    "audio",
+    "robotics",
+    "computer-use",
+    "veo",
+];
 
 /// The Gemini models this key can use for a task.
 pub async fn models(key: &str) -> Result<Vec<Listed>, String> {
@@ -24,11 +33,18 @@ pub async fn models(key: &str) -> Result<Vec<Listed>, String> {
         .await
         .map_err(|_| "Shoji couldn't reach Google.".to_string())?;
     let status = answer.status();
-    if status == reqwest::StatusCode::BAD_REQUEST || status == reqwest::StatusCode::FORBIDDEN || status == reqwest::StatusCode::UNAUTHORIZED {
-        return Err("Google didn't accept your Gemini key. Check it in Google AI Studio.".to_string());
+    if status == reqwest::StatusCode::BAD_REQUEST
+        || status == reqwest::StatusCode::FORBIDDEN
+        || status == reqwest::StatusCode::UNAUTHORIZED
+    {
+        return Err(
+            "Google didn't accept your Gemini key. Check it in Google AI Studio.".to_string(),
+        );
     }
     if !status.is_success() {
-        return Err(format!("Google couldn't list its models just now ({status}). Try again in a minute."));
+        return Err(format!(
+            "Google couldn't list its models just now ({status}). Try again in a minute."
+        ));
     }
     let value: serde_json::Value = answer.json().await.map_err(|e| e.to_string())?;
     Ok(listed(&value))
@@ -44,8 +60,15 @@ pub fn listed(value: &serde_json::Value) -> Vec<Listed> {
             let id = model["name"].as_str()?.strip_prefix("models/")?;
             let converses = model["supportedGenerationMethods"]
                 .as_array()
-                .is_some_and(|methods| methods.iter().any(|m| m.as_str() == Some("generateContent")));
-            (id.starts_with("gemini-") && converses && !NOT_FOR_TASKS.iter().any(|word| id.contains(word))).then(|| Listed {
+                .is_some_and(|methods| {
+                    methods
+                        .iter()
+                        .any(|m| m.as_str() == Some("generateContent"))
+                });
+            (id.starts_with("gemini-")
+                && converses
+                && !NOT_FOR_TASKS.iter().any(|word| id.contains(word)))
+            .then(|| Listed {
                 id: id.to_string(),
                 name: model["displayName"].as_str().unwrap_or(id).to_string(),
             })
@@ -67,6 +90,12 @@ mod tests {
             { "name": "models/gemma-4-26b-it", "displayName": "Gemma 4", "supportedGenerationMethods": ["generateContent"] },
             { "name": "models/gemini-2.5-flash-preview-tts", "displayName": "TTS", "supportedGenerationMethods": ["generateContent"] }
         ]});
-        assert_eq!(listed(&answer), vec![Listed { id: "gemini-3.5-flash".into(), name: "Gemini 3.5 Flash".into() }]);
+        assert_eq!(
+            listed(&answer),
+            vec![Listed {
+                id: "gemini-3.5-flash".into(),
+                name: "Gemini 3.5 Flash".into()
+            }]
+        );
     }
 }

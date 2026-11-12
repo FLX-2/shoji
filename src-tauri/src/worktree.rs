@@ -9,7 +9,13 @@ use std::path::{Path, PathBuf};
 use super::{git, slug};
 
 /// Folders of installed packages that a thread's copy links to rather than installs again.
-const PACKAGES: &[&str] = &["node_modules", ".venv", "venv", "vendor", "bower_components"];
+const PACKAGES: &[&str] = &[
+    "node_modules",
+    ".venv",
+    "venv",
+    "vendor",
+    "bower_components",
+];
 
 /// Shoji's own notes on the project, which git ignores, so a copy needs them brought across.
 const NOTES: &str = "SHOJI.md";
@@ -32,22 +38,55 @@ fn packages(path: &str) -> bool {
 
 /// What git ignores in a checkout, with ignored folders named once with a trailing slash.
 fn ignored(dir: &str) -> Result<Vec<String>, String> {
-    let listed = git(dir, &["ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory"])?;
-    Ok(listed.split('\0').filter(|p| !p.is_empty()).map(str::to_string).collect())
+    let listed = git(
+        dir,
+        &[
+            "ls-files",
+            "-z",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "--directory",
+        ],
+    )?;
+    Ok(listed
+        .split('\0')
+        .filter(|p| !p.is_empty())
+        .map(str::to_string)
+        .collect())
 }
 
 /// Makes a copy of the project on a new branch named after the task, under `root`. It starts
 /// from the project's last commit, so changes the person hasn't committed stay where they are, or
 /// from the tip of `from`, a branch an earlier thread committed to, to carry that work on.
 /// Returns the branch and the copy's folder.
-pub fn create(repo: &str, root: &Path, task: &str, from: Option<&str>) -> Result<(String, PathBuf), String> {
+pub fn create(
+    repo: &str,
+    root: &Path,
+    task: &str,
+    from: Option<&str>,
+) -> Result<(String, PathBuf), String> {
     if git(repo, &["rev-parse", "--verify", "--quiet", "HEAD"]).is_err() {
-        return Err("The project has no commits yet. Commit once, then start the thread again.".into());
+        return Err(
+            "The project has no commits yet. Commit once, then start the thread again.".into(),
+        );
     }
     let base = match from {
         Some(branch) => {
-            if git(repo, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/{branch}")]).is_err() {
-                return Err(format!("The branch {branch} isn't in the project any more, so there's nothing to carry on from."));
+            if git(
+                repo,
+                &[
+                    "rev-parse",
+                    "--verify",
+                    "--quiet",
+                    &format!("refs/heads/{branch}"),
+                ],
+            )
+            .is_err()
+            {
+                return Err(format!(
+                    "The branch {branch} isn't in the project any more, so there's nothing to carry on from."
+                ));
             }
             branch
         }
@@ -60,7 +99,16 @@ pub fn create(repo: &str, root: &Path, task: &str, from: Option<&str>) -> Result
         .unwrap_or_else(|| "project".into());
     let name = slug(task);
     let taken = |n: &str| {
-        git(repo, &["rev-parse", "--verify", "--quiet", &format!("refs/heads/shoji/{n}")]).is_ok()
+        git(
+            repo,
+            &[
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                &format!("refs/heads/shoji/{n}"),
+            ],
+        )
+        .is_ok()
             || root.join(&project).join(n).exists()
     };
     let name = std::iter::once(name.clone())
@@ -71,7 +119,10 @@ pub fn create(repo: &str, root: &Path, task: &str, from: Option<&str>) -> Result
     let dir = root.join(&project).join(&name);
     fs::create_dir_all(dir.parent().unwrap()).map_err(|e| e.to_string())?;
     let path = dir.display().to_string();
-    git(repo, &["worktree", "add", "--quiet", "-b", &branch, &path, base])?;
+    git(
+        repo,
+        &["worktree", "add", "--quiet", "-b", &branch, &path, base],
+    )?;
     if let Err(e) = furnish(repo, &dir) {
         remove(repo, &path);
         let _ = git(repo, &["branch", "--quiet", "-D", &branch]);
@@ -118,7 +169,12 @@ fn furnish(repo: &str, dir: &Path) -> Result<(), String> {
             }
             link(&from, &to)?;
             linked.push(path.to_string());
-        } else if !folder && Path::new(path).file_name().and_then(|n| n.to_str()).is_some_and(copied) {
+        } else if !folder
+            && Path::new(path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(copied)
+        {
             if let Some(parent) = to.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
@@ -139,7 +195,9 @@ fn furnish(repo: &str, dir: &Path) -> Result<(), String> {
 fn copy_folder(from: &Path, to: &Path) -> Result<(), String> {
     fs::create_dir_all(to).map_err(|e| e.to_string())?;
     for entry in fs::read_dir(from).map_err(|e| e.to_string())?.flatten() {
-        let Ok(kind) = entry.file_type() else { continue };
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
         let target = to.join(entry.file_name());
         if kind.is_dir() {
             copy_folder(&entry.path(), &target)?;
@@ -172,7 +230,11 @@ fn link(from: &Path, to: &Path) -> Result<(), String> {
         if out.status.success() {
             Ok(())
         } else {
-            Err(format!("Couldn't link {}: {}", to.display(), String::from_utf8_lossy(&out.stderr).trim()))
+            Err(format!(
+                "Couldn't link {}: {}",
+                to.display(),
+                String::from_utf8_lossy(&out.stderr).trim()
+            ))
         }
     }
 }
@@ -187,15 +249,22 @@ fn exclude(dir: &str, linked: &[String]) -> Result<(), String> {
     let file = Path::new(dir).join(found.trim());
     let current = fs::read_to_string(&file).unwrap_or_default();
     let have: Vec<&str> = current.lines().collect();
-    let missing: Vec<String> =
-        linked.iter().map(|p| format!("/{p}")).filter(|line| !have.contains(&line.as_str())).collect();
+    let missing: Vec<String> = linked
+        .iter()
+        .map(|p| format!("/{p}"))
+        .filter(|line| !have.contains(&line.as_str()))
+        .collect();
     if missing.is_empty() {
         return Ok(());
     }
     if let Some(parent) = file.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let gap = if current.is_empty() || current.ends_with('\n') { "" } else { "\n" };
+    let gap = if current.is_empty() || current.ends_with('\n') {
+        ""
+    } else {
+        "\n"
+    };
     fs::write(&file, format!("{current}{gap}{}\n", missing.join("\n"))).map_err(|e| e.to_string())
 }
 
@@ -203,7 +272,11 @@ fn exclude(dir: &str, linked: &[String]) -> Result<(), String> {
 /// project itself. The links go first, so nothing deletes the project's own packages through them.
 pub fn remove(repo: &str, dir: &str) {
     if let Ok(paths) = ignored(dir) {
-        for path in paths.iter().filter_map(|p| p.strip_suffix('/')).filter(|p| packages(p)) {
+        for path in paths
+            .iter()
+            .filter_map(|p| p.strip_suffix('/'))
+            .filter(|p| packages(p))
+        {
             let at = Path::new(dir).join(path);
             if fs::symlink_metadata(&at).is_ok_and(|m| m.file_type().is_symlink()) {
                 let _ = fs::remove_file(&at).or_else(|_| fs::remove_dir(&at));
@@ -224,7 +297,11 @@ mod tests {
         fs::create_dir_all(repo.join("node_modules/left-pad")).unwrap();
         fs::create_dir_all(repo.join("web/node_modules/react")).unwrap();
         fs::write(repo.join("node_modules/left-pad/index.js"), "pad\n").unwrap();
-        fs::write(repo.join(".gitignore"), "node_modules/\n.env*\n!.env.example\nbuild/\n").unwrap();
+        fs::write(
+            repo.join(".gitignore"),
+            "node_modules/\n.env*\n!.env.example\nbuild/\n",
+        )
+        .unwrap();
         fs::write(repo.join(".env"), "TOKEN=1\n").unwrap();
         fs::write(repo.join(".env.example"), "TOKEN=\n").unwrap();
         fs::create_dir_all(repo.join("build")).unwrap();
@@ -234,7 +311,16 @@ mod tests {
         for args in [
             &["init", "--quiet", "-b", "main"][..],
             &["-c", "user.email=t@t", "-c", "user.name=t", "add", "."],
-            &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "--quiet", "-m", "start"],
+            &[
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "user.name=t",
+                "commit",
+                "--quiet",
+                "-m",
+                "start",
+            ],
         ] {
             git(&root, args).unwrap();
         }
@@ -248,11 +334,28 @@ mod tests {
         let first = dir.display().to_string();
         fs::write(dir.join("faq.html"), "faq\n").unwrap();
         git(&first, &["add", "faq.html"]).unwrap();
-        git(&first, &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "--quiet", "-m", "faq"]).unwrap();
+        git(
+            &first,
+            &[
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "user.name=t",
+                "commit",
+                "--quiet",
+                "-m",
+                "faq",
+            ],
+        )
+        .unwrap();
         let (next_branch, next) = create(&repo, &root, "Style the FAQ", Some(&branch)).unwrap();
         assert_eq!(next_branch, "shoji/style-the-faq");
         assert!(next.join("faq.html").exists());
-        assert!(create(&repo, &root, "Again", Some("shoji/gone")).unwrap_err().contains("isn't in the project"));
+        assert!(
+            create(&repo, &root, "Again", Some("shoji/gone"))
+                .unwrap_err()
+                .contains("isn't in the project")
+        );
     }
 
     #[test]
@@ -264,15 +367,40 @@ mod tests {
         assert_eq!(branch, "shoji/add-a-faq-page");
         assert_eq!(dir, root.join("app").join("add-a-faq-page"));
         let path = dir.display().to_string();
-        assert_eq!(git(&path, &["branch", "--show-current"]).unwrap().trim(), branch);
+        assert_eq!(
+            git(&path, &["branch", "--show-current"]).unwrap().trim(),
+            branch
+        );
         // The project's own checkout stays where it was.
-        assert_eq!(git(&repo, &["branch", "--show-current"]).unwrap().trim(), "main");
-        assert_eq!(fs::read_to_string(dir.join("web/index.html")).unwrap(), "<p>hi</p>\n");
-        assert_eq!(fs::read_to_string(Path::new(&repo).join("web/index.html")).unwrap(), "<p>mine</p>\n");
+        assert_eq!(
+            git(&repo, &["branch", "--show-current"]).unwrap().trim(),
+            "main"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.join("web/index.html")).unwrap(),
+            "<p>hi</p>\n"
+        );
+        assert_eq!(
+            fs::read_to_string(Path::new(&repo).join("web/index.html")).unwrap(),
+            "<p>mine</p>\n"
+        );
 
-        assert!(fs::symlink_metadata(dir.join("node_modules")).unwrap().file_type().is_symlink());
-        assert_eq!(fs::read_to_string(dir.join("node_modules/left-pad/index.js")).unwrap(), "pad\n");
-        assert!(fs::symlink_metadata(dir.join("web/node_modules")).unwrap().file_type().is_symlink());
+        assert!(
+            fs::symlink_metadata(dir.join("node_modules"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(
+            fs::read_to_string(dir.join("node_modules/left-pad/index.js")).unwrap(),
+            "pad\n"
+        );
+        assert!(
+            fs::symlink_metadata(dir.join("web/node_modules"))
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
         assert_eq!(fs::read_to_string(dir.join(".env")).unwrap(), "TOKEN=1\n");
         // Build output is the copy's own to make.
         assert!(!dir.join("build").exists());
@@ -291,7 +419,11 @@ mod tests {
         let (branch, dir) = create(&repo, &root, "Tidy up", None).unwrap();
         remove(&repo, &dir.display().to_string());
         assert!(!dir.exists());
-        assert!(Path::new(&repo).join("node_modules/left-pad/index.js").exists());
+        assert!(
+            Path::new(&repo)
+                .join("node_modules/left-pad/index.js")
+                .exists()
+        );
         assert!(Path::new(&repo).join("web/node_modules/react").exists());
         // The branch stays, so the person can check it out.
         git(&repo, &["switch", "--quiet", &branch]).unwrap();
@@ -304,12 +436,19 @@ mod tests {
         let path = dir.display().to_string();
         remove(&repo, &path);
         restore(&repo, &dir, &branch).unwrap();
-        assert_eq!(git(&path, &["branch", "--show-current"]).unwrap().trim(), branch);
+        assert_eq!(
+            git(&path, &["branch", "--show-current"]).unwrap().trim(),
+            branch
+        );
         assert!(dir.join("node_modules/left-pad/index.js").exists());
         // Once the project itself has the branch checked out, the copy can't come back.
         remove(&repo, &path);
         git(&repo, &["switch", "--quiet", &branch]).unwrap();
-        assert!(restore(&repo, &dir, &branch).unwrap_err().contains("checked out in the project"));
+        assert!(
+            restore(&repo, &dir, &branch)
+                .unwrap_err()
+                .contains("checked out in the project")
+        );
     }
 
     #[test]
@@ -322,9 +461,15 @@ mod tests {
         fs::create_dir_all(&skill).unwrap();
         fs::write(skill.join("SKILL.md"), "Add a migration.\n").unwrap();
         let (_, dir) = create(&repo, &root, "Use a command", None).unwrap();
-        assert_eq!(fs::read_to_string(dir.join(".claude/commands/review/pair.md")).unwrap(), "Review $1.\n");
+        assert_eq!(
+            fs::read_to_string(dir.join(".claude/commands/review/pair.md")).unwrap(),
+            "Review $1.\n"
+        );
         assert!(dir.join(".claude/skills/migrations/SKILL.md").exists());
-        assert_eq!(git(&dir.display().to_string(), &["status", "--porcelain"]).unwrap(), "");
+        assert_eq!(
+            git(&dir.display().to_string(), &["status", "--porcelain"]).unwrap(),
+            ""
+        );
     }
 
     #[test]
@@ -334,6 +479,10 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let repo = dir.display().to_string();
         git(&repo, &["init", "--quiet"]).unwrap();
-        assert!(create(&repo, &dir.join("worktrees"), "Anything", None).unwrap_err().contains("no commits"));
+        assert!(
+            create(&repo, &dir.join("worktrees"), "Anything", None)
+                .unwrap_err()
+                .contains("no commits")
+        );
     }
 }

@@ -20,8 +20,14 @@ pub struct Pulled {
 
 /// Where Ollama listens: OLLAMA_HOST, as Ollama itself reads it, or its usual port on this computer.
 pub fn address(host: Option<&str>) -> (String, u16) {
-    let given = host.map(str::trim).filter(|h| !h.is_empty()).unwrap_or("127.0.0.1:11434");
-    let bare = given.split_once("://").map_or(given, |(_, rest)| rest).trim_end_matches('/');
+    let given = host
+        .map(str::trim)
+        .filter(|h| !h.is_empty())
+        .unwrap_or("127.0.0.1:11434");
+    let bare = given
+        .split_once("://")
+        .map_or(given, |(_, rest)| rest)
+        .trim_end_matches('/');
     let (name, port) = match bare.rsplit_once(':') {
         Some((name, port)) if !name.ends_with(']') || bare.starts_with('[') => match port.parse() {
             Ok(port) => (name, port),
@@ -30,15 +36,24 @@ pub fn address(host: Option<&str>) -> (String, u16) {
         _ => (bare, 11434),
     };
     let name = name.trim_start_matches('[').trim_end_matches(']');
-    let name = if name == "0.0.0.0" || name == "::" || name.is_empty() { "127.0.0.1" } else { name };
+    let name = if name == "0.0.0.0" || name == "::" || name.is_empty() {
+        "127.0.0.1"
+    } else {
+        name
+    };
     (name.to_string(), port)
 }
 
 /// One plain HTTP/1.0 exchange, so the answer comes whole with no chunking, and its body if it's a 200.
 fn exchange(host: &(String, u16), method: &str, path: &str, body: &str) -> Result<String, String> {
     let gone = || "Ollama isn't running on this computer.".to_string();
-    let addr = (host.0.as_str(), host.1).to_socket_addrs().map_err(|_| gone())?.next().ok_or_else(gone)?;
-    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(800)).map_err(|_| gone())?;
+    let addr = (host.0.as_str(), host.1)
+        .to_socket_addrs()
+        .map_err(|_| gone())?
+        .next()
+        .ok_or_else(gone)?;
+    let mut stream =
+        TcpStream::connect_timeout(&addr, Duration::from_millis(800)).map_err(|_| gone())?;
     stream.set_read_timeout(Some(Duration::from_secs(5))).ok();
     let request = format!(
         "{method} {path} HTTP/1.0\r\nHost: {}:{}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
@@ -46,11 +61,21 @@ fn exchange(host: &(String, u16), method: &str, path: &str, body: &str) -> Resul
         host.1,
         body.len()
     );
-    stream.write_all(request.as_bytes()).map_err(|e| e.to_string())?;
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|e| e.to_string())?;
     let mut answer = String::new();
-    stream.read_to_string(&mut answer).map_err(|e| e.to_string())?;
-    let (head, body) = answer.split_once("\r\n\r\n").ok_or("Ollama's answer was cut short.")?;
-    if !head.lines().next().is_some_and(|status| status.split(' ').nth(1) == Some("200")) {
+    stream
+        .read_to_string(&mut answer)
+        .map_err(|e| e.to_string())?;
+    let (head, body) = answer
+        .split_once("\r\n\r\n")
+        .ok_or("Ollama's answer was cut short.")?;
+    if !head
+        .lines()
+        .next()
+        .is_some_and(|status| status.split(' ').nth(1) == Some("200"))
+    {
         return Err("Ollama didn't answer as expected.".into());
     }
     Ok(body.to_string())
@@ -63,7 +88,12 @@ fn tags(body: &str) -> Vec<(String, u64)> {
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|m| Some((m["name"].as_str()?.to_string(), m["size"].as_u64().unwrap_or(0))))
+        .filter_map(|m| {
+            Some((
+                m["name"].as_str()?.to_string(),
+                m["size"].as_u64().unwrap_or(0),
+            ))
+        })
         .collect()
 }
 
@@ -101,7 +131,10 @@ mod tests {
         assert_eq!(address(None), ("127.0.0.1".into(), 11434));
         assert_eq!(address(Some("0.0.0.0")), ("127.0.0.1".into(), 11434));
         assert_eq!(address(Some("0.0.0.0:8080")), ("127.0.0.1".into(), 8080));
-        assert_eq!(address(Some("http://192.168.1.20:11500/")), ("192.168.1.20".into(), 11500));
+        assert_eq!(
+            address(Some("http://192.168.1.20:11500/")),
+            ("192.168.1.20".into(), 11500)
+        );
         assert_eq!(address(Some("[::1]:11434")), ("::1".into(), 11434));
     }
 
@@ -114,7 +147,10 @@ mod tests {
                 let mut stream = stream.unwrap();
                 let mut buf = [0u8; 4096];
                 let _ = stream.read(&mut buf);
-                let reply = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{answer}", answer.len());
+                let reply = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{answer}",
+                    answer.len()
+                );
                 stream.write_all(reply.as_bytes()).unwrap();
             }
         });
@@ -133,15 +169,25 @@ mod tests {
         assert_eq!(
             found,
             vec![
-                Pulled { name: "gemma4:31b".into(), size: 19000 },
-                Pulled { name: "tiny:1b".into(), size: 800 }
+                Pulled {
+                    name: "gemma4:31b".into(),
+                    size: 19000
+                },
+                Pulled {
+                    name: "tiny:1b".into(),
+                    size: 800
+                }
             ]
         );
     }
 
     #[test]
     fn says_when_ollama_isnt_running() {
-        let free = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let free = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
         assert_eq!(
             pulled(Some(&format!("127.0.0.1:{free}"))).unwrap_err(),
             "Ollama isn't running on this computer."

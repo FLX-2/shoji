@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -79,7 +79,9 @@ pub struct Store {
 }
 
 fn now_ms() -> i64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as i64)
 }
 
 pub(crate) fn random(bytes: usize) -> String {
@@ -95,7 +97,14 @@ fn uuid() -> String {
     b[6] = (b[6] & 0x0f) | 0x40;
     b[8] = (b[8] & 0x3f) | 0x80;
     let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+    format!(
+        "{}-{}-{}-{}-{}",
+        &h[0..8],
+        &h[8..12],
+        &h[12..16],
+        &h[16..20],
+        &h[20..32]
+    )
 }
 
 /// The PKCE challenge for a verifier.
@@ -105,7 +114,11 @@ pub fn challenge(verifier: &str) -> String {
 
 impl Store {
     pub fn new(path: PathBuf) -> Self {
-        Store { path, turn: tokio::sync::Mutex::new(()), http: reqwest::Client::new() }
+        Store {
+            path,
+            turn: tokio::sync::Mutex::new(()),
+            http: reqwest::Client::new(),
+        }
     }
 
     pub fn load(&self) -> Saved {
@@ -114,14 +127,22 @@ impl Store {
 
     pub fn status(&self) -> Status {
         let saved = self.load();
-        Status { signed_in: saved.session.is_some(), email: saved.session.and(saved.email) }
+        Status {
+            signed_in: saved.session.is_some(),
+            email: saved.session.and(saved.email),
+        }
     }
 
     /// Opens the browser at OpenAI, waits for the person to allow Shoji, and keeps the tokens.
-    pub async fn sign_in(&self, open: impl FnOnce(&str) -> Result<(), String>) -> Result<Status, String> {
+    pub async fn sign_in(
+        &self,
+        open: impl FnOnce(&str) -> Result<(), String>,
+    ) -> Result<Status, String> {
         let _turn = self.turn.lock().await;
         let mut saved = self.load();
-        let listener = TcpListener::bind("127.0.0.1:0").await.map_err(|e| e.to_string())?;
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .map_err(|e| e.to_string())?;
         let port = listener.local_addr().map_err(|e| e.to_string())?.port();
         let redirect = format!("http://127.0.0.1:{port}/auth/callback");
         let (state, nonce, verifier) = (random(24), random(24), random(48));
@@ -139,10 +160,12 @@ impl Store {
                 format!("ChatGPT didn't finish the sign-in: {error}.")
             });
         }
-        let code = back.get("code").ok_or("ChatGPT sent no sign-in code. Try again.")?;
+        let code = back
+            .get("code")
+            .ok_or("ChatGPT sent no sign-in code. Try again.")?;
         let client_id = match (&saved.client_id, back.get("client_id")) {
             (Some(kept), Some(given)) if kept != given => {
-                return Err("ChatGPT answered for another app. Try again.".into())
+                return Err("ChatGPT answered for another app. Try again.".into());
             }
             (_, Some(given)) => given.clone(),
             (Some(kept), None) => kept.clone(),
@@ -160,24 +183,34 @@ impl Store {
         let tokens = self.token_request(&form).await?;
         let claims = self.verify(&tokens.id_token, &client_id, &nonce).await?;
         if !tokens.scopes().iter().any(|s| s == PLAN_SCOPE) {
-            return Err("ChatGPT didn't let Shoji use your plan. Sign in again and allow it.".into());
+            return Err(
+                "ChatGPT didn't let Shoji use your plan. Sign in again and allow it.".into(),
+            );
         }
         saved.client_id = Some(client_id);
         saved.email = claims.email.or(saved.email);
         saved.session = Some(tokens.session(claims.sub)?);
         save(&self.path, &saved)?;
-        Ok(Status { signed_in: true, email: saved.email })
+        Ok(Status {
+            signed_in: true,
+            email: saved.email,
+        })
     }
 
     /// A current access token and when it ends, renewed first when it's near its end. None once signed out.
     pub async fn token(&self) -> Result<Option<(String, i64)>, String> {
         let _turn = self.turn.lock().await;
         let mut saved = self.load();
-        let Some(session) = saved.session.clone() else { return Ok(None) };
+        let Some(session) = saved.session.clone() else {
+            return Ok(None);
+        };
         if session.expires_at - now_ms() > RENEW_BEFORE_MS {
             return Ok(Some((session.access_token, session.expires_at)));
         }
-        let client_id = saved.client_id.clone().ok_or("Shoji has no client ID for ChatGPT.")?;
+        let client_id = saved
+            .client_id
+            .clone()
+            .ok_or("Shoji has no client ID for ChatGPT.")?;
         let form = [
             ("grant_type", "refresh_token"),
             ("client_id", client_id.as_str()),
@@ -189,10 +222,21 @@ impl Store {
                 // The new refresh token replaces the old one, which can't be used again.
                 saved.session = Some(Session {
                     access_token: tokens.access_token.clone(),
-                    refresh_token: tokens.refresh_token.clone().unwrap_or(session.refresh_token),
+                    refresh_token: tokens
+                        .refresh_token
+                        .clone()
+                        .unwrap_or(session.refresh_token),
                     expires_at: now_ms() + tokens.expires_in.unwrap_or(3600) * 1000,
-                    id_token: if tokens.id_token.is_empty() { session.id_token } else { tokens.id_token.clone() },
-                    scopes: if tokens.scope.is_some() { tokens.scopes() } else { session.scopes },
+                    id_token: if tokens.id_token.is_empty() {
+                        session.id_token
+                    } else {
+                        tokens.id_token.clone()
+                    },
+                    scopes: if tokens.scope.is_some() {
+                        tokens.scopes()
+                    } else {
+                        session.scopes
+                    },
                     sub: session.sub,
                 });
                 save(&self.path, &saved)?;
@@ -212,7 +256,9 @@ impl Store {
     pub async fn sign_out(&self) -> Result<Option<String>, String> {
         let _turn = self.turn.lock().await;
         let mut saved = self.load();
-        let Some(session) = saved.session.take() else { return Ok(None) };
+        let Some(session) = saved.session.take() else {
+            return Ok(None);
+        };
         save(&self.path, &saved)?;
         let revoked = match (&saved.client_id, self.discovery().await) {
             (Some(client_id), Ok(found)) => match found["revocation_endpoint"].as_str() {
@@ -238,7 +284,9 @@ impl Store {
 
     /// The models the person's plan offers, by OpenAI's names for them.
     pub async fn models(&self) -> Result<Vec<PlanModel>, String> {
-        let Some((token, _)) = self.token().await? else { return Ok(vec![]) };
+        let Some((token, _)) = self.token().await? else {
+            return Ok(vec![]);
+        };
         let answer = self
             .http
             .get(format!("{RESOURCE}/models"))
@@ -247,25 +295,29 @@ impl Store {
             .await
             .map_err(|_| "Shoji couldn't reach ChatGPT.".to_string())?;
         if !answer.status().is_success() {
-            return Err(format!("ChatGPT didn't list your plan's models ({}).", answer.status().as_u16()));
+            return Err(format!(
+                "ChatGPT didn't list your plan's models ({}).",
+                answer.status().as_u16()
+            ));
         }
         let value: serde_json::Value = answer.json().await.map_err(|e| e.to_string())?;
         Ok(plan_models(&value))
     }
 
     async fn discovery(&self) -> Result<serde_json::Value, String> {
-        let answer = self.http.get(DISCOVERY).send().await.map_err(|e| e.to_string())?;
+        let answer = self
+            .http
+            .get(DISCOVERY)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
         answer.json().await.map_err(|e| e.to_string())
     }
 
     async fn token_request(&self, form: &[(&str, &str)]) -> Result<Tokens, String> {
-        let answer = self
-            .http
-            .post(TOKEN)
-            .form(form)
-            .send()
-            .await
-            .map_err(|_| "Shoji couldn't reach ChatGPT. Check your internet connection.".to_string())?;
+        let answer = self.http.post(TOKEN).form(form).send().await.map_err(|_| {
+            "Shoji couldn't reach ChatGPT. Check your internet connection.".to_string()
+        })?;
         let status = answer.status();
         let value: serde_json::Value = answer.json().await.unwrap_or_default();
         if !status.is_success() {
@@ -273,7 +325,9 @@ impl Store {
             if status.as_u16() == 400 || status.as_u16() == 401 {
                 return Err(format!("refused: {error}"));
             }
-            return Err(format!("ChatGPT couldn't sign Shoji in right now ({error}). Try again in a few minutes."));
+            return Err(format!(
+                "ChatGPT couldn't sign Shoji in right now ({error}). Try again in a few minutes."
+            ));
         }
         serde_json::from_value(value).map_err(|e| e.to_string())
     }
@@ -281,7 +335,9 @@ impl Store {
     /// Checks the ID token against OpenAI's published keys: its signer, issuer, audience, time and nonce.
     async fn verify(&self, id_token: &str, client_id: &str, nonce: &str) -> Result<Claims, String> {
         let found = self.discovery().await?;
-        let jwks_uri = found["jwks_uri"].as_str().ok_or("ChatGPT published no signing keys.")?;
+        let jwks_uri = found["jwks_uri"]
+            .as_str()
+            .ok_or("ChatGPT published no signing keys.")?;
         let keys: jsonwebtoken::jwk::JwkSet = self
             .http
             .get(jwks_uri)
@@ -307,7 +363,12 @@ struct Tokens {
 
 impl Tokens {
     fn scopes(&self) -> Vec<String> {
-        self.scope.as_deref().unwrap_or("").split_whitespace().map(String::from).collect()
+        self.scope
+            .as_deref()
+            .unwrap_or("")
+            .split_whitespace()
+            .map(String::from)
+            .collect()
     }
 
     fn session(self, sub: String) -> Result<Session, String> {
@@ -315,7 +376,9 @@ impl Tokens {
         Ok(Session {
             sub,
             access_token: self.access_token,
-            refresh_token: self.refresh_token.ok_or("ChatGPT gave Shoji no way to stay signed in. Try again.")?,
+            refresh_token: self
+                .refresh_token
+                .ok_or("ChatGPT gave Shoji no way to stay signed in. Try again.")?,
             expires_at: now_ms() + self.expires_in.unwrap_or(3600) * 1000,
             id_token: self.id_token,
             scopes,
@@ -330,7 +393,12 @@ pub struct Claims {
     nonce: Option<String>,
 }
 
-pub fn verify_with(id_token: &str, client_id: &str, nonce: &str, keys: &jsonwebtoken::jwk::JwkSet) -> Result<Claims, String> {
+pub fn verify_with(
+    id_token: &str,
+    client_id: &str,
+    nonce: &str,
+    keys: &jsonwebtoken::jwk::JwkSet,
+) -> Result<Claims, String> {
     let bad = |_| "ChatGPT's sign-in couldn't be checked. Try again.".to_string();
     let header = jsonwebtoken::decode_header(id_token).map_err(bad)?;
     let jwk = match &header.kid {
@@ -342,7 +410,9 @@ pub fn verify_with(id_token: &str, client_id: &str, nonce: &str, keys: &jsonwebt
     let mut rules = jsonwebtoken::Validation::new(header.alg);
     rules.set_issuer(&[ISSUER]);
     rules.set_audience(&[client_id]);
-    let claims = jsonwebtoken::decode::<Claims>(id_token, &key, &rules).map_err(bad)?.claims;
+    let claims = jsonwebtoken::decode::<Claims>(id_token, &key, &rules)
+        .map_err(bad)?
+        .claims;
     if claims.nonce.as_deref() != Some(nonce) {
         return Err("The sign-in came back for another attempt. Try again.".into());
     }
@@ -350,7 +420,13 @@ pub fn verify_with(id_token: &str, client_id: &str, nonce: &str, keys: &jsonwebt
 }
 
 /// The address the browser opens: a first sign-in registers Shoji, and later ones reuse its client ID.
-pub fn authorize_url(saved: &Saved, redirect: &str, state: &str, nonce: &str, challenge: &str) -> String {
+pub fn authorize_url(
+    saved: &Saved,
+    redirect: &str,
+    state: &str,
+    nonce: &str,
+    challenge: &str,
+) -> String {
     let mut url = url::Url::parse(AUTHORIZE).expect("a fixed address");
     {
         let mut q = url.query_pairs_mut();
@@ -403,7 +479,10 @@ pub fn callback_query(request: &str) -> Option<HashMap<String, String>> {
 
 const DONE_PAGE: &str = "<!doctype html><meta charset=utf-8><title>Shoji</title><body style=\"font:16px system-ui;margin:48px;background:#141413;color:#f2efe9\"><p>You can close this tab and go back to Shoji.</p>";
 
-pub(crate) async fn wait_for_callback(listener: &TcpListener, deadline: Instant) -> Result<HashMap<String, String>, String> {
+pub(crate) async fn wait_for_callback(
+    listener: &TcpListener,
+    deadline: Instant,
+) -> Result<HashMap<String, String>, String> {
     loop {
         let left = deadline.saturating_duration_since(Instant::now());
         let (mut stream, _) = tokio::time::timeout(left, listener.accept())
@@ -411,10 +490,17 @@ pub(crate) async fn wait_for_callback(listener: &TcpListener, deadline: Instant)
             .map_err(|_| "The sign-in took too long. Try again.".to_string())?
             .map_err(|e| e.to_string())?;
         let mut buf = vec![0u8; 16 * 1024];
-        let read = tokio::time::timeout(Duration::from_secs(5), stream.read(&mut buf)).await.unwrap_or(Ok(0)).unwrap_or(0);
+        let read = tokio::time::timeout(Duration::from_secs(5), stream.read(&mut buf))
+            .await
+            .unwrap_or(Ok(0))
+            .unwrap_or(0);
         let request = String::from_utf8_lossy(&buf[..read]);
         let found = callback_query(&request);
-        let (status, body) = if found.is_some() { ("200 OK", DONE_PAGE) } else { ("404 Not Found", "") };
+        let (status, body) = if found.is_some() {
+            ("200 OK", DONE_PAGE)
+        } else {
+            ("404 Not Found", "")
+        };
         let reply = format!(
             "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
@@ -459,18 +545,28 @@ pub fn save(path: &Path, saved: &Saved) -> Result<(), String> {
 
 /// Whether a stack, as the runtime's --stack-json takes it, has a role on the ChatGPT plan.
 pub fn uses_plan(stack: &serde_json::Value) -> bool {
-    stack
-        .as_object()
-        .is_some_and(|roles| roles.values().any(|seat| seat["model"].as_str().is_some_and(|m| m.starts_with("chatgpt/"))))
+    stack.as_object().is_some_and(|roles| {
+        roles.values().any(|seat| {
+            seat["model"]
+                .as_str()
+                .is_some_and(|m| m.starts_with("chatgpt/"))
+        })
+    })
 }
 
 /// What a run on the plan is handed: the saved token and its end. A token near its end is renewed by the run
 /// asking, so starting a run never waits on the network.
 pub fn run_env(saved: &Saved) -> Result<Vec<(String, String)>, String> {
-    let session = saved.session.as_ref().ok_or("Sign in with ChatGPT in Settings first.")?;
+    let session = saved
+        .session
+        .as_ref()
+        .ok_or("Sign in with ChatGPT in Settings first.")?;
     Ok(vec![
         ("SHOJI_CHATGPT_TOKEN".into(), session.access_token.clone()),
-        ("SHOJI_CHATGPT_EXPIRES".into(), session.expires_at.to_string()),
+        (
+            "SHOJI_CHATGPT_EXPIRES".into(),
+            session.expires_at.to_string(),
+        ),
     ])
 }
 
@@ -488,20 +584,42 @@ mod tests {
     }
 
     fn query(url: &str) -> HashMap<String, String> {
-        url::Url::parse(url).unwrap().query_pairs().into_owned().collect()
+        url::Url::parse(url)
+            .unwrap()
+            .query_pairs()
+            .into_owned()
+            .collect()
     }
 
     #[test]
     fn registers_shoji_on_the_first_sign_in_and_reuses_its_client_id_after() {
-        let first = query(&authorize_url(&saved(None), "http://127.0.0.1:5000/auth/callback", "s", "n", "c"));
+        let first = query(&authorize_url(
+            &saved(None),
+            "http://127.0.0.1:5000/auth/callback",
+            "s",
+            "n",
+            "c",
+        ));
         assert_eq!(first["client_id"], "dynamic_agent_client");
         assert_eq!(first["agent_name_hint"], "Shoji");
-        assert_eq!(first["scope"], "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct");
+        assert_eq!(
+            first["scope"],
+            "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct"
+        );
         assert_eq!(first["resource"], "https://api.openai.com/v1");
         assert_eq!(first["redirect_uri"], "http://127.0.0.1:5000/auth/callback");
         assert_eq!(first["code_challenge_method"], "S256");
-        assert_eq!(first["ext_agent_host_id"], "urn:uuid:7c3c5b0e-2f4c-4a8e-9a55-2c7f5e1b9d10");
-        let again = query(&authorize_url(&saved(Some("oaiapp_1")), "http://127.0.0.1:5001/auth/callback", "s", "n", "c"));
+        assert_eq!(
+            first["ext_agent_host_id"],
+            "urn:uuid:7c3c5b0e-2f4c-4a8e-9a55-2c7f5e1b9d10"
+        );
+        let again = query(&authorize_url(
+            &saved(Some("oaiapp_1")),
+            "http://127.0.0.1:5001/auth/callback",
+            "s",
+            "n",
+            "c",
+        ));
         assert_eq!(again["client_id"], "oaiapp_1");
         assert_eq!(again["login_hint"], "bob@example.com");
         assert!(!again.contains_key("agent_name_hint"));
@@ -510,13 +628,26 @@ mod tests {
     #[test]
     fn makes_the_pkce_challenge_as_rfc_7636_does() {
         // RFC 7636, appendix B.
-        assert_eq!(challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+        assert_eq!(
+            challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
+            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+        );
     }
 
     #[test]
     fn reads_only_the_callback() {
-        let back = callback_query("GET /auth/callback?code=abc&state=xyz&client_id=oaiapp_1 HTTP/1.1\r\nHost: x\r\n\r\n").unwrap();
-        assert_eq!((back["code"].as_str(), back["state"].as_str(), back["client_id"].as_str()), ("abc", "xyz", "oaiapp_1"));
+        let back = callback_query(
+            "GET /auth/callback?code=abc&state=xyz&client_id=oaiapp_1 HTTP/1.1\r\nHost: x\r\n\r\n",
+        )
+        .unwrap();
+        assert_eq!(
+            (
+                back["code"].as_str(),
+                back["state"].as_str(),
+                back["client_id"].as_str()
+            ),
+            ("abc", "xyz", "oaiapp_1")
+        );
         assert!(callback_query("GET /favicon.ico HTTP/1.1\r\n").is_none());
     }
 
@@ -526,7 +657,13 @@ mod tests {
             { "slug": "gpt-6", "display_name": "GPT-6", "visibility": "list" },
             { "slug": "internal", "display_name": "Internal", "visibility": "hide" },
         ]});
-        assert_eq!(plan_models(&value), vec![PlanModel { slug: "gpt-6".into(), display_name: "GPT-6".into() }]);
+        assert_eq!(
+            plan_models(&value),
+            vec![PlanModel {
+                slug: "gpt-6".into(),
+                display_name: "GPT-6".into()
+            }]
+        );
     }
 
     #[test]
@@ -550,16 +687,29 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            assert_eq!(std::fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o600);
+            assert_eq!(
+                std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
         }
-        assert_eq!(run_env(&kept).unwrap()[0], ("SHOJI_CHATGPT_TOKEN".into(), "a".into()));
-        assert_eq!(run_env(&first).unwrap_err(), "Sign in with ChatGPT in Settings first.");
+        assert_eq!(
+            run_env(&kept).unwrap()[0],
+            ("SHOJI_CHATGPT_TOKEN".into(), "a".into())
+        );
+        assert_eq!(
+            run_env(&first).unwrap_err(),
+            "Sign in with ChatGPT in Settings first."
+        );
     }
 
     #[test]
     fn sees_a_stack_with_a_role_on_the_plan() {
         let seat = |m: &str| serde_json::json!({ "model": m, "effort": "low" });
-        assert!(uses_plan(&serde_json::json!({ "scout": seat("claude-haiku-5-5"), "build": seat("chatgpt/gpt-6") })));
-        assert!(!uses_plan(&serde_json::json!({ "scout": seat("claude-haiku-5-5") })));
+        assert!(uses_plan(
+            &serde_json::json!({ "scout": seat("claude-haiku-5-5"), "build": seat("chatgpt/gpt-6") })
+        ));
+        assert!(!uses_plan(
+            &serde_json::json!({ "scout": seat("claude-haiku-5-5") })
+        ));
     }
 }

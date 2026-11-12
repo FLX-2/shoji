@@ -323,7 +323,9 @@ export const bridge = {
     invoke<string>("commit_thread", { repo, branch, message, thread }),
   /** Pushes a committed thread's branch to the project's remote and opens the page for a pull request. Only the
    *  person's button calls it. */
-  pushThread: (repo: string, branch: string) => invoke<Pushed>("push_thread", { repo, branch }),
+  /** `body` fills in the pull request's description, where the host takes one from the link. */
+  pushThread: (repo: string, branch: string, body?: string | null) =>
+    invoke<Pushed>("push_thread", { repo, branch, body: body ?? null }),
   /** Names a thread; an empty name gives it back Scout's title or its task. */
   renameThread: (thread: number, title: string) => invoke<void>("rename_thread", { thread, title }),
   pinThread: (thread: number, pinned: boolean) => invoke<void>("pin_thread", { thread, pinned }),

@@ -14,6 +14,7 @@ import {
 import { folderName, type HomeDraft, HomeView } from "./home/HomeView";
 import { startersIn } from "./home/starters";
 import { baselineName, oneModelCost, routingLine, threadSpend } from "./receipts/receipts";
+import { prBody } from "./receipts/prBody";
 import { Field } from "./look/Field";
 import { lookStyle } from "./look/LookRows";
 import { useTheme } from "./look/theme";
@@ -1029,7 +1030,13 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     }
                     onQuestion={question}
                     onCommit={commit}
-                    onPush={() => bridge.pushThread(thread.repo, thread.branch!)}
+                    onPush={() =>
+                      bridge.pushThread(
+                        thread.repo,
+                        thread.branch!,
+                        prefs.receiptInPR && shownRecord ? prBody(shownRecord) : null,
+                      )
+                    }
                     onAnswer={(command, allow, always) => {
                       if (always) {
                         const now = prefs.allowedCommands[thread.repo] ?? [];

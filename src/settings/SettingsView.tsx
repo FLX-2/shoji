@@ -271,6 +271,12 @@ export function SettingsView({
                   <>
                     <PrivateRow prefs={prefs} onChange={onChange} />
                     <SwitchRow
+                      label="Receipt in pull requests"
+                      description="Push and open PR fills in the pull request's description with each step's model and cost, the total and Review's verdict, for you to change before you open it. No code, task or file names."
+                      on={prefs.receiptInPR}
+                      onToggle={() => onChange({ receiptInPR: !prefs.receiptInPR })}
+                    />
+                    <SwitchRow
                       label="Keep models current"
                       description={`Once a day Shoji downloads the list of models and their prices from its GitHub repository, so a new model or price needs no update. It sends nothing about you or your work. Prices as listed on ${listedDay()}.`}
                       on={prefs.updateModels}

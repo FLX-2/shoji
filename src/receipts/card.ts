@@ -15,7 +15,7 @@ export interface Card {
   compared: [string, string] | null;
 }
 
-const STEP_NAMES: Record<string, string> = {
+export const STEP_NAMES: Record<string, string> = {
   scout: "Scout",
   plan: "Plan",
   build: "Build",
@@ -29,7 +29,7 @@ const STEP_NAMES: Record<string, string> = {
 /** The most step lines a card holds before the rest are counted. */
 const MOST_LINES = 6;
 
-const dollars = (amount: number) =>
+export const dollars = (amount: number) =>
   amount > 0 && amount < 0.0005 ? "<$0.001" : `$${amount.toFixed(3)}`;
 
 /** A step's cost on the card, or where it ran when that charged nothing. */

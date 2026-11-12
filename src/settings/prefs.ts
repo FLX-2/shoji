@@ -33,6 +33,8 @@ export interface Prefs {
   density: "comfortable" | "compact";
   /** The bar along the bottom of the window. */
   statusBar: boolean;
+  /** Push and open PR fills in the pull request's description with the thread's receipt. */
+  receiptInPR: boolean;
   /** What threads cost, shown as they run and on the review bar. */
   showCosts: boolean;
   /** Which model takes each step, shown beside it. */
@@ -111,6 +113,7 @@ export const DEFAULT_PREFS: Prefs = {
   density: "comfortable",
   statusBar: true,
   showCosts: true,
+  receiptInPR: true,
   showModels: true,
   autoPanel: true,
   setupDone: false,

@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { applyFound } from "../../runtime/src/models";
 import { ollamaModel } from "../../runtime/src/found";
 import { cardOf } from "./card";
+import { prBody } from "./prBody";
 import App from "../App";
 import type { LedgerCall, LedgerRun, LedgerThread } from "../bridge";
 import { fakeBridge } from "../test/fakeBridge";
@@ -341,6 +342,16 @@ describe("the Receipts view", () => {
         ],
         compared: ["On Claude, estimated", `$${oneModelCost(t).toFixed(3)}`],
       });
+    });
+
+    it("puts the same receipt in a pull request's description, with no task or paths", () => {
+      applyFound("ollama", Object.fromEntries([ollamaModel("gemma4:31b")]));
+      const body = prBody(work())!;
+      expect(body).toContain("| Build | gemma4:31b | On this computer |");
+      expect(body).toContain("| Review | Haiku 5.5 | <$0.001 |");
+      expect(body).toContain(`On Claude, estimated: $${oneModelCost(work()).toFixed(3)}. Review passed.`);
+      expect(body).not.toMatch(/basket|pricing-page|shoji\/t3/);
+      expect(prBody(thread(4, "Nothing ran", [run("task", "failed", [])]))).toBeNull();
     });
 
     it("says so on the receipt, and copies the receipt as a picture drawn here", async () => {

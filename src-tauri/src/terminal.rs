@@ -4,10 +4,10 @@
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -44,7 +44,10 @@ fn shell() -> CommandBuilder {
     }
     #[cfg(not(windows))]
     {
-        let shell = std::env::var("SHELL").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| "/bin/sh".into());
+        let shell = std::env::var("SHELL")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "/bin/sh".into());
         let mut command = CommandBuilder::new(shell);
         // A login shell, so it's set up as it is in the person's own terminal.
         command.arg("-l");
@@ -68,7 +71,12 @@ impl Terminals {
     /// Opens a shell in `dir` at the given size, and returns the terminal's number.
     pub fn open(&self, app: &AppHandle, dir: &str, cols: u16, rows: u16) -> Result<u64, String> {
         let pair = native_pty_system()
-            .openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
+            .openpty(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
             .map_err(|e| e.to_string())?;
         let mut command = shell();
         command.cwd(dir);
@@ -76,12 +84,23 @@ impl Terminals {
         command.env("COLORTERM", "truecolor");
         // Shoji's own key is for the runtime, not the person's shell.
         command.env_remove("SHOJI_API_KEY");
-        let child = pair.slave.spawn_command(command).map_err(|e| format!("Couldn't start a shell: {e}"))?;
+        let child = pair
+            .slave
+            .spawn_command(command)
+            .map_err(|e| format!("Couldn't start a shell: {e}"))?;
         drop(pair.slave);
         let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
         let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
         let id = self.count.fetch_add(1, Ordering::Relaxed) + 1;
-        self.open.lock().unwrap().insert(id, Session { dir: dir.to_string(), master: pair.master, writer, child });
+        self.open.lock().unwrap().insert(
+            id,
+            Session {
+                dir: dir.to_string(),
+                master: pair.master,
+                writer,
+                child,
+            },
+        );
 
         let app = app.clone();
         std::thread::spawn(move || {
@@ -111,13 +130,21 @@ impl Terminals {
     pub fn write(&self, id: u64, data: &str) -> Result<(), String> {
         let mut open = self.open.lock().unwrap();
         let session = open.get_mut(&id).ok_or("That terminal has closed.")?;
-        session.writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+        session
+            .writer
+            .write_all(data.as_bytes())
+            .map_err(|e| e.to_string())?;
         session.writer.flush().map_err(|e| e.to_string())
     }
 
     pub fn resize(&self, id: u64, cols: u16, rows: u16) {
         if let Some(session) = self.open.lock().unwrap().get(&id) {
-            let _ = session.master.resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 });
+            let _ = session.master.resize(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            });
         }
     }
 
@@ -130,7 +157,13 @@ impl Terminals {
 
     /// Ends the terminals in a folder, as before a thread's copy is put away.
     pub fn close_in(&self, dir: &str) {
-        for session in self.open.lock().unwrap().values_mut().filter(|s| s.dir == dir) {
+        for session in self
+            .open
+            .lock()
+            .unwrap()
+            .values_mut()
+            .filter(|s| s.dir == dir)
+        {
             let _ = session.child.kill();
         }
     }
@@ -163,7 +196,12 @@ mod tests {
     fn runs_a_shell_in_a_pseudo_terminal_in_its_folder() {
         let dir = std::env::temp_dir();
         let pair = native_pty_system()
-            .openpty(PtySize { rows: 24, cols: 80, pixel_width: 0, pixel_height: 0 })
+            .openpty(PtySize {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
             .unwrap();
         let mut command = CommandBuilder::new("/bin/sh");
         command.args(["-c", "pwd; test -t 1 && echo tty"]);
@@ -185,7 +223,10 @@ mod tests {
         }
         let printed = String::from_utf8_lossy(&out);
         let first = printed.lines().next().unwrap().trim();
-        assert_eq!(std::path::Path::new(first).canonicalize().unwrap(), dir.canonicalize().unwrap());
+        assert_eq!(
+            std::path::Path::new(first).canonicalize().unwrap(),
+            dir.canonicalize().unwrap()
+        );
         assert!(printed.contains("tty"));
     }
 }

@@ -5,12 +5,45 @@ import type { ModelId } from "../../runtime/src/models";
 import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import { STACKS, type Role } from "../../runtime/src/stack";
 import App from "../App";
+import type { LedgerThread } from "../bridge";
 import { fakeBridge } from "../test/fakeBridge";
 import { foldRun, formatCost, stepLabel } from "./fold";
 
 const OPUS = "claude-opus-5-5";
 const SONNET = "claude-sonnet-5-5";
 const HAIKU = "claude-haiku-5-5";
+
+const ledgerCall = {
+  at: 0,
+  effort: "medium" as const,
+  inputTokens: 1,
+  outputTokens: 1,
+  cacheWriteTokens: 0,
+  cacheReadTokens: 0,
+  seconds: 1,
+};
+const acceptedRecord = (): LedgerThread => ({
+  id: 1,
+  task: "Add an annual toggle to the pricing cards",
+  repo: "/work/pricing-page",
+  branch: "shoji/thread",
+  stack: "balanced",
+  startedAt: 0,
+  committed: "a1b2c3d",
+  committedAt: 0,
+  runs: [
+    {
+      id: 1,
+      kind: "task",
+      startedAt: 0,
+      status: "ready",
+      calls: [
+        { ...ledgerCall, step: "plan", role: "plan", model: OPUS, cost: 0.1 },
+        { ...ledgerCall, step: "build", role: "build", model: SONNET, cost: 0.02 },
+      ],
+    },
+  ],
+});
 
 const running = (step: string, role: Role, model: ModelId): RuntimeEvent => ({
   type: "step",
@@ -255,6 +288,7 @@ describe("a thread in the app", () => {
     await act(async () => fake.exit(0));
     expect(document.querySelector(".status .branch")?.textContent).toBe("shoji/thread");
 
+    fake.ledger.push(acceptedRecord());
     await act(async () => {
       fireEvent.click(await screen.findByRole("button", { name: "Accept and commit" }));
     });
@@ -286,12 +320,44 @@ describe("a thread in the app", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Push and open PR" }));
     });
-    expect(fake.calls.pushes).toEqual([
+    expect(fake.calls.pushes).toMatchObject([
       { repo: "/work/pricing-page", branch: "shoji/thread" },
       { repo: "/work/pricing-page", branch: "shoji/thread" },
     ]);
+    // The pull request's description is the thread's receipt.
+    expect(fake.calls.pushes[1].body).toBe(
+      [
+        "### Receipt",
+        "",
+        "| Step | Model | Cost |",
+        "| :-- | :-- | --: |",
+        "| Plan | Opus 5.5 | $0.100 |",
+        "| Build | Sonnet 5.5 | $0.020 |",
+        "| **Total** | | **$0.120** |",
+        "",
+        "Review passed.",
+        "",
+        "<sub>Made with [Shoji](https://shoji-app.vercel.app/), which picks the model for each step.</sub>",
+      ].join("\n"),
+    );
     expect(screen.getByText("Pushed shoji/thread to origin")).toBeTruthy();
     expect(screen.queryByText(/terminal prompts disabled/)).toBeNull();
+  });
+
+  it("leaves the receipt out of the pull request when Settings says so", async () => {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", cap: 0.5, receiptInPR: false }));
+    const fake = await startThread();
+    fake.project.diff = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b\n";
+    fake.emit(result("ready", 0.12));
+    await act(async () => fake.exit(0));
+    fake.ledger.push(acceptedRecord());
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: "Accept and commit" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Push and open PR" }));
+    });
+    expect(fake.calls.pushes).toEqual([{ repo: "/work/pricing-page", branch: "shoji/thread", body: null }]);
   });
 
   it("says why a commit failed and lets it be tried again", async () => {

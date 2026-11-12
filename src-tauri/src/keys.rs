@@ -60,10 +60,11 @@ pub fn saved(keyed: &Keyed) -> Option<String> {
 
 /// A key from the shell, for development. An app opened from the Dock or Start menu won't see one.
 pub fn from_shell(keyed: &Keyed) -> Option<String> {
-    keyed
-        .shell_env
-        .iter()
-        .find_map(|name| std::env::var(name).ok().filter(|value| !value.trim().is_empty()))
+    keyed.shell_env.iter().find_map(|name| {
+        std::env::var(name)
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+    })
 }
 
 pub fn save(keyed: &Keyed, key: &str) -> Result<(), String> {
@@ -85,7 +86,9 @@ pub fn forget(keyed: &Keyed) -> Result<(), String> {
 
 /// The provider a model id belongs to: the name before its first slash, or Anthropic for a bare id.
 pub fn provider_of(model: &str) -> &str {
-    model.split_once('/').map_or("anthropic", |(provider, _)| provider)
+    model
+        .split_once('/')
+        .map_or("anthropic", |(provider, _)| provider)
 }
 
 /// Every model a stack names, as the runtime's --stack-json takes it.
@@ -100,7 +103,10 @@ fn models_of(stack: &serde_json::Value) -> Vec<&str> {
 
 /// The variables a run of this stack gets its keys in: every key the person has, so a role can use any of
 /// them. A stack that needs a key the person hasn't added stops here, before anything is made.
-pub fn run_env(stack: &serde_json::Value, key: impl Fn(&Keyed) -> Option<String>) -> Result<Vec<(String, String)>, String> {
+pub fn run_env(
+    stack: &serde_json::Value,
+    key: impl Fn(&Keyed) -> Option<String>,
+) -> Result<Vec<(String, String)>, String> {
     for model in models_of(stack) {
         if let Some(needed) = KEYED.iter().find(|k| k.id == provider_of(model)) {
             if key(needed).is_none() {
