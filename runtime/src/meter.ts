@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { costOf, worstCaseOutput, type ModelId } from "./models";
+import { costOf, MODELS, tokensCost, worstCaseOutput, type ModelId } from "./models";
 import type { CallRecord, Emit } from "./events";
 import type { ModelProvider, ModelRequest } from "./provider";
 import type { Role } from "./stack";
@@ -10,6 +10,24 @@ export class BudgetExceeded extends Error {}
 export const LEAST_OUTPUT = 4000;
 
 export class RefusedError extends Error {}
+
+/** What a picture or a document in a prompt is counted as, whatever its size on disk. */
+const IMAGE_TOKENS = 1500;
+/** Characters to a token, on the low side, so a guess at a prompt's length errs high. */
+const CHARS_PER_TOKEN = 3.5;
+
+/** The characters of text in part of a request: every string in it, with a picture counted as a fixed amount. */
+function charsIn(value: unknown): number {
+  if (typeof value === "string") return value.length;
+  if (Array.isArray(value)) return value.reduce((sum: number, item) => sum + charsIn(item), 0);
+  if (!value || typeof value !== "object") return 0;
+  const block = value as Record<string, unknown>;
+  if (block.type === "image" || block.type === "document") return IMAGE_TOKENS * CHARS_PER_TOKEN;
+  return Object.values(block).reduce((sum: number, item) => sum + charsIn(item), 0);
+}
+
+/** Roughly how many tokens part of a request is. Only the provider counts them exactly, and only afterwards. */
+export const roughTokens = (part: unknown) => Math.ceil(charsIn(part) / CHARS_PER_TOKEN);
 
 /** Sends every call through one place, so each is costed, logged and held to the cap. */
 export class Meter {
@@ -23,11 +41,35 @@ export class Meter {
     readonly cap: number,
   ) {}
 
+  /**
+   * What the next call's prompt will likely cost. A step's later calls send its last prompt again with a little
+   * more: priced as the last call was charged, read from the cache where that call used it, with what's new
+   * since then on top. A step's first call has no call to go by, so its prompt is measured by its text.
+   */
+  private likelyInput(role: Role, step: string, request: ModelRequest): number {
+    const model = request.model;
+    if (MODELS[model].billing) return 0;
+    const none = { input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
+    const last = this.calls.filter((c) => c.role === role && c.step === step && c.model === model).pop();
+    if (!last) {
+      return tokensCost(model, { ...none, input: roughTokens([request.system, request.messages, request.tools]) });
+    }
+    const prompt = last.inputTokens + last.cacheWriteTokens + last.cacheReadTokens;
+    // The last answer and what the tools said back to it.
+    const fresh = roughTokens(request.messages.slice(-2));
+    return last.cacheWriteTokens + last.cacheReadTokens > 0
+      ? tokensCost(model, { ...none, cacheRead: prompt, cacheWrite: fresh })
+      : tokensCost(model, { ...none, input: prompt + fresh });
+  }
+
   async send(role: Role, step: string, request: ModelRequest): Promise<Anthropic.Message> {
     let shortened = false;
-    if (this.spent + worstCaseOutput(request.model, request.maxTokens) > this.cap) {
+    // The prompt is paid for too, so it counts before the call is made: the answer's worst case alone let one
+    // call with a long prompt pass the cap by what the prompt cost.
+    const input = this.likelyInput(role, step, request);
+    if (this.spent + input + worstCaseOutput(request.model, request.maxTokens) > this.cap) {
       // Near the cap, a call may still answer at shorter length, as long as that leaves it room to work.
-      const room = Math.floor(((this.cap - this.spent) / worstCaseOutput(request.model, 1e6)) * 1e6);
+      const room = Math.floor(((this.cap - this.spent - input) / worstCaseOutput(request.model, 1e6)) * 1e6);
       if (room < LEAST_OUTPUT) {
         throw new BudgetExceeded(
           `Stopped at $${this.spent.toFixed(2)}: the next call could pass the $${this.cap.toFixed(2)} limit.`,
