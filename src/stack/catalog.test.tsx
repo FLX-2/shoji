@@ -82,7 +82,7 @@ describe("keeping models current", () => {
     await open("Settings");
     fireEvent.click(screen.getByRole("button", { name: "Data" }));
     expect(
-      screen.getByText(/It sends nothing about you or your work\. Prices as listed on 10 Nov 2026\./),
+      screen.getByText(/It sends nothing about you or your work\. Prices as listed on 12 Nov 2026\./),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole("switch", { name: "Keep models current" }));
     expect(JSON.parse(localStorage.getItem("shoji.prefs")!).updateModels).toBe(false);

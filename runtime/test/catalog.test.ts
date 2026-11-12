@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { applyCatalog, BUILT_IN, costOf, MODELS, parseCatalog, pricesListed } from "../src/models";
+import { applyCatalog, BUILT_IN, costOf, MODELS, parseCatalog, pricesListed, worstCaseOutput } from "../src/models";
 import { parseStack } from "../src/stack";
 
 const usage = (input: number, output: number) =>
@@ -33,7 +33,42 @@ describe("the model list", () => {
 
     applyCatalog(null);
     expect(MODELS).toEqual(BUILT_IN);
-    expect(pricesListed()).toBe("2026-11-10");
+    expect(pricesListed()).toBe("2026-11-12");
+  });
+
+  it("prices each call on Haiku by its own prompt's length, with cache reads and writes counted in it", () => {
+    const call = (input: number, read: number, written: number, output: number) =>
+      ({
+        input_tokens: input,
+        output_tokens: output,
+        cache_creation_input_tokens: written,
+        cache_read_input_tokens: read,
+      }) as never;
+    // Up to 100,000 tokens: $0.10 in and $0.50 out, a million.
+    expect(costOf("claude-haiku-5-5", call(100_000, 0, 0, 10_000))).toBeCloseTo(0.01 + 0.005, 6);
+    // Past it the whole call is dearer, a cache hit included: $0.50 in, $0.05 read, $0.625 written, $2.50 out.
+    expect(costOf("claude-haiku-5-5", call(20_000, 80_000, 1_000, 10_000))).toBeCloseTo(
+      0.01 + 0.004 + 0.000625 + 0.025,
+      6,
+    );
+    // Nobody knows a prompt's length before it's sent, so the cap allows for the dearer output.
+    expect(worstCaseOutput("claude-haiku-5-5", 1e6)).toBeCloseTo(2.5);
+    expect(worstCaseOutput("claude-sonnet-5-5", 1e6)).toBeCloseTo(10);
+    // Sonnet reads its cache at $0.10 a million.
+    expect(costOf("claude-sonnet-5-5", call(0, 1e6, 0, 0))).toBeCloseTo(0.1);
+  });
+
+  it("takes a model's long-prompt prices from the list, checked like the rest", () => {
+    const long = { over: 200_000, input: 6, output: 30, cacheRead: 0.6 };
+    const withLong = (change: object) => ({
+      ...LIST,
+      models: { ...LIST.models, "claude-sonnet-6": { ...LIST.models["claude-sonnet-6"], long: { ...long, ...change } } },
+    });
+    expect(parseCatalog(withLong({})).models["claude-sonnet-6"].long).toEqual(long);
+    expect(parseCatalog(LIST).models["claude-sonnet-6"].long).toBeUndefined();
+    expect(() => parseCatalog(withLong({ over: 0 }))).toThrow(/prices/);
+    expect(() => parseCatalog(withLong({ output: 0 }))).toThrow(/prices/);
+    expect(() => parseCatalog(withLong({ input: "6" }))).toThrow(/prices/);
   });
 
   it("refuses a list it can't trust, whole", () => {
@@ -65,7 +100,7 @@ describe("the model list", () => {
     const file = path.join(__dirname, "../../catalog/v2/models.json");
     const published = parseCatalog(JSON.parse(fs.readFileSync(file, "utf8")));
     expect(published.models).toEqual(BUILT_IN);
-    expect(published.updated).toBe("2026-11-10");
+    expect(published.updated).toBe("2026-11-12");
   });
 
   it("keeps v0.1's list to Anthropic's models, which is all v0.1 reads", () => {

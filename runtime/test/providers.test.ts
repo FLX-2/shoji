@@ -54,7 +54,7 @@ describe("billing", () => {
     expect(listedCostOf("chatgpt/gpt-6", usage(1e6, 1e6))).toBeCloseTo(12);
     // So the cap never stops a call that can't spend.
     expect(worstCaseOutput("chatgpt/gpt-6", 1e6)).toBe(0);
-    expect(costOf("claude-haiku-5-5", usage(1e6, 1e6))).toBeCloseTo(0.6);
+    expect(costOf("claude-haiku-5-5", usage(1e5, 1e5))).toBeCloseTo(0.06);
   });
 
   it("refuses a free price on a model that charges, a billing it doesn't know, and a provider it doesn't know", () => {

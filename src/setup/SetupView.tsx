@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { MODELS, providerOf } from "../../runtime/src/models";
+import { labelOf, MODELS, providerOf } from "../../runtime/src/models";
 import { chargesNothing } from "../receipts/receipts";
 import { STACKS, type Stack, type StackName } from "../../runtime/src/stack";
 import type { Bridge, FoundProject, KeyStatus } from "../bridge";
@@ -104,7 +104,7 @@ export function SetupView(props: SetupViewProps) {
           repo={props.prefs.repo}
           starters={props.prefs.starters}
           onChange={props.onChange}
-          scout={MODELS[picked.scout.model].label}
+          scout={labelOf(picked.scout.model)}
           free={chargesNothing(picked.scout.model)}
           notes={props.notes}
           onWriteNotes={(repo) => props.onWriteNotes(repo, picked)}

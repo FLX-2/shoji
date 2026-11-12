@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { EFFORTS, isFound, MODELS, type ModelId } from "../../runtime/src/models";
+import { EFFORTS, isFound, labelOf, type ModelId, MODELS } from "../../runtime/src/models";
 import { ROLES, STACKS, type Role, type Seat, type Stack, type StackName } from "../../runtime/src/stack";
 import type { Bridge, LedgerThread, TrialRequest } from "../bridge";
 import {
@@ -146,7 +146,7 @@ export function StackView({
                 <div key={model} className="worth">
                   <span className="tag">Worth a trial</span>
                   <p>
-                    <b>{MODELS[model].label}</b> is new in the model list, at {priceLine(model)} per million tokens.
+                    <b>{labelOf(model)}</b> is new in the model list, at {priceLine(model)} per million tokens.
                   </p>
                   <span className="acts">
                     <button type="button" className="btn sm ghost" onClick={() => onSeeModels([model])}>
@@ -252,7 +252,7 @@ export function StackView({
                 .filter((model) => !MODELS[model].billing)
                 .map((model) => (
                   <div key={model} className="prow" role="row">
-                    <span role="cell">{MODELS[model].label}</span>
+                    <span role="cell">{labelOf(model)}</span>
                     <span role="cell" className="n">
                       ${MODELS[model].input.toFixed(2)}
                     </span>

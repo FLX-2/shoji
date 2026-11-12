@@ -4,6 +4,8 @@ import { formatCost } from "../thread/fold";
 export interface Ask {
   /** What's been spent today. */
   spent: number;
+  /** What threads and a trial still running may yet spend of their own limits. */
+  reserved: number;
   /** The most the run about to start may spend. */
   cap: number;
   /** What's about to start, as the sentence names it: "This thread" or "This trial". */
@@ -20,8 +22,9 @@ export function LimitAsk({ ask, limit, onClose }: { ask: Ask; limit: number; onC
       <div className="ask" role="alertdialog" aria-labelledby="ask-h" aria-describedby="ask-d">
         <h2 id="ask-h">Past today's limit?</h2>
         <p id="ask-d">
-          Today has cost {formatCost(ask.spent)} of your {formatCost(limit)} daily limit. {ask.what} may spend up to{" "}
-          {formatCost(ask.cap)}, which could take today past it.
+          Today has cost {formatCost(ask.spent)} of your {formatCost(limit)} daily limit
+          {ask.reserved >= 0.005 && `, and what's still running may spend ${formatCost(ask.reserved)} more`}. {ask.what}{" "}
+          may spend up to {formatCost(ask.cap)}, which could take today past it.
         </p>
         <div className="acts">
           <button type="button" className="btn" ref={cancel} onClick={onClose}>

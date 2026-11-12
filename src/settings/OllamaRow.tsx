@@ -1,4 +1,4 @@
-import { MODELS } from "../../runtime/src/models";
+import { labelOf } from "../../runtime/src/models";
 import type { Ollama } from "../stack/ollama";
 
 /** What Ollama has for Shoji, in a sentence. */
@@ -7,7 +7,7 @@ export function ollamaNote(ollama: Ollama): string {
     case "looking":
       return "Looking for Ollama on this computer…";
     case "ready": {
-      const names = ollama.models.map((m) => MODELS[m].label);
+      const names = ollama.models.map((m) => labelOf(m));
       const listed = names.length > 3 ? `${names.slice(0, 3).join(", ")} and ${names.length - 3} more` : names.join(", ");
       return `${listed}. Free, and your code stays on this computer.`;
     }

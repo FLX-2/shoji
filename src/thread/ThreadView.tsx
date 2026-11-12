@@ -11,7 +11,7 @@ import {
 } from "react";
 import type { ComparedPage } from "../../runtime/src/compare";
 import type { CheckResult } from "../../runtime/src/events";
-import { MODELS, type ModelId } from "../../runtime/src/models";
+import { labelOf, type ModelId, MODELS } from "../../runtime/src/models";
 import type { Bridge, Pushed } from "../bridge";
 import { CodeView } from "../code/CodeView";
 import { commentsNote, type LineComment } from "../code/comments";
@@ -376,7 +376,7 @@ export function ThreadView({
     ) : now ? (
       <>
         {stepLabel(lastRun.steps, lastRun.steps.indexOf(now))}
-        <span className="mn"> · {MODELS[now.model].label}</span>
+        <span className="mn"> · {labelOf(now.model)}</span>
       </>
     ) : last.stoppedByYou ? (
       "Stopping"
@@ -904,7 +904,7 @@ function StepRow({
   const reaches = useReaches();
   const step = steps[index];
   const label = stepLabel(steps, index);
-  const about = step.cost > 0 ? `${MODELS[step.model].label} · ${formatCost(step.cost)}` : MODELS[step.model].label;
+  const about = step.cost > 0 ? `${labelOf(step.model)} · ${formatCost(step.cost)}` : labelOf(step.model);
   const now = live && step.running;
   const finished = !step.running && !step.unfinished;
   return (
@@ -926,7 +926,7 @@ function StepRow({
                 type="button"
                 className="m mn redo"
                 title={`${about}. Do it again on another model`}
-                aria-label={`${label} with ${MODELS[step.model].label}. Do it again on another model`}
+                aria-label={`${label} with ${labelOf(step.model)}. Do it again on another model`}
                 aria-haspopup="menu"
                 aria-expanded={!!menuAt}
                 onClick={(e) => setMenuAt(menuAt ? null : under(e.currentTarget))}
@@ -938,7 +938,7 @@ function StepRow({
                   at={menuAt}
                   label="Do it again on"
                   items={redoModels(step.model, reaches).map((model) => ({
-                    label: `${AGAIN[redo]} with ${MODELS[model].label}`,
+                    label: `${AGAIN[redo]} with ${labelOf(model)}`,
                     run: () => onRedo(redo, model),
                   }))}
                   onClose={() => setMenuAt(null)}
@@ -953,7 +953,7 @@ function StepRow({
         </div>
         {step.escalation && (
           <p className="esc">
-            Moved up to {MODELS[step.escalation.to].label}. {step.escalation.reason}
+            Moved up to {labelOf(step.escalation.to)}. {step.escalation.reason}
           </p>
         )}
         <Work step={step} showPlan={showPlan} onOpenFile={onOpenFile} />
@@ -1260,12 +1260,28 @@ function useFollow(thread: Thread) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    let top = el.scrollTop;
     const onScroll = () => {
-      atEnd.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+      // Only the person moving up leaves the end. New work landing below also leaves a gap for a moment, and
+      // taking that for leaving stopped the follow whenever several steps arrived at once.
+      if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) atEnd.current = true;
+      else if (el.scrollTop < top) atEnd.current = false;
+      top = el.scrollTop;
       setAway(!atEnd.current);
     };
     el.addEventListener("scroll", onScroll);
-    return () => el.removeEventListener("scroll", onScroll);
+    // The room for the conversation shrinks when the bar under it appears, as when a run ends or asks.
+    const resized =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            if (atEnd.current) el.scrollTop = el.scrollHeight;
+          });
+    resized?.observe(el);
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      resized?.disconnect();
+    };
   }, []);
   useEffect(() => {
     const el = ref.current;

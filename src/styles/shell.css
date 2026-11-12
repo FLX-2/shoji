@@ -385,6 +385,13 @@ button {
   color: var(--z7);
 }
 
+/* Two quiet buttons side by side, under a screen that couldn't be shown. */
+.broken .acts {
+  display: flex;
+  gap: var(--s-2);
+  margin-top: var(--s-1);
+}
+
 /* Status bar */
 .status {
   display: flex;

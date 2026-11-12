@@ -1,6 +1,6 @@
 import type { LedgerThread } from "../bridge";
 import { folderName } from "../home/HomeView";
-import { MODELS } from "../../runtime/src/models";
+import { labelOf } from "../../runtime/src/models";
 import { SECTIONS } from "../shell/sections";
 import { foldRun, formatCost, stepLabel } from "../thread/fold";
 import { threadCost, type Thread } from "../thread/useThread";
@@ -34,7 +34,7 @@ function doing(thread: Thread): { stage: string; target?: string } {
   const now = run.steps.findLast((s) => s.running);
   if (!now) return { stage: "Starting" };
   return {
-    stage: `${stepLabel(run.steps, run.steps.indexOf(now))} · ${MODELS[now.model].label}`,
+    stage: `${stepLabel(run.steps, run.steps.indexOf(now))} · ${labelOf(now.model)}`,
     target: now.tools.at(-1)?.target,
   };
 }

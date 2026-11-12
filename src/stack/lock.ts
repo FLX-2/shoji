@@ -1,5 +1,5 @@
 import { foundModelsIn } from "../../runtime/src/found";
-import { applyFound, MODELS, NAMED } from "../../runtime/src/models";
+import { applyFound, labelOf, MODELS, NAMED } from "../../runtime/src/models";
 import { parseStack, ROLES, STACKS, type Role, type Seat, type Stack, type StackName } from "../../runtime/src/stack";
 
 /** One saved choice of models. */
@@ -58,7 +58,7 @@ export function presetOf(stack: Stack): StackName | null {
 /** The roles whose seat differs from one stack to the next. */
 export const changedRoles = (from: Stack, to: Stack) => ROLES.filter((role) => !sameSeat(from[role], to[role]));
 
-export const seatLabel = (seat: Seat) => `${MODELS[seat.model].label}, ${EFFORT_NAMES[seat.effort].toLowerCase()}`;
+export const seatLabel = (seat: Seat) => `${labelOf(seat.model)}, ${EFFORT_NAMES[seat.effort].toLowerCase()}`;
 
 export const EFFORT_NAMES = { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" } as const;
 

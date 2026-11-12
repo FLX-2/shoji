@@ -6,7 +6,7 @@ import type { RuntimeEvent } from "./events";
 import { hasChanges, isGitRepo } from "./git";
 import { Browser, findBrowser } from "./browser";
 import { connectMcp, type Mcp, parseMcpServers, transportFor } from "./mcp";
-import { applyCatalog, applyFound, MODELS, NAMED, parseCatalog } from "./models";
+import { applyCatalog, applyFound, labelOf, NAMED, parseCatalog } from "./models";
 import { foundModelsIn } from "./found";
 import { writeNotes, type NotesEvent } from "./notes";
 import { runThread } from "./pipeline";
@@ -139,7 +139,7 @@ function attached(files: string[]) {
 function describe(event: RuntimeEvent): string | null {
   switch (event.type) {
     case "step":
-      return event.status === "running" ? `${event.step} · ${MODELS[event.model].label}` : null;
+      return event.status === "running" ? `${event.step} · ${labelOf(event.model)}` : null;
     case "tool":
       return `  ${event.tool} ${event.target}`;
     case "call":
@@ -154,7 +154,7 @@ function describe(event: RuntimeEvent): string | null {
     case "baseline":
       return event.failingBefore.length ? `  failing before any change: ${event.failingBefore.join(", ")}` : null;
     case "escalate":
-      return `  moving up to ${MODELS[event.to].label}: ${event.reason}`;
+      return `  moving up to ${labelOf(event.to)}: ${event.reason}`;
     case "ask":
       return null; // The question itself is asked on stderr.
     case "answer":

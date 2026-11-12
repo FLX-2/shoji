@@ -98,6 +98,34 @@ describe("the daily limit", () => {
     expect(fake.calls.starts.map((s) => s.task)).toEqual(["Add a toggle"]);
   });
 
+  it("counts what a thread still running may yet spend, so threads side by side can't slip past the limit", async () => {
+    // $0.20 spent, and the first thread may spend $0.50: a second $0.50 could take the day to $1.20.
+    const { fake } = await home([spent(Date.now(), 0.2)]);
+    expect(fake.calls.starts).toHaveLength(1);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    });
+    const again = screen.getByRole("textbox", { name: "Task" });
+    fireEvent.change(again, { target: { value: "Add a footer" } });
+    await act(async () => {
+      fireEvent.keyDown(again, { key: "Enter" });
+    });
+    const ask = screen.getByRole("alertdialog", { name: "Past today's limit?" });
+    expect(ask.textContent).toContain(
+      "Today has cost $0.20 of your $1.00 daily limit, and what's still running may spend $0.50 more. This thread may spend up to $0.50",
+    );
+    expect(fake.calls.starts).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Not now" }));
+
+    // Once the first thread ends, what it didn't spend is free again.
+    await act(async () => fake.exit(0));
+    await act(async () => {
+      fireEvent.keyDown(screen.getByRole("textbox", { name: "Task" }), { key: "Enter" });
+    });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(fake.calls.starts.map((s) => s.task)).toEqual(["Add a toggle", "Add a footer"]);
+  });
+
   it("shows today's spend in the status bar, keeping up with a running thread", async () => {
     const { fake } = await home([spent(Date.now(), 0.2)]);
     const status = () => document.querySelector("footer.status")!.textContent;

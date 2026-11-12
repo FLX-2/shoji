@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RuntimeEvent } from "../../runtime/src/events";
-import { MODELS, type ModelId } from "../../runtime/src/models";
+import { labelOf, type ModelId } from "../../runtime/src/models";
 import type { Stack } from "../../runtime/src/stack";
 import type { Bridge, CarryOn, ChangesRequest, RunExit } from "../bridge";
 import { foldRun, reviewNotes } from "./fold";
@@ -66,7 +66,7 @@ export function commitMessage(thread: Thread): string {
   const roles = new Map<string, Set<string>>();
   for (const turn of thread.turns) {
     for (const step of foldRun(turn.events).steps) {
-      const label = MODELS[step.model].label;
+      const label = labelOf(step.model);
       roles.set(label, (roles.get(label) ?? new Set()).add(step.role));
     }
   }
@@ -314,7 +314,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
       if (!shown) return;
       const stack = { ...shown.thread.stack, [role]: { ...shown.thread.stack[role], model } };
       const again = { ...shown, thread: { ...shown.thread, stack } };
-      const label = MODELS[model].label;
+      const label = labelOf(model);
       if (role === "plan") carryOnHeld(again, `Plan it again with ${label}`, PLAN_AGAIN, "replan", extra);
       else if (role === "build") carryOnHeld(again, `Build it again with ${label}`, "", "rebuild", extra);
       else carryOnHeld(again, `Review it again with ${label}`, "", "review", extra);

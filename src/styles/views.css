@@ -3840,6 +3840,9 @@ button.rrow:focus-visible {
 
 .review.cmdask code {
   overflow-wrap: anywhere;
+  /* A command long enough to wrap keeps its edge and padding on each line, rather than a chip cut open. */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
   font-family: var(--mono);
   font-size: var(--t-sm);
   color: var(--z10);
