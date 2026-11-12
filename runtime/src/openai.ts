@@ -141,12 +141,13 @@ export function toMessage(response: ResponsesResult, model: ModelId): Anthropic.
     role: "assistant",
     model,
     content,
+    // Cut off comes before a tool call: the call's arguments may have been cut off with it.
     stop_reason: refused
       ? "refusal"
-      : called
-        ? "tool_use"
-        : response.incomplete_details?.reason === "max_output_tokens"
-          ? "max_tokens"
+      : response.incomplete_details?.reason === "max_output_tokens"
+        ? "max_tokens"
+        : called
+          ? "tool_use"
           : "end_turn",
     stop_sequence: null,
     usage: {

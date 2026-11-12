@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { MAX_TOKENS, OUT_OF_TURNS, runAgent, textOf } from "./agent";
+import { MAX_TOKENS, OUT_OF_TURNS, runAgent, whole } from "./agent";
 import { type Attachments, withAttachments } from "./attachments";
 import { runChecks } from "./commands";
 import type { CheckResult, Emit, ThreadResult } from "./events";
@@ -180,7 +180,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
             { type: "text", text: "The screenshots above show the pages Build looked at, before the change and after it." },
           ]
         : prompt;
-      const said = textOf(
+      const said = whole(
         await meter.send("review", "review", {
           model: stack.review.model,
           effort: stack.review.effort,
@@ -188,6 +188,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
           messages: [{ role: "user", content }],
           maxTokens: MAX_TOKENS,
         }),
+        "review",
       );
       return shots.length ? holdToLook(said) : said;
     });
@@ -332,7 +333,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
       lookingTools,
     );
     return step("plan", "plan", stack.plan, async () =>
-      textOf(
+      whole(
         await meter.send("plan", "plan", {
           model: stack.plan.model,
           effort: stack.plan.effort,
@@ -348,6 +349,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
           ],
           maxTokens: MAX_TOKENS,
         }),
+        "plan",
       ),
     );
   }
