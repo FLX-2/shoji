@@ -9,12 +9,15 @@ export function openrouterNote(openrouter: OpenRouter): string {
     case "connecting":
       return "Finish connecting in your browser. Shoji waits here.";
     case "disconnected":
-      return "Hundreds of models from many providers on one account, billed to your OpenRouter credit.";
+      return "Hundreds of models from many providers on one account, billed to your OpenRouter credit. Some are free.";
     case "connected": {
       const how = openrouter.fromShell ? "Using the key from your shell." : "Connected.";
-      return openrouter.count === null
-        ? how
-        : `${how} ${openrouter.count} models that can use tools, at OpenRouter's prices. Pick them in Stack.`;
+      if (openrouter.count === null) return how;
+      const listed = `${how} ${openrouter.count} models that can use tools, at OpenRouter's prices.`;
+      // OpenRouter allows 50 free requests a day until $10 of credit is bought, and a task takes about ten.
+      return openrouter.free.length
+        ? `${listed} ${openrouter.free.length === 1 ? "1 is" : `${openrouter.free.length} are`} free, for about five tasks a day until you've bought $10 of credit.`
+        : `${listed} Pick them in Stack.`;
     }
   }
 }

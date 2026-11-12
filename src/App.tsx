@@ -895,7 +895,13 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 error={stack.error}
                 onSave={stack.save}
                 ledger={ledger}
-                presets={providerPresets({ openai: openaiConnected, chatgpt, ollama })}
+                presets={providerPresets({
+                  anthropic: anthropicKey,
+                  openai: openaiConnected,
+                  chatgpt,
+                  ollama,
+                  openrouterFree: openrouter.free,
+                })}
                 seenModels={prefs.seenModels ?? Object.keys(MODELS)}
                 onSeeModels={(models) =>
                   setPrefs({ seenModels: [...new Set([...(prefs.seenModels ?? Object.keys(MODELS)), ...models])] })

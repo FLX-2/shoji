@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { applyFound } from "../../runtime/src/models";
 import App from "../App";
+import { freeModels } from "./openrouter";
 import { fakeBridge } from "../test/fakeBridge";
 
 const large = { model: "openrouter/vendor/large", effort: "medium" };
@@ -92,5 +93,43 @@ describe("OpenRouter", () => {
       output: 15,
       cacheRead: 0.3,
     });
+  });
+
+  it("ranks the free models it lists by the size their ids name, largest first", () => {
+    expect(
+      freeModels([
+        "vendor/paid-70b",
+        "liquid/lfm-3-1.7b:free",
+        "vendor/unnamed-size:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "google/gemma-4-26b-a4b-it:free",
+      ]),
+    ).toEqual([
+      "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+      "openrouter/google/gemma-4-26b-a4b-it:free",
+      "openrouter/liquid/lfm-3-1.7b:free",
+      "openrouter/vendor/unnamed-size:free",
+    ]);
+  });
+
+  it("offers a stack on its free models once connected, and says how far they go", async () => {
+    const fake = fakeBridge();
+    localStorage.setItem("shoji.prefs", PREFS);
+    render(<App bridge={fake.bridge} />);
+    fireEvent.click(screen.getByRole("button", { name: "Stack" }));
+    expect(within(screen.getByRole("radiogroup", { name: "Preset" })).queryByRole("radio", { name: "Free on OpenRouter" }))
+      .toBeNull();
+
+    await openModels();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Connect OpenRouter" }));
+    });
+    expect(screen.getByText(/1 is free, for about five tasks a day until you've bought \$10 of credit\./)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Stack" }));
+    const presets = within(screen.getByRole("radiogroup", { name: "Preset" }));
+    fireEvent.click(presets.getByRole("radio", { name: "Free on OpenRouter" }));
+    expect(presets.getByRole("radio", { name: "Free on OpenRouter" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText("Vendor: Small (free) takes every step.")).toBeTruthy();
   });
 });
