@@ -36,20 +36,23 @@ export function GeminiRow({
 
   return (
     <div className="srow">
-      <label htmlFor="s-key-gemini">
-        <b>Gemini API key</b>
-        <span className="d" role="status">
-          {error ?? geminiNote(gemini, tier)}
-        </span>
-      </label>
-      <span className="acts">
-        <div className="seg" role="radiogroup" aria-label="Gemini tier">
+      {/* The tier sits under the words it changes, so the key field keeps the row's right side as on the others. */}
+      <div>
+        <label htmlFor="s-key-gemini">
+          <b>Gemini API key</b>
+          <span className="d" role="status">
+            {error ?? geminiNote(gemini, tier)}
+          </span>
+        </label>
+        <div className="seg tier" role="radiogroup" aria-label="Gemini tier">
           {(["free", "paid"] as GeminiTier[]).map((t) => (
             <button key={t} type="button" role="radio" aria-checked={tier === t} onClick={() => onTier(t)}>
               {t === "free" ? "Free tier" : "Paid"}
             </button>
           ))}
         </div>
+      </div>
+      <span className="acts">
         {gemini.saved ? (
           confirming ? (
             <>

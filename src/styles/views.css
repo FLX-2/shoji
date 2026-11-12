@@ -2131,6 +2131,11 @@
   gap: 6px;
 }
 
+/* A choice that changes what a row's words say, such as Gemini's tier, sits under them. */
+.srow .seg.tier {
+  margin-top: var(--s-2);
+}
+
 .dh .ask,
 .srow .ask {
   font-size: var(--t-sm);
