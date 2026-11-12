@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { routedModel } from "../../runtime/src/found";
-import { applyFound } from "../../runtime/src/models";
+import { applyFound, type ModelId } from "../../runtime/src/models";
+import type { Stack } from "../../runtime/src/stack";
 import type { Bridge, KeyStatus, RoutedModel } from "../bridge";
 
 /** Every model OpenRouter has listed for this Shoji, with its prices, kept so a stack or thread that names one still
@@ -43,6 +44,8 @@ export interface OpenRouter {
   fromShell: boolean;
   /** How many of OpenRouter's models can use tools, once it has answered. */
   count: number | null;
+  /** Its free models that can use tools, largest first, once it has answered. */
+  free: ModelId[];
   error: string | null;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
@@ -58,6 +61,7 @@ export function useOpenRouter(bridge: Bridge): OpenRouter {
   });
   const [connecting, setConnecting] = useState(false);
   const [count, setCount] = useState<number | null>(null);
+  const [free, setFree] = useState<ModelId[]>([]);
   const [error, setError] = useState<string | null>(null);
   const connected = !!key && (key.saved || key.fromEnv);
 
@@ -80,6 +84,7 @@ export function useOpenRouter(bridge: Bridge): OpenRouter {
         remember(all);
         known(all);
         setCount(listed.length);
+        setFree(freeModels(listed.map((m) => m.id)));
       },
       (e) => current && setError(`Shoji couldn't read OpenRouter's models: ${plain(e)}`),
     );
@@ -108,9 +113,46 @@ export function useOpenRouter(bridge: Bridge): OpenRouter {
       setError(plain(e));
     }
     setCount(null);
+    setFree([]);
     await read();
   }, [bridge, read]);
 
   const status = key === null ? "looking" : connecting ? "connecting" : connected ? "connected" : "disconnected";
-  return { status, fromShell: !!key && !key.saved && key.fromEnv, count, error, connect, disconnect };
+  return {
+    status,
+    fromShell: !!key && !key.saved && key.fromEnv,
+    count,
+    free: connected ? free : [],
+    error,
+    connect,
+    disconnect,
+  };
+}
+
+/** A model's size in billions of parameters, as its id names it ("550b-a55b" is 550), or 0 when it doesn't. */
+function size(id: string): number {
+  const named = [...id.matchAll(/(\d+(?:\.\d+)?)b(?![a-z])/g)].map((m) => Number(m[1]));
+  return named.length ? Math.max(...named) : 0;
+}
+
+/** OpenRouter's free models among those it listed, largest first, since a larger model plans and builds better.
+ *  Free models churn, so they're picked from what OpenRouter lists now rather than from a list Shoji keeps. */
+export function freeModels(ids: string[]): ModelId[] {
+  return ids
+    .filter((id) => id.endsWith(":free"))
+    .map((id, order) => ({ id, order, size: size(id) }))
+    .sort((a, b) => b.size - a.size || a.order - b.order)
+    .map(({ id }) => `openrouter/${id}`);
+}
+
+/** A stack on OpenRouter's free models: the largest takes every step. It costs nothing, so there's no saving in a
+ *  smaller model, and free models count requests, not tokens. */
+export function freeStack(models: ModelId[]): Stack {
+  const largest = models[0];
+  return {
+    scout: { model: largest, effort: "low" },
+    plan: { model: largest, effort: "medium" },
+    build: { model: largest, effort: "medium" },
+    review: { model: largest, effort: "low" },
+  };
 }

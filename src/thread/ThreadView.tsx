@@ -496,7 +496,7 @@ export function ThreadView({
                 {dotted([
                   routing.line,
                   routing.oneModel - routing.spent >= 0.005 &&
-                    `about ${formatCost(routing.oneModel - routing.spent)} less than ${routing.baseline} alone`,
+                    `about ${formatCost(routing.oneModel - routing.spent)} less than ${routing.baseline === "Claude" ? "on Claude" : `${routing.baseline} alone`}`,
                 ])}
                 {onViewReceipt && (
                   <button type="button" className="link" onClick={onViewReceipt}>

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { MODELS, providerOf } from "../../runtime/src/models";
+import { chargesNothing } from "../receipts/receipts";
 import { STACKS, type Stack, type StackName } from "../../runtime/src/stack";
 import type { Bridge, FoundProject, KeyStatus } from "../bridge";
 import { folderName } from "../home/HomeView";
@@ -7,10 +8,15 @@ import { MoneyRow } from "../settings/MoneyRow";
 import type { Prefs } from "../settings/prefs";
 import { Mark } from "../shell/Mark";
 import { describeStack, presetOf, PRESETS, sameStack } from "../stack/lock";
-import { planStack, type ChatGPT } from "../stack/chatgpt";
-import { localStack, type Ollama } from "../stack/ollama";
+import type { ChatGPT } from "../stack/chatgpt";
+import type { Ollama } from "../stack/ollama";
+import type { OpenRouter } from "../stack/openrouter";
+import type { Gemini } from "../stack/gemini";
+import { providerPresets, type ProviderPreset } from "../stack/presets";
 import { ChatGPTRow } from "../settings/ChatGPTRow";
 import { OllamaRow } from "../settings/OllamaRow";
+import { OpenRouterRow } from "../settings/OpenRouterRow";
+import { GeminiRow } from "../settings/GeminiRow";
 import { formatCost } from "../thread/fold";
 import { NOTES_CAP, notesProgress, type Notes } from "./useNotes";
 
@@ -21,6 +27,8 @@ interface SetupViewProps {
   onKeyChanged: () => Promise<void>;
   ollama: Ollama;
   chatgpt: ChatGPT;
+  openrouter: OpenRouter;
+  gemini: Gemini;
   stack: Stack;
   onSaveStack: (stack: Stack) => Promise<void>;
   prefs: Prefs;
@@ -37,15 +45,28 @@ interface SetupViewProps {
 export function SetupView(props: SetupViewProps) {
   const [choice, setChoice] = useState(props.stack);
   const anthropic = !!props.keyStatus?.saved;
-  const local = props.ollama.status === "ready" ? localStack(props.ollama.models) : null;
-  const plan =
-    props.chatgpt.status === "signed-in" && props.chatgpt.models.length ? planStack(props.chatgpt.models) : null;
-  const connected = anthropic || !!local || !!plan;
-  const names = [anthropic && "Anthropic", plan && "ChatGPT", local && "Ollama"].filter(Boolean) as string[];
+  const free = props.prefs.geminiTier === "free";
+  // Only the stacks that can run on what's connected; OpenAI's key isn't asked for here.
+  const presets = providerPresets({
+    anthropic,
+    openai: false,
+    chatgpt: props.chatgpt,
+    ollama: props.ollama,
+    openrouterFree: props.openrouter.free,
+    gemini: free ? { free: props.gemini.models } : { paid: props.gemini.models },
+  });
+  const connected = anthropic || presets.length > 0;
+  const names = [
+    anthropic && "Anthropic",
+    props.chatgpt.status === "signed-in" && "ChatGPT",
+    props.ollama.status === "ready" && "Ollama",
+    props.openrouter.status === "connected" && "OpenRouter",
+    props.gemini.status === "connected" && "Gemini",
+  ].filter(Boolean) as string[];
 
-  // Without Anthropic, the stack starts on whichever other provider is connected, since only it can run.
-  const runs = (stack: Stack | null) => !!stack && sameStack(choice, stack);
-  const picked = anthropic || runs(plan) || runs(local) ? choice : (plan ?? local ?? choice);
+  // Without Anthropic, the stack starts on whichever other stack can run.
+  const runs = presets.some((p) => sameStack(choice, p.stack));
+  const picked = anthropic || runs ? choice : (presets[0]?.stack ?? choice);
 
   const start = async () => {
     if (!sameStack(picked, props.stack)) await props.onSaveStack(picked);
@@ -65,22 +86,26 @@ export function SetupView(props: SetupViewProps) {
         </div>
         <Models bridge={props.bridge} status={props.keyStatus} onKeyChanged={props.onKeyChanged} ollama={props.ollama}
           chatgpt={props.chatgpt}
+          openrouter={props.openrouter}
+          gemini={props.gemini}
+          prefs={props.prefs}
+          onChange={props.onChange}
         />
         <StackStep
           choice={picked}
           onChoose={setChoice}
           anthropic={anthropic}
-          plan={plan}
-          local={local}
+          presets={presets}
           prefs={props.prefs}
           onChange={props.onChange}
         />
         <Project
           bridge={props.bridge}
           repo={props.prefs.repo}
+          starters={props.prefs.starters}
           onChange={props.onChange}
           scout={MODELS[picked.scout.model].label}
-          free={!!MODELS[picked.scout.model].billing}
+          free={chargesNothing(picked.scout.model)}
           notes={props.notes}
           onWriteNotes={(repo) => props.onWriteNotes(repo, picked)}
         />
@@ -102,12 +127,20 @@ function Models({
   onKeyChanged,
   ollama,
   chatgpt,
+  openrouter,
+  gemini,
+  prefs,
+  onChange,
 }: {
   bridge: Bridge;
   status: KeyStatus | null;
   onKeyChanged: () => Promise<void>;
   ollama: Ollama;
   chatgpt: ChatGPT;
+  openrouter: OpenRouter;
+  gemini: Gemini;
+  prefs: Prefs;
+  onChange: (change: Partial<Prefs>) => void;
 }) {
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -123,8 +156,9 @@ function Models({
       <div className="suhd">
         <h3>Connect your models</h3>
         <p>
-          Connect any of them. Your key stays in the system keychain and is sent only to Anthropic. ChatGPT runs on your
-          Plus or Pro plan. Ollama runs models on this computer. You can change these later in Settings.
+          Connect any of them. You can start free: ChatGPT runs on your Plus or Pro plan, Ollama runs models on this
+          computer, and OpenRouter and Gemini have free models with daily limits. Keys stay in your system keychain.
+          You can change these later in Settings.
         </p>
       </div>
       {status?.fromEnv && !saved && (
@@ -182,6 +216,8 @@ function Models({
         </div>
         <ChatGPTRow chatgpt={chatgpt} onManageUsage={() => void bridge.chatgptManageUsage().catch(() => {})} setup />
         <OllamaRow ollama={ollama} setup />
+        <OpenRouterRow openrouter={openrouter} />
+        <GeminiRow gemini={gemini} tier={prefs.geminiTier} onTier={(geminiTier) => onChange({ geminiTier })} />
       </div>
     </section>
   );
@@ -199,8 +235,7 @@ function StackStep({
   choice,
   onChoose,
   anthropic,
-  plan,
-  local,
+  presets,
   prefs,
   onChange,
 }: {
@@ -208,10 +243,8 @@ function StackStep({
   onChoose: (stack: Stack) => void;
   /** Whether Anthropic is connected, so its stacks can run. */
   anthropic: boolean;
-  /** A stack on the person's ChatGPT plan, when they're signed in. */
-  plan: Stack | null;
-  /** A stack on Ollama's models, when Ollama has some. */
-  local: Stack | null;
+  /** The stacks other connected providers can run. */
+  presets: ProviderPreset[];
   prefs: Prefs;
   onChange: (change: Partial<Prefs>) => void;
 }) {
@@ -238,16 +271,17 @@ function StackStep({
               {PRESETS[name]}
             </button>
           ))}
-        {plan && (
-          <button type="button" role="radio" aria-checked={sameStack(choice, plan)} onClick={() => onChoose(plan)}>
-            On my ChatGPT plan
+        {presets.map((p) => (
+          <button
+            key={p.name}
+            type="button"
+            role="radio"
+            aria-checked={!preset && sameStack(choice, p.stack)}
+            onClick={() => onChoose(p.stack)}
+          >
+            {p.name}
           </button>
-        )}
-        {local && (
-          <button type="button" role="radio" aria-checked={sameStack(choice, local)} onClick={() => onChoose(local)}>
-            On this computer
-          </button>
-        )}
+        ))}
       </div>
       <p className="note">{describeStack(choice)}</p>
       <div className="card">
@@ -261,7 +295,7 @@ function StackStep({
         <MoneyRow
           id="su-daily"
           label="Daily limit"
-          description="Shoji asks before a thread or trial could take the day's spend past this."
+          description="Shoji asks before a thread or trial could take the day's spend past this. Start small and raise it when you're ready."
           value={prefs.dailyLimit}
           onChange={(dailyLimit) => onChange({ dailyLimit })}
         />
@@ -275,6 +309,7 @@ type Check = { repo: string; problem: string | null; notGit?: boolean } | null;
 function Project({
   bridge,
   repo,
+  starters,
   onChange,
   scout,
   free,
@@ -283,6 +318,8 @@ function Project({
 }: {
   bridge: Bridge;
   repo: string | null;
+  /** First tasks offered on Home, by project folder. */
+  starters: Record<string, string[]>;
   onChange: (change: Partial<Prefs>) => void;
   /** The Scout seat's model, which reads the project for its notes. */
   scout: string;
@@ -294,6 +331,7 @@ function Project({
   const [recent, setRecent] = useState<string[]>([]);
   const [found, setFound] = useState<FoundProject[]>([]);
   const [check, setCheck] = useState<Check>(null);
+  const [practiceError, setPracticeError] = useState<string | null>(null);
 
   useEffect(() => {
     bridge
@@ -363,7 +401,7 @@ function Project({
         </div>
       )}
       {check && check.repo === repo && check.problem && <p className="note">{check.problem}</p>}
-      <div>
+      <div className="acts">
         <button
           type="button"
           className="btn sm"
@@ -374,7 +412,24 @@ function Project({
         >
           Open a folder…
         </button>
+        <button
+          type="button"
+          className="btn sm"
+          title="A small project with failing tests, so a first task never touches your own code"
+          onClick={async () => {
+            try {
+              const [path, task] = await bridge.practiceProject();
+              onChange({ repo: path, starters: { ...starters, [path]: [task] } });
+              setPracticeError(null);
+            } catch (e) {
+              setPracticeError(String(e).replace(/^Error: /, ""));
+            }
+          }}
+        >
+          Use a practice project
+        </button>
       </div>
+      {practiceError && <p className="note">{practiceError}</p>}
       {repo && check?.repo === repo && !check.notGit && (
         <NotesRow
           repo={repo}

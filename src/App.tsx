@@ -13,7 +13,8 @@ import {
 } from "./bridge";
 import { folderName, type HomeDraft, HomeView } from "./home/HomeView";
 import { startersIn } from "./home/starters";
-import { baselineModel, modelLabel, oneModelCost, routingLine, threadSpend } from "./receipts/receipts";
+import { baselineName, oneModelCost, routingLine, threadSpend } from "./receipts/receipts";
+import { prBody } from "./receipts/prBody";
 import { Field } from "./look/Field";
 import { lookStyle } from "./look/LookRows";
 import { useTheme } from "./look/theme";
@@ -26,6 +27,7 @@ import { notesProgress, useNotes } from "./setup/useNotes";
 import { useModelCatalog } from "./stack/catalog";
 import { useChatGPT } from "./stack/chatgpt";
 import { useOpenRouter } from "./stack/openrouter";
+import { useGemini } from "./stack/gemini";
 import { providerPresets } from "./stack/presets";
 import { ReachContext } from "./stack/reach";
 import { useOllama } from "./stack/ollama";
@@ -84,6 +86,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const ollama = useOllama(given);
   const chatgpt = useChatGPT(given);
   const openrouter = useOpenRouter(given);
+  const gemini = useGemini(given, prefs.geminiTier);
   // The models there at first are known ones; only a model the list brings later is new.
   useEffect(() => {
     if (!prefs.seenModels) setPrefs({ seenModels: Object.keys(MODELS) });
@@ -290,7 +293,9 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
           ? !openaiConnected
           : provider === "openrouter"
             ? openrouter.status === "disconnected"
-            : false,
+            : provider === "gemini"
+              ? gemini.status === "disconnected"
+              : false,
   );
   // Lists offer Anthropic's models always, as Setup asks for its key, and others once their provider is connected.
   const reaches = useCallback(
@@ -299,9 +304,10 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       if (provider === "openai") return openaiConnected;
       if (provider === "chatgpt") return chatgpt.status === "signed-in";
       if (provider === "openrouter") return openrouter.status === "connected";
+      if (provider === "gemini") return gemini.status === "connected" && gemini.models.includes(model);
       return true;
     },
-    [openaiConnected, chatgpt.status, openrouter.status],
+    [openaiConnected, chatgpt.status, openrouter.status, gemini.status, gemini.models],
   );
   const hasKey = !unconnected;
   // Scheduled tasks start by themselves, never past the daily limit, since nobody may be here to say yes.
@@ -448,6 +454,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
           openai: openaiKey,
           chatgpt: chatgpt.status,
           openrouter: openrouter.status,
+          gemini: `${gemini.status}, ${prefs.geminiTier === "free" ? "free tier" : "paid"}`,
           ollama: { status: ollama.status, models: ollama.models.length },
           stack: stack.stack,
           pricesListed: pricesListed(),
@@ -836,6 +843,8 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
             onKeyChanged={refreshKey}
             ollama={ollama}
             chatgpt={chatgpt}
+            openrouter={openrouter}
+            gemini={gemini}
             stack={stack.stack}
             onSaveStack={stack.save}
             prefs={prefs}
@@ -895,7 +904,14 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 error={stack.error}
                 onSave={stack.save}
                 ledger={ledger}
-                presets={providerPresets({ openai: openaiConnected, chatgpt, ollama })}
+                presets={providerPresets({
+                  anthropic: anthropicKey,
+                  openai: openaiConnected,
+                  chatgpt,
+                  ollama,
+                  openrouterFree: openrouter.free,
+                  gemini: prefs.geminiTier === "free" ? { free: gemini.models } : { paid: gemini.models },
+                })}
                 seenModels={prefs.seenModels ?? Object.keys(MODELS)}
                 onSeeModels={(models) =>
                   setPrefs({ seenModels: [...new Set([...(prefs.seenModels ?? Object.keys(MODELS)), ...models])] })
@@ -1003,7 +1019,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                         line: routingLine(shownRecord),
                         spent: threadSpend(shownRecord),
                         oneModel: oneModelCost(shownRecord),
-                        baseline: modelLabel(baselineModel(shownRecord)).split(" ")[0],
+                        baseline: baselineName(shownRecord).split(" ")[0],
                       },
                       onViewReceipt: () => viewReceipt(shownRecord.id),
                     })}
@@ -1014,7 +1030,13 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     }
                     onQuestion={question}
                     onCommit={commit}
-                    onPush={() => bridge.pushThread(thread.repo, thread.branch!)}
+                    onPush={() =>
+                      bridge.pushThread(
+                        thread.repo,
+                        thread.branch!,
+                        prefs.receiptInPR && shownRecord ? prBody(shownRecord) : null,
+                      )
+                    }
                     onAnswer={(command, allow, always) => {
                       if (always) {
                         const now = prefs.allowedCommands[thread.repo] ?? [];
@@ -1074,6 +1096,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 chatgpt={chatgpt}
                 openaiKey={openaiKey}
                 openrouter={openrouter}
+                gemini={gemini}
                 onSaveOpenAIKey={(key) => bridge.saveKey(key, "openai").then(refreshOpenAIKey)}
                 onForgetOpenAIKey={() => bridge.forgetKey("openai").then(refreshOpenAIKey)}
                 onManageUsage={() => void bridge.chatgptManageUsage().catch(() => {})}

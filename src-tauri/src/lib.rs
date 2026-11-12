@@ -3,7 +3,9 @@ mod chatgpt;
 mod keys;
 mod ledger;
 mod ollama;
+mod gemini;
 mod openrouter;
+mod practice;
 mod push;
 mod updates;
 #[cfg(unix)]
@@ -177,6 +179,21 @@ async fn openrouter_connect() -> Result<(), String> {
 #[tauri::command]
 async fn openrouter_models() -> Result<Vec<openrouter::Listed>, String> {
     openrouter::models().await
+}
+
+/// The practice project, made the first time it's asked for, and the task Home offers first in it.
+#[tauri::command]
+fn practice_project(app: AppHandle) -> Result<(String, String), String> {
+    let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let dir = practice::make(&data)?;
+    Ok((dir.to_string_lossy().into_owned(), practice::FIRST_TASK.to_string()))
+}
+
+/// The Gemini models the person's key can use for a task.
+#[tauri::command]
+async fn gemini_models() -> Result<Vec<gemini::Listed>, String> {
+    let key = keys::any(keys::keyed("gemini")?).ok_or("Add your Gemini API key in Settings first.")?;
+    gemini::models(&key).await
 }
 
 /// The models the person's ChatGPT plan offers. Empty when signed out.
@@ -848,10 +865,11 @@ async fn commit_thread(
 }
 
 /// Pushes a committed thread's branch to the project's remote, when the person presses Push and open PR,
-/// and opens the page where they open a pull request for it. Shoji never pushes on its own.
+/// and opens the page where they open a pull request for it, with the receipt as its description unless they
+/// turned that off. Shoji never pushes on its own.
 #[tauri::command]
-async fn push_thread(app: AppHandle, repo: String, branch: String) -> Result<push::Pushed, String> {
-    let pushed = push::push(&repo, &branch)?;
+async fn push_thread(app: AppHandle, repo: String, branch: String, body: Option<String>) -> Result<push::Pushed, String> {
+    let pushed = push::push(&repo, &branch, body.as_deref())?;
     if let Some(url) = pushed.url.as_deref() {
         #[allow(deprecated)]
         let _ = tauri_plugin_shell::ShellExt::shell(&app).open(url, None);
@@ -1289,6 +1307,8 @@ pub fn run() {
             chatgpt_manage_usage,
             openrouter_connect,
             openrouter_models,
+            gemini_models,
+            practice_project,
             pick_project,
             found_projects,
             pick_attachments,

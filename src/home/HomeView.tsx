@@ -350,7 +350,7 @@ export function HomeView({
           </p>
         ) : !hasKey ? (
           <p className="hint">
-            {unconnected === "chatgpt" || unconnected === "openrouter"
+            {unconnected === "chatgpt" || unconnected === "openrouter" || unconnected === "gemini"
               ? `Your stack uses ${PROVIDER_NAMES[unconnected]}'s models.`
               : `Shoji needs your ${PROVIDER_NAMES[unconnected ?? "anthropic"]} API key to run.`}{" "}
             <button type="button" className="link" onClick={onOpenSettings}>
@@ -358,7 +358,9 @@ export function HomeView({
                 ? "Sign in with ChatGPT in Settings"
                 : unconnected === "openrouter"
                   ? "Connect OpenRouter in Settings"
-                  : "Add it in Settings"}
+                  : unconnected === "gemini"
+                    ? "Add a Gemini key in Settings"
+                    : "Add it in Settings"}
             </button>
           </p>
         ) : !repo ? (

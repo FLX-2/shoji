@@ -1,6 +1,7 @@
 import { providerOf, type ModelId, type ProviderId } from "./models";
 import { OllamaProvider, ollamaUrl } from "./ollama";
 import { OpenAIError, OpenAIProvider } from "./openai";
+import { ChatProvider, GEMINI_API } from "./chat";
 
 /** OpenRouter's API, which takes OpenAI's Responses format for every model it routes to. */
 export const OPENROUTER_API = "https://openrouter.ai/api/v1";
@@ -11,6 +12,7 @@ export const KEY_ENV: Readonly<Partial<Record<ProviderId, readonly string[]>>> =
   anthropic: ["SHOJI_API_KEY", "ANTHROPIC_API_KEY"],
   openai: ["SHOJI_OPENAI_KEY", "OPENAI_API_KEY"],
   openrouter: ["SHOJI_OPENROUTER_KEY", "OPENROUTER_API_KEY"],
+  gemini: ["SHOJI_GEMINI_KEY", "GEMINI_API_KEY"],
 };
 
 /** A ChatGPT access token lasts an hour; one this close to its end is renewed before a call. */
@@ -58,6 +60,8 @@ export function connect(env: NodeJS.ProcessEnv, options: Connections = {}): Prov
       headers: { "HTTP-Referer": "https://github.com/FLX-2/shoji", "X-Title": "Shoji" },
       credential: async () => openrouter,
     });
+  const gemini = keyOf(env, "gemini");
+  if (gemini) connected.gemini = new ChatProvider({ service: "Gemini", baseURL: GEMINI_API, key: gemini });
   const plan = env.SHOJI_CHATGPT_TOKEN?.trim();
   if (plan)
     connected.chatgpt = new OpenAIProvider({

@@ -45,7 +45,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     accepted: [] as string[],
     reverted: [] as string[],
     commits: [] as { repo: string; branch: string; message: string; thread: number }[],
-    pushes: [] as { repo: string; branch: string }[],
+    pushes: [] as { repo: string; branch: string; body: string | null }[],
     exports: [] as { name: string; contents: string }[],
     lockWrites: [] as string[],
     pasted: [] as { name: string; bytes: number[] }[],
@@ -98,13 +98,24 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     connectError: null as string | null,
     connects: 0,
   };
+  /** Gemini's key, and the models Google lists for it; tests set these. */
+  let geminiKey: KeyStatus = { saved: false, fromEnv: false };
+  const gemini = {
+    models: [
+      { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash" },
+      { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview" },
+      { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash-Lite" },
+    ],
+  };
 
   const bridge: Bridge = {
-    keyStatus: async (provider) => (provider === "openai" ? openai : provider === "openrouter" ? router : key),
+    keyStatus: async (provider) =>
+      provider === "openai" ? openai : provider === "openrouter" ? router : provider === "gemini" ? geminiKey : key,
     saveKey: async (value, provider) => {
       calls.savedKeys.push(value);
       if (provider === "openai") openai = { ...openai, saved: true };
       else if (provider === "openrouter") router = { ...router, saved: true };
+      else if (provider === "gemini") geminiKey = { ...geminiKey, saved: true };
       else key = { ...key, saved: true };
     },
     useShellKey: async () => {
@@ -116,6 +127,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       calls.forgot++;
       if (provider === "openai") openai = { ...openai, saved: false };
       else if (provider === "openrouter") router = { ...router, saved: false };
+      else if (provider === "gemini") geminiKey = { ...geminiKey, saved: false };
       else key = { ...key, saved: false };
     },
     ollamaModels: async () => {
@@ -141,6 +153,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       router = { ...router, saved: true };
     },
     openrouterModels: async () => [...openrouter.models],
+    geminiModels: async () => [...gemini.models],
+    practiceProject: async () => ["/data/practice", "Make the failing tests in test/basket.test.js pass."],
     chatgptManageUsage: async () => {
       chatgpt.usageOpened++;
     },
@@ -243,8 +257,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       project.accepted = [];
       return "a1b2c3d";
     },
-    pushThread: async (repo, branch) => {
-      calls.pushes.push({ repo, branch });
+    pushThread: async (repo, branch, body) => {
+      calls.pushes.push({ repo, branch, body: body ?? null });
       if (project.pushError) throw project.pushError;
       return { remote: "origin", url: `https://github.com/bob/app/compare/${branch}?expand=1` };
     },
@@ -332,6 +346,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       openai = status;
     },
     openrouter,
+    gemini,
     /** Sends events from the latest run. */
     emit: (...events: RuntimeEvent[]) => act(() => events.forEach((event) => onEvent.forEach((h) => h(runs, event)))),
     /** Sends trial events from the latest run. */

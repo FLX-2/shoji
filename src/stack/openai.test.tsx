@@ -75,7 +75,10 @@ describe("an OpenAI API key", () => {
       "On my ChatGPT plan",
       "OpenAI",
       "On this computer",
+      "Claude checks",
     ]);
+    fireEvent.click(presets.getByRole("radio", { name: "Claude checks" }));
+    expect(screen.getByText("gemma4:31b plans, builds and scouts and Haiku 5.5 reviews.")).toBeTruthy();
     fireEvent.click(presets.getByRole("radio", { name: "OpenAI" }));
     expect(presets.getByRole("radio", { name: "OpenAI" }).getAttribute("aria-checked")).toBe("true");
     expect(screen.getByText("GPT-6.1 Sol plans, GPT-6.1 Terra builds, and GPT-6 Luna scouts and reviews.")).toBeTruthy();

@@ -33,7 +33,9 @@ export const priceLine = (id: ModelId) =>
     ? "Free, on this computer"
     : MODELS[id].billing === "plan"
       ? "Using your ChatGPT plan"
-      : MODELS[id].input === 0 && MODELS[id].output === 0
+      : MODELS[id].billing === "free"
+        ? "On Gemini's free tier"
+        : MODELS[id].input === 0 && MODELS[id].output === 0
         ? "Free on OpenRouter"
         : `${dollars(MODELS[id].input)} in, ${dollars(MODELS[id].output)} out`;
 
