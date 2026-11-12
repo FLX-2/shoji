@@ -44,10 +44,7 @@ pub async fn check_update(app: AppHandle) -> Result<Option<Available>, String> {
     }
     let updater = app.updater().map_err(|e| e.to_string())?;
     match updater.check().await {
-        Ok(update) => Ok(update.map(|u| Available {
-            version: u.version,
-            notes: u.body,
-        })),
+        Ok(update) => Ok(update.map(|u| Available { version: u.version, notes: u.body })),
         // No release yet, or one without updates for this system, reads the same as no update.
         Err(e) => {
             eprintln!("update check: {e}");
@@ -67,10 +64,7 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
     let update = updater
         .check()
         .await
-        .map_err(|_| {
-            "Shoji couldn't reach GitHub to update. Check your internet connection, then try again."
-                .to_string()
-        })?
+        .map_err(|_| "Shoji couldn't reach GitHub to update. Check your internet connection, then try again.".to_string())?
         .ok_or_else(|| "There's no newer Shoji to install.".to_string())?;
     update
         .download_and_install(|_, _| {}, || {})
@@ -84,16 +78,11 @@ mod tests {
     /// The updater plugin reads its settings when Shoji starts, and settings it can't read stop Shoji opening.
     #[test]
     fn the_updater_settings_can_be_read() {
-        let conf: serde_json::Value =
-            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let conf: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
         let updater = conf["plugins"]["updater"].clone();
         let config: tauri_plugin_updater::Config = serde_json::from_value(updater).unwrap();
         assert_eq!(
-            config
-                .endpoints
-                .iter()
-                .map(|u| u.as_str())
-                .collect::<Vec<_>>(),
+            config.endpoints.iter().map(|u| u.as_str()).collect::<Vec<_>>(),
             ["https://github.com/FLX-2/shoji/releases/latest/download/latest.json"]
         );
     }

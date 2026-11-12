@@ -9,8 +9,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 /// Each entry moves the schema up one version, in order. Never edit one that has shipped.
-const MIGRATIONS: &[&str] = &[
-    "
+const MIGRATIONS: &[&str] = &["
     CREATE TABLE threads (
         id INTEGER PRIMARY KEY,
         task TEXT NOT NULL,
@@ -46,20 +45,16 @@ const MIGRATIONS: &[&str] = &[
     );
     CREATE INDEX runs_by_thread ON runs(thread_id);
     CREATE INDEX calls_by_run ON calls(run_id);
-",
-    "
+", "
     ALTER TABLE runs ADD COLUMN ask TEXT;
-",
-    "
+", "
     ALTER TABLE threads ADD COLUMN workdir TEXT;
-",
-    "
+", "
     ALTER TABLE threads ADD COLUMN title TEXT;
     ALTER TABLE threads ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE threads ADD COLUMN archived_at INTEGER;
     ALTER TABLE threads ADD COLUMN discarded_at INTEGER;
-",
-];
+"];
 
 pub struct Ledger(Mutex<Connection>);
 
@@ -98,17 +93,8 @@ pub struct Place {
 
 /// The title Scout gave a task on its brief's TITLE: line, if it gave one.
 pub fn title_in(brief: &str) -> Option<String> {
-    let line = brief
-        .lines()
-        .find_map(|l| l.trim().strip_prefix("TITLE:"))?;
-    let title: String = line
-        .trim()
-        .trim_matches(|c| c == '"' || c == '\'' || c == '*')
-        .trim_end_matches('.')
-        .trim()
-        .chars()
-        .take(80)
-        .collect();
+    let line = brief.lines().find_map(|l| l.trim().strip_prefix("TITLE:"))?;
+    let title: String = line.trim().trim_matches(|c| c == '"' || c == '\'' || c == '*').trim_end_matches('.').trim().chars().take(80).collect();
     (!title.is_empty()).then_some(title)
 }
 
@@ -149,10 +135,11 @@ impl Ledger {
     /// without an ending, by a crash or a forced quit, is marked interrupted, for the person to pick up.
     pub fn open(path: &Path) -> Result<Self> {
         let ledger = Self::with(Connection::open(path)?)?;
-        ledger.0.lock().unwrap().execute(
-            "UPDATE runs SET status = 'interrupted' WHERE status IS NULL",
-            [],
-        )?;
+        ledger
+            .0
+            .lock()
+            .unwrap()
+            .execute("UPDATE runs SET status = 'interrupted' WHERE status IS NULL", [])?;
         Ok(ledger)
     }
 
@@ -200,10 +187,10 @@ impl Ledger {
 
     /// Keeps where the thread's own copy of the project is.
     pub fn note_workdir(&self, thread: i64, workdir: &str) -> Result<()> {
-        self.0.lock().unwrap().execute(
-            "UPDATE threads SET workdir = ?2 WHERE id = ?1",
-            params![thread, workdir],
-        )?;
+        self.0
+            .lock()
+            .unwrap()
+            .execute("UPDATE threads SET workdir = ?2 WHERE id = ?1", params![thread, workdir])?;
         Ok(())
     }
 
@@ -213,11 +200,7 @@ impl Ledger {
         self.0
             .lock()
             .unwrap()
-            .query_row(
-                "SELECT workdir FROM threads WHERE id = ?1",
-                [thread],
-                |row| row.get(0),
-            )
+            .query_row("SELECT workdir FROM threads WHERE id = ?1", [thread], |row| row.get(0))
             .optional()
             .map(Option::flatten)
     }
@@ -236,9 +219,7 @@ impl Ledger {
         self.0
             .lock()
             .unwrap()
-            .query_row("SELECT log FROM runs WHERE id = ?1", [run], |row| {
-                row.get(0)
-            })
+            .query_row("SELECT log FROM runs WHERE id = ?1", [run], |row| row.get(0))
             .optional()
     }
 
@@ -401,27 +382,27 @@ impl Ledger {
 
     /// Names a thread, or with None lets Scout's title or the task name it again.
     pub fn set_title(&self, thread: i64, title: Option<&str>) -> Result<()> {
-        self.0.lock().unwrap().execute(
-            "UPDATE threads SET title = ?2 WHERE id = ?1",
-            params![thread, title],
-        )?;
+        self.0
+            .lock()
+            .unwrap()
+            .execute("UPDATE threads SET title = ?2 WHERE id = ?1", params![thread, title])?;
         Ok(())
     }
 
     pub fn set_pinned(&self, thread: i64, pinned: bool) -> Result<()> {
-        self.0.lock().unwrap().execute(
-            "UPDATE threads SET pinned = ?2 WHERE id = ?1",
-            params![thread, pinned as i64],
-        )?;
+        self.0
+            .lock()
+            .unwrap()
+            .execute("UPDATE threads SET pinned = ?2 WHERE id = ?1", params![thread, pinned as i64])?;
         Ok(())
     }
 
     /// Puts a thread away at `at`, or with None brings it back.
     pub fn set_archived(&self, thread: i64, at: Option<i64>) -> Result<()> {
-        self.0.lock().unwrap().execute(
-            "UPDATE threads SET archived_at = ?2 WHERE id = ?1",
-            params![thread, at],
-        )?;
+        self.0
+            .lock()
+            .unwrap()
+            .execute("UPDATE threads SET archived_at = ?2 WHERE id = ?1", params![thread, at])?;
         Ok(())
     }
 
@@ -442,12 +423,7 @@ impl Ledger {
                 "SELECT repo, branch, workdir, committed FROM threads WHERE id = ?1",
                 [thread],
                 |row| {
-                    Ok(Place {
-                        repo: row.get(0)?,
-                        branch: row.get(1)?,
-                        workdir: row.get(2)?,
-                        committed: row.get(3)?,
-                    })
+                    Ok(Place { repo: row.get(0)?, branch: row.get(1)?, workdir: row.get(2)?, committed: row.get(3)? })
                 },
             )
             .optional()
@@ -523,18 +499,10 @@ mod tests {
         ledger.note_ask(changes, "Make it blue").unwrap();
         ledger.commit(thread, "abc1234", 3000).unwrap();
         assert_eq!(ledger.workdir_of(thread).unwrap(), None);
-        ledger
-            .note_workdir(thread, "/data/worktrees/app/add-a-toggle")
-            .unwrap();
-        assert_eq!(
-            ledger.workdir_of(thread).unwrap().as_deref(),
-            Some("/data/worktrees/app/add-a-toggle")
-        );
+        ledger.note_workdir(thread, "/data/worktrees/app/add-a-toggle").unwrap();
+        assert_eq!(ledger.workdir_of(thread).unwrap().as_deref(), Some("/data/worktrees/app/add-a-toggle"));
         assert_eq!(ledger.workdir_of(99).unwrap(), None);
-        assert_eq!(
-            ledger.log_of(changes).unwrap().as_deref(),
-            Some("/logs/2.jsonl")
-        );
+        assert_eq!(ledger.log_of(changes).unwrap().as_deref(), Some("/logs/2.jsonl"));
         assert_eq!(ledger.log_of(99).unwrap(), None);
 
         let threads = ledger.threads().unwrap();
@@ -544,17 +512,11 @@ mod tests {
             (t.task.as_str(), t.committed.as_deref(), t.committed_at),
             ("Add a toggle", Some("abc1234"), Some(3000))
         );
-        assert_eq!(
-            t.workdir.as_deref(),
-            Some("/data/worktrees/app/add-a-toggle")
-        );
+        assert_eq!(t.workdir.as_deref(), Some("/data/worktrees/app/add-a-toggle"));
         assert_eq!(t.runs.len(), 2);
         assert_eq!(t.runs[0].status.as_deref(), Some("ready"));
         assert_eq!(t.runs[1].status.as_deref(), Some("stopped"));
-        assert_eq!(
-            (t.runs[0].ask.as_deref(), t.runs[1].ask.as_deref()),
-            (None, Some("Make it blue"))
-        );
+        assert_eq!((t.runs[0].ask.as_deref(), t.runs[1].ask.as_deref()), (None, Some("Make it blue")));
         let calls = &t.runs[0].calls;
         assert_eq!(calls.len(), 2);
         assert_eq!(
@@ -567,39 +529,15 @@ mod tests {
     #[test]
     fn titles_pins_archives_and_discards_a_thread() {
         let ledger = Ledger::in_memory().unwrap();
-        let thread = ledger
-            .start_thread(
-                "When a run fails, show why",
-                "/r",
-                "shoji/when-a-run",
-                "{}",
-                1,
-            )
-            .unwrap();
-        let run = ledger
-            .start_run(thread, "task", "/logs/1.jsonl", 2)
-            .unwrap();
+        let thread = ledger.start_thread("When a run fails, show why", "/r", "shoji/when-a-run", "{}", 1).unwrap();
+        let run = ledger.start_run(thread, "task", "/logs/1.jsonl", 2).unwrap();
         let brief = |output: &str| json!({ "type": "step", "step": "scout", "role": "scout", "status": "done", "output": output });
-        ledger
-            .record(
-                run,
-                &brief("TITLE: \"Explain failed runs.\"\nThe runner is in run.ts.\nFILES: run.ts"),
-                3,
-            )
-            .unwrap();
-        assert_eq!(
-            ledger.threads().unwrap()[0].title.as_deref(),
-            Some("Explain failed runs")
-        );
+        ledger.record(run, &brief("TITLE: \"Explain failed runs.\"\nThe runner is in run.ts.\nFILES: run.ts"), 3).unwrap();
+        assert_eq!(ledger.threads().unwrap()[0].title.as_deref(), Some("Explain failed runs"));
         // Scout's title never replaces the person's own.
         ledger.set_title(thread, Some("Failed runs")).unwrap();
-        ledger
-            .record(run, &brief("TITLE: Something else"), 4)
-            .unwrap();
-        assert_eq!(
-            ledger.threads().unwrap()[0].title.as_deref(),
-            Some("Failed runs")
-        );
+        ledger.record(run, &brief("TITLE: Something else"), 4).unwrap();
+        assert_eq!(ledger.threads().unwrap()[0].title.as_deref(), Some("Failed runs"));
         ledger.set_pinned(thread, true).unwrap();
         ledger.set_archived(thread, Some(5)).unwrap();
         let t = &ledger.threads().unwrap()[0];
@@ -608,15 +546,9 @@ mod tests {
         ledger.set_archived(thread, None).unwrap();
         ledger.discard(thread, 6).unwrap();
         let t = &ledger.threads().unwrap()[0];
-        assert_eq!(
-            (t.pinned, t.archived_at, t.discarded_at),
-            (false, Some(6), Some(6))
-        );
+        assert_eq!((t.pinned, t.archived_at, t.discarded_at), (false, Some(6), Some(6)));
         let place = ledger.place_of(thread).unwrap().unwrap();
-        assert_eq!(
-            (place.repo.as_str(), place.branch.as_str()),
-            ("/r", "shoji/when-a-run")
-        );
+        assert_eq!((place.repo.as_str(), place.branch.as_str()), ("/r", "shoji/when-a-run"));
         assert!(ledger.place_of(99).unwrap().is_none());
         assert_eq!(title_in("No title here"), None);
     }
@@ -627,23 +559,16 @@ mod tests {
         let thread = ledger
             .start_thread("Review on Sonnet 5.5", "/r", "", "{}", 1)
             .unwrap();
-        let run = ledger
-            .start_run(thread, "trial", "/logs/2.jsonl", 2)
-            .unwrap();
+        let run = ledger.start_run(thread, "trial", "/logs/2.jsonl", 2).unwrap();
         let wrapped = |event: Value| json!({ "type": "runtime", "index": 0, "event": event });
         ledger
             .record(run, &wrapped(call("review", "claude-sonnet-5-5", 0.01)), 3)
             .unwrap();
         ledger
-            .record(
-                run,
-                &wrapped(json!({ "type": "result", "result": { "status": "ready" } })),
-                4,
-            )
+            .record(run, &wrapped(json!({ "type": "result", "result": { "status": "ready" } })), 4)
             .unwrap();
         assert_eq!(ledger.threads().unwrap()[0].runs[0].status, None);
-        let briefing =
-            json!({ "type": "briefing", "briefing": { "outcomes": [{ "status": "stopped" }] } });
+        let briefing = json!({ "type": "briefing", "briefing": { "outcomes": [{ "status": "stopped" }] } });
         ledger.record(run, &briefing, 5).unwrap();
 
         let runs = &ledger.threads().unwrap()[0].runs;
@@ -655,21 +580,13 @@ mod tests {
     #[test]
     fn keeps_how_project_notes_ended() {
         let ledger = Ledger::in_memory().unwrap();
-        let thread = ledger
-            .start_thread("Project notes", "/r", "", "{}", 1)
-            .unwrap();
-        let run = ledger
-            .start_run(thread, "notes", "/logs/3.jsonl", 2)
-            .unwrap();
+        let thread = ledger.start_thread("Project notes", "/r", "", "{}", 1).unwrap();
+        let run = ledger.start_run(thread, "notes", "/logs/3.jsonl", 2).unwrap();
         ledger
             .record(run, &call("scout", "claude-haiku-5-5", 0.002), 3)
             .unwrap();
         ledger
-            .record(
-                run,
-                &json!({ "type": "notes", "result": { "status": "ready" } }),
-                4,
-            )
+            .record(run, &json!({ "type": "notes", "result": { "status": "ready" } }), 4)
             .unwrap();
 
         let runs = &ledger.threads().unwrap()[0].runs;
@@ -706,9 +623,7 @@ mod tests {
             let thread = ledger
                 .start_thread("Kept", "/r", "shoji/kept", "balanced", 1)
                 .unwrap();
-            ledger
-                .start_run(thread, "task", "/logs/1.jsonl", 2)
-                .unwrap();
+            ledger.start_run(thread, "task", "/logs/1.jsonl", 2).unwrap();
         }
         let ledger = Ledger::open(&path).unwrap();
         let threads = ledger.threads().unwrap();

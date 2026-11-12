@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read};
 use std::net::TcpListener;
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
@@ -34,11 +34,7 @@ struct Exit {
 /// A port nothing on this computer is using now, given to the server as PORT. Servers that read
 /// PORT then don't collide when several copies run at once; others, such as Vite, find their own.
 fn free_port() -> Option<u16> {
-    TcpListener::bind("127.0.0.1:0")
-        .ok()?
-        .local_addr()
-        .ok()
-        .map(|a| a.port())
+    TcpListener::bind("127.0.0.1:0").ok()?.local_addr().ok().map(|a| a.port())
 }
 
 /// The person's command, run by their shell in `dir`, in a process group of its own so stopping
@@ -56,10 +52,7 @@ fn shell(dir: &str, command: &str) -> Command {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let mut shell = Command::new("cmd");
-        shell
-            .arg("/C")
-            .raw_arg(command)
-            .creation_flags(CREATE_NO_WINDOW);
+        shell.arg("/C").raw_arg(command).creation_flags(CREATE_NO_WINDOW);
         shell
     };
     shell
@@ -113,9 +106,7 @@ impl Servers {
         if live.values().any(|(_, d)| d == dir) {
             return Err("A dev server is already running for this thread.".into());
         }
-        let mut child = shell(dir, command)
-            .spawn()
-            .map_err(|e| format!("Couldn't start {command}: {e}"))?;
+        let mut child = shell(dir, command).spawn().map_err(|e| format!("Couldn't start {command}: {e}"))?;
         let id = self.count.fetch_add(1, Ordering::Relaxed) + 1;
         live.insert(id, (child.id(), dir.to_string()));
         drop(live);
@@ -158,29 +149,13 @@ mod tests {
     #[test]
     fn runs_the_command_in_its_folder_with_a_free_port() {
         let dir = std::env::temp_dir();
-        let out = shell(
-            &dir.display().to_string(),
-            "pwd; echo \"port=$PORT\"; echo oops >&2",
-        )
-        .output()
-        .unwrap();
+        let out = shell(&dir.display().to_string(), "pwd; echo \"port=$PORT\"; echo oops >&2")
+            .output()
+            .unwrap();
         let printed = String::from_utf8_lossy(&out.stdout);
         let here = dir.canonicalize().unwrap();
-        assert!(
-            printed
-                .lines()
-                .next()
-                .map(|l| std::path::Path::new(l).canonicalize().unwrap())
-                == Some(here)
-        );
-        let port: u16 = printed
-            .lines()
-            .nth(1)
-            .unwrap()
-            .strip_prefix("port=")
-            .unwrap()
-            .parse()
-            .unwrap();
+        assert!(printed.lines().next().map(|l| std::path::Path::new(l).canonicalize().unwrap()) == Some(here));
+        let port: u16 = printed.lines().nth(1).unwrap().strip_prefix("port=").unwrap().parse().unwrap();
         assert!(port > 0);
         assert_eq!(String::from_utf8_lossy(&out.stderr).trim(), "oops");
     }
@@ -195,13 +170,7 @@ mod tests {
         child.wait().unwrap();
         assert!(started.elapsed().as_secs() < 10);
         // Nothing is left in the group, once the background sleep has had a moment to go.
-        let left = || {
-            Command::new("pgrep")
-                .args(["-g", &child.id().to_string()])
-                .output()
-                .unwrap()
-                .stdout
-        };
+        let left = || Command::new("pgrep").args(["-g", &child.id().to_string()]).output().unwrap().stdout;
         let waited = std::time::Instant::now();
         while !left().is_empty() && waited.elapsed().as_secs() < 3 {
             std::thread::sleep(std::time::Duration::from_millis(50));

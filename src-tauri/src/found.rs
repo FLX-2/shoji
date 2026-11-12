@@ -31,35 +31,23 @@ pub fn found_in(home: &Path, codex_home: Option<PathBuf>) -> Vec<FoundProject> {
     let mut found: Vec<FoundProject> = Vec::new();
     for log in claude_logs(&home.join(".claude").join("projects")) {
         if let Some(path) = folder_of(&log.0) {
-            found.push(FoundProject {
-                path,
-                from: "Claude Code",
-                at: log.1,
-            });
+            found.push(FoundProject { path, from: "Claude Code", at: log.1 });
         }
     }
-    let codex = codex_home
-        .unwrap_or_else(|| home.join(".codex"))
-        .join("sessions");
+    let codex = codex_home.unwrap_or_else(|| home.join(".codex")).join("sessions");
     let mut logs = Vec::new();
     jsonl_under(&codex, 4, &mut logs);
     logs.sort_by_key(|l| Reverse(l.1));
     for log in logs.into_iter().take(CODEX_LOGS) {
         if let Some(path) = folder_of(&log.0) {
-            found.push(FoundProject {
-                path,
-                from: "Codex",
-                at: log.1,
-            });
+            found.push(FoundProject { path, from: "Codex", at: log.1 });
         }
     }
 
     found.sort_by_key(|f| Reverse(f.at));
     let mut kept: Vec<FoundProject> = Vec::new();
     for project in found {
-        if kept.iter().any(|k| k.path == project.path)
-            || !Path::new(&project.path).join(".git").exists()
-        {
+        if kept.iter().any(|k| k.path == project.path) || !Path::new(&project.path).join(".git").exists() {
             continue;
         }
         kept.push(project);
@@ -72,9 +60,7 @@ pub fn found_in(home: &Path, codex_home: Option<PathBuf>) -> Vec<FoundProject> {
 
 /// The latest log in each of Claude Code's project folders.
 fn claude_logs(dir: &Path) -> Vec<(PathBuf, u64)> {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return vec![];
-    };
+    let Ok(entries) = fs::read_dir(dir) else { return vec![] };
     entries
         .flatten()
         .filter(|e| e.path().is_dir())
@@ -88,9 +74,7 @@ fn claude_logs(dir: &Path) -> Vec<(PathBuf, u64)> {
 
 /// Every .jsonl file in `dir`, and in its folders down to `depth` more levels, with when each last changed.
 fn jsonl_under(dir: &Path, depth: usize, out: &mut Vec<(PathBuf, u64)>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
+    let Ok(entries) = fs::read_dir(dir) else { return };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
@@ -112,17 +96,11 @@ fn jsonl_under(dir: &Path, depth: usize, out: &mut Vec<(PathBuf, u64)>) {
 /// The folder a session ran in: the first `cwd` in the log's opening lines, at the top or in its `payload`.
 fn folder_of(log: &Path) -> Option<String> {
     let file = fs::File::open(log).ok()?;
-    BufReader::new(file)
-        .lines()
-        .take(LINES)
-        .map_while(Result::ok)
-        .find_map(|line| {
-            let value: serde_json::Value = serde_json::from_str(&line).ok()?;
-            let cwd = value
-                .get("cwd")
-                .or_else(|| value.get("payload").and_then(|p| p.get("cwd")))?;
-            cwd.as_str().filter(|s| !s.is_empty()).map(str::to_string)
-        })
+    BufReader::new(file).lines().take(LINES).map_while(Result::ok).find_map(|line| {
+        let value: serde_json::Value = serde_json::from_str(&line).ok()?;
+        let cwd = value.get("cwd").or_else(|| value.get("payload").and_then(|p| p.get("cwd")))?;
+        cwd.as_str().filter(|s| !s.is_empty()).map(str::to_string)
+    })
 }
 
 #[cfg(test)]
@@ -147,36 +125,16 @@ mod tests {
         let plain = home.join("code").join("plain");
         fs::create_dir_all(&plain).unwrap();
         let line = |cwd: &str| serde_json::json!({ "type": "user", "cwd": cwd }).to_string();
-        let meta = |cwd: &str| {
-            serde_json::json!({ "type": "session_meta", "payload": { "cwd": cwd } }).to_string()
-        };
+        let meta = |cwd: &str| serde_json::json!({ "type": "session_meta", "payload": { "cwd": cwd } }).to_string();
 
-        write(
-            &home.join(".claude/projects/-code-axon/a.jsonl"),
-            &format!("{{\"type\":\"summary\"}}\n{}\n", line(&axon)),
-        );
-        write(
-            &home.join(".claude/projects/-code-plain/p.jsonl"),
-            &line(&plain.display().to_string()),
-        );
-        write(
-            &home.join(".claude/projects/-code-gone/g.jsonl"),
-            &line("/no/such/folder"),
-        );
-        write(
-            &home.join(".claude/projects/-code-both/b.jsonl"),
-            &line(&both),
-        );
+        write(&home.join(".claude/projects/-code-axon/a.jsonl"), &format!("{{\"type\":\"summary\"}}\n{}\n", line(&axon)));
+        write(&home.join(".claude/projects/-code-plain/p.jsonl"), &line(&plain.display().to_string()));
+        write(&home.join(".claude/projects/-code-gone/g.jsonl"), &line("/no/such/folder"));
+        write(&home.join(".claude/projects/-code-both/b.jsonl"), &line(&both));
         std::thread::sleep(std::time::Duration::from_millis(20));
-        write(
-            &home.join(".codex/sessions/2026/11/09/rollout-1.jsonl"),
-            &meta(&site),
-        );
+        write(&home.join(".codex/sessions/2026/11/09/rollout-1.jsonl"), &meta(&site));
         std::thread::sleep(std::time::Duration::from_millis(20));
-        write(
-            &home.join(".codex/sessions/2026/11/10/rollout-2.jsonl"),
-            &meta(&both),
-        );
+        write(&home.join(".codex/sessions/2026/11/10/rollout-2.jsonl"), &meta(&both));
 
         let found = found_in(&home, None);
         let paths: Vec<_> = found.iter().map(|f| (f.path.as_str(), f.from)).collect();
