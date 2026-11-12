@@ -1222,6 +1222,27 @@
   margin-inline: auto;
 }
 
+/* In a short window a finished thread's composer rests as one line, so the work above it keeps the room: at the
+   smallest window with the side panel open, the full composer and the review bar left the work a third of the
+   height. Writing in it opens it, with what to send and the quality back under the text. */
+@media (max-height: 720px) {
+  .composer.resting {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding-block: 8px;
+  }
+
+  .composer.resting textarea {
+    height: 1.55em;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .composer.resting .row > :not(.send, .sends) {
+    display: none;
+  }
+}
+
 /* What routing did, over the review bar: the model behind each role, and what it saved. */
 .routed {
   margin-block: 10px -6px;
