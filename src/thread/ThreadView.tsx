@@ -1201,7 +1201,10 @@ function Item(props: { icon: string; summary: string; open?: boolean; children: 
 }
 
 function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean }) {
-  if (live || run.result?.status === "answered") return null;
+  if (live) return null;
+  if (turn.cleared)
+    return <p className="outcome">This run's steps were cleared with old data. Receipts still have what it cost.</p>;
+  if (run.result?.status === "answered") return null;
   const result = run.result;
   let text: string;
   if (turn.error) text = turn.error;

@@ -2,6 +2,7 @@ mod found;
 mod chatgpt;
 mod keys;
 mod ledger;
+mod old;
 mod ollama;
 mod gemini;
 mod openrouter;
@@ -1139,6 +1140,56 @@ fn shot_bytes(runs: &Path, file: &Path) -> Result<Vec<u8>, String> {
     fs::read(&file).map_err(|e| e.to_string())
 }
 
+/// What Clear old data would remove now: what committed or discarded threads put away over 30 days ago, and
+/// trials and project notes that old, left in the runs folder, pasted images that old, and the copies of
+/// committed threads. A thread with a run going is left alone.
+fn old_data(app: &AppHandle, ledger: &Ledger, run: &Run) -> Result<old::Old, String> {
+    let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    // A thread that is starting is busy too: its copy is being made ready for the run.
+    let mut busy: Vec<i64> = run.live.lock().unwrap().values().map(|l| l.thread).collect();
+    busy.extend(run.starting.lock().unwrap().iter());
+    let before = now_ms() - old::OLD_MS;
+    let free = |thread: &i64| !busy.contains(thread);
+    let logs: Vec<String> = ledger
+        .old_logs(before)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .filter(|(thread, _)| free(thread))
+        .map(|(_, log)| log)
+        .collect();
+    let copies: Vec<(String, String)> = ledger
+        .committed_copies()
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .filter(|(thread, _, _)| free(thread))
+        .map(|(_, repo, dir)| (repo, dir))
+        .collect();
+    Ok(old::find(&data, &logs, &copies, before))
+}
+
+/// How many bytes Clear old data would free, for Settings to say before the person clears.
+#[tauri::command]
+async fn old_data_size(app: AppHandle, ledger: State<'_, Ledger>, run: State<'_, Run>) -> Result<u64, String> {
+    Ok(old::bytes(&old_data(&app, &ledger, &run)?))
+}
+
+/// Clears old data, when the person presses Clear in Settings, and returns the bytes it freed. The ledger is
+/// never touched, so Receipts keep every cost, and neither is a project, a branch or a copy holding work.
+#[tauri::command]
+async fn clear_old_data(
+    app: AppHandle,
+    ledger: State<'_, Ledger>,
+    run: State<'_, Run>,
+    servers: State<'_, Servers>,
+    terminals: State<'_, Terminals>,
+) -> Result<u64, String> {
+    let old = old_data(&app, &ledger, &run)?;
+    Ok(old::clear(old, |dir| {
+        servers.stop_in(dir);
+        terminals.close_in(dir);
+    }))
+}
+
 /// Every thread in the ledger with its runs and calls, newest first, for Receipts.
 #[tauri::command]
 async fn ledger_threads(ledger: State<'_, Ledger>) -> Result<Vec<ThreadRecord>, String> {
@@ -1362,6 +1413,8 @@ pub fn run() {
             show_waiting,
             set_zoom,
             ledger_threads,
+            old_data_size,
+            clear_old_data,
             run_events,
             read_shot,
             export_csv,

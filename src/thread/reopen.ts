@@ -1,4 +1,4 @@
-import type { RuntimeEvent, ThreadResult } from "../../runtime/src/events";
+import type { CallRecord, RuntimeEvent, ThreadResult } from "../../runtime/src/events";
 import { parseStack, type Stack, STACKS, type StackName } from "../../runtime/src/stack";
 import type { Bridge, LedgerThread } from "../bridge";
 import { isNotes, isTrial } from "../receipts/receipts";
@@ -44,6 +44,32 @@ export function cutOff(events: RuntimeEvent[]): RuntimeEvent[] {
   return [...events, { type: "result", result }];
 }
 
+const ENDINGS: ThreadResult["status"][] = ["ready", "needs-work", "stopped", "failed", "planned", "answered"];
+/** How a run ends only by its result, which it writes to its log. */
+const WITH_RESULT = ["ready", "needs-work", "planned", "answered"];
+
+/**
+ * A past run whose log is gone, cleared with old data, read back from what the ledger keeps: each call with its
+ * cost, and how the run ended. Its steps, plan and review went with the log.
+ */
+function fromLedger(run: LedgerThread["runs"][number]): RuntimeEvent[] {
+  const costByRole = { scout: 0, plan: 0, build: 0, review: 0 };
+  for (const call of run.calls) costByRole[call.role] += call.cost;
+  const result: ThreadResult = {
+    status: ENDINGS.find((status) => status === run.status) ?? "failed",
+    plan: "",
+    diff: "",
+    review: "",
+    checks: [],
+    escalated: false,
+    cost: run.calls.reduce((sum, call) => sum + call.cost, 0),
+    costByRole,
+  };
+  // A ledger can hold a model this version no longer lists, which is shown by its id.
+  const calls = run.calls.map(({ at: _, ...call }): RuntimeEvent => ({ type: "call", call: call as CallRecord }));
+  return [...calls, { type: "result", result }];
+}
+
 function stackOf(saved: string): Stack {
   if (saved in STACKS) return STACKS[saved as StackName];
   try {
@@ -62,7 +88,10 @@ export async function reopen(bridge: Bridge, record: LedgerThread, cap: number):
   const turns = await Promise.all(
     runs.map(async (run): Promise<Turn> => {
       const logged = await bridge.runEvents(run.id);
-      const events = run.status === "interrupted" ? cutOff(logged) : logged;
+      // A run that made calls, or ended with a result, wrote a log. With the log gone, the ledger still says what
+      // it cost and how it ended. One that failed or was stopped before its first call never had steps to show.
+      const cleared = logged.length === 0 && (run.calls.length > 0 || WITH_RESULT.includes(run.status ?? ""));
+      const events = cleared ? fromLedger(run) : run.status === "interrupted" ? cutOff(logged) : logged;
       // A run the person stopped ended without a result; one stopped at its limit says so in its result.
       const stoppedByYou = run.status === "stopped" && !events.some((e) => e.type === "result");
       return {
@@ -76,6 +105,7 @@ export async function reopen(bridge: Bridge, record: LedgerThread, cap: number):
           error: run.status === "interrupted" && !events.some((e) => e.type === "result") ? CUT_OFF : "",
         },
         ...(stoppedByYou && { stoppedByYou }),
+        ...(cleared && { cleared }),
       };
     }),
   );

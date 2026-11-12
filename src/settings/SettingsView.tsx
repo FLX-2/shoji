@@ -6,7 +6,7 @@ import type { OpenRouter } from "../stack/openrouter";
 import { GeminiRow } from "./GeminiRow";
 import type { Gemini } from "../stack/gemini";
 import { OllamaRow } from "./OllamaRow";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { type McpServer, parseMcpServers } from "../../runtime/src/mcpConfig";
 import { DEFAULT_PRIVATE } from "../../runtime/src/private";
 import type { Stack } from "../../runtime/src/stack";
@@ -27,6 +27,7 @@ import { describeStack } from "../stack/lock";
 import { fileName } from "../thread/useThread";
 import { MoneyRow } from "./MoneyRow";
 import { keyLabel, SHORTCUTS } from "./shortcuts";
+import { formatBytes } from "./size";
 
 const MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent);
 import type { Prefs } from "./prefs";
@@ -52,6 +53,10 @@ interface SettingsViewProps {
   onRunSetup: () => void;
   /** Copies what a bug report needs, with no keys or code. */
   onCopyDiagnostics: () => void;
+  /** Bytes that clearing old data would free. */
+  onOldDataSize: () => Promise<number>;
+  /** Clears old data, and resolves with the bytes it freed. */
+  onClearOldData: () => Promise<number>;
 }
 
 /** The pages of Settings, in the order the side lists them, under their groups. */
@@ -89,6 +94,8 @@ export function SettingsView({
   onForgetKey,
   onRunSetup,
   onCopyDiagnostics,
+  onOldDataSize,
+  onClearOldData,
 }: SettingsViewProps) {
   const shown = SETTINGS_PAGES.find((p) => p.id === page) ?? SETTINGS_PAGES[0];
   return (
@@ -300,6 +307,7 @@ export function SettingsView({
                         Copy diagnostics
                       </button>
                     </div>
+                    <OldDataRow onSize={onOldDataSize} onClear={onClearOldData} />
                   </>
                 )}
               </div>
@@ -307,6 +315,77 @@ export function SettingsView({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * What finished work left on this computer, with how much room clearing it would free. Clearing can't be undone,
+ * so the button asks once before it does.
+ */
+function OldDataRow({ onSize, onClear }: { onSize: () => Promise<number>; onClear: () => Promise<number> }) {
+  // Null until it has been measured, which reads the project copies and can take a moment.
+  const [bytes, setBytes] = useState<number | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [freed, setFreed] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let shown = true;
+    onSize().then(
+      (found) => shown && setBytes(found),
+      () => {},
+    );
+    return () => {
+      shown = false;
+    };
+  }, [onSize]);
+
+  const clear = async () => {
+    setConfirming(false);
+    setClearing(true);
+    try {
+      setFreed(await onClear());
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
+    // Measured again, so what couldn't be cleared is still on offer.
+    setBytes(await onSize().catch(() => null));
+    setClearing(false);
+  };
+
+  return (
+    <div className="srow">
+      <div>
+        <b>Old data</b>
+        <span className="d">
+          {error ??
+            "Clears the steps and screenshots of committed or discarded threads you archived over 30 days ago, trials and pasted images that old, and the copies of committed threads' projects. Those threads then open without their steps. Receipts, your projects and their branches stay."}
+        </span>
+      </div>
+      <span className="acts">
+        {clearing ? (
+          <span className="ask">Clearing…</span>
+        ) : confirming && bytes ? (
+          <>
+            <span className="ask">Clear {formatBytes(bytes)} for good?</span>
+            <button type="button" className="btn sm" onClick={clear}>
+              Clear
+            </button>
+            <button type="button" className="btn sm ghost" onClick={() => setConfirming(false)}>
+              Keep
+            </button>
+          </>
+        ) : bytes ? (
+          <button type="button" className="btn sm" onClick={() => setConfirming(true)}>
+            Clear {formatBytes(bytes)}
+          </button>
+        ) : (
+          bytes === 0 && <span className="ask">{freed ? `Cleared ${formatBytes(freed)}` : "Nothing to clear"}</span>
+        )}
+      </span>
     </div>
   );
 }

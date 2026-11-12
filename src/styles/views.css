@@ -2157,8 +2157,15 @@
   margin-top: var(--s-2);
 }
 
+/* A question asked in a row, beside its answers. It is plain words, not the card a limit ask is drawn as. */
 .dh .ask,
 .srow .ask {
+  display: inline;
+  width: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
   font-size: var(--t-sm);
   color: var(--z8);
   margin-right: 4px;

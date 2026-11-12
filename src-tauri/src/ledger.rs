@@ -429,6 +429,33 @@ impl Ledger {
             .optional()
     }
 
+    /// The logs of runs whose steps nothing needs any more, each with its thread: the runs of threads put away
+    /// before `before` whose work is committed or thrown away, and trials and project notes started before it.
+    /// A thread whose work is still uncommitted keeps its steps, since its plan is what changes carry on from.
+    /// A run still going is never among them.
+    pub fn old_logs(&self, before: i64) -> Result<Vec<(i64, String)>> {
+        let conn = self.0.lock().unwrap();
+        let mut found = conn.prepare(
+            "SELECT r.thread_id, r.log FROM runs r JOIN threads t ON t.id = r.thread_id
+             WHERE r.status IS NOT NULL
+               AND ((t.archived_at < ?1 AND (t.committed IS NOT NULL OR t.discarded_at IS NOT NULL))
+                    OR (r.kind IN ('trial', 'notes') AND r.started_at < ?1))
+             ORDER BY r.id",
+        )?;
+        let logs = found.query_map([before], |row| Ok((row.get(0)?, row.get(1)?)))?.collect();
+        logs
+    }
+
+    /// Threads whose work is committed and that worked in a copy of their own, as (thread, project, copy).
+    pub fn committed_copies(&self) -> Result<Vec<(i64, String, String)>> {
+        let conn = self.0.lock().unwrap();
+        let mut found = conn.prepare(
+            "SELECT id, repo, workdir FROM threads WHERE committed IS NOT NULL AND workdir IS NOT NULL ORDER BY id",
+        )?;
+        let copies = found.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?.collect();
+        copies
+    }
+
     /// The thread a run belongs to, for checking a request for changes names a real thread.
     pub fn has_thread(&self, thread: i64) -> Result<bool> {
         self.0
@@ -444,6 +471,58 @@ impl Ledger {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn names_the_old_logs_and_the_committed_copies() {
+        let ledger = Ledger::in_memory().unwrap();
+        let day = 24 * 60 * 60 * 1000;
+        let thread = |task: &str| ledger.start_thread(task, "/work/app", "shoji/x", "balanced", 0).unwrap();
+        let run = |thread: i64, kind: &str, log: &str, at: i64, status: Option<&str>| {
+            let run = ledger.start_run(thread, kind, log, at).unwrap();
+            if let Some(status) = status {
+                ledger.end_run(run, status).unwrap();
+            }
+        };
+        // Put away long ago, put away lately, and still in the list.
+        let (long_away, lately, kept) = (thread("One"), thread("Two"), thread("Three"));
+        ledger.set_archived(long_away, Some(10 * day)).unwrap();
+        ledger.set_archived(lately, Some(50 * day)).unwrap();
+        // Put away long ago with its work thrown away, and with its work still uncommitted in its copy.
+        let (thrown, unfinished) = (thread("Four"), thread("Five"));
+        ledger.discard(thrown, 12 * day).unwrap();
+        ledger.set_archived(unfinished, Some(10 * day)).unwrap();
+        run(thrown, "task", "i.jsonl", 0, Some("failed"));
+        run(unfinished, "task", "j.jsonl", 0, Some("needs-work"));
+        // Committed in the project itself, from before threads had copies.
+        ledger.commit(long_away, "def5678", 9 * day).unwrap();
+        run(long_away, "task", "a.jsonl", 0, Some("ready"));
+        run(long_away, "question", "b.jsonl", day, Some("ready"));
+        run(lately, "task", "c.jsonl", 0, Some("ready"));
+        run(kept, "task", "d.jsonl", 0, Some("ready"));
+        // An old trial and old notes, a new trial, and an old trial that is somehow still going.
+        let (trial, notes, new_trial, going) = (thread("Trial"), thread("Project notes"), thread("Trial"), thread("Trial"));
+        run(trial, "trial", "e.jsonl", 5 * day, Some("ready"));
+        run(notes, "notes", "f.jsonl", 5 * day, Some("failed"));
+        run(new_trial, "trial", "g.jsonl", 45 * day, Some("ready"));
+        run(going, "trial", "h.jsonl", 5 * day, None);
+
+        let old = ledger.old_logs(40 * day).unwrap();
+        assert_eq!(
+            old,
+            [
+                (thrown, "i.jsonl".to_string()),
+                (long_away, "a.jsonl".into()),
+                (long_away, "b.jsonl".into()),
+                (trial, "e.jsonl".into()),
+                (notes, "f.jsonl".into()),
+            ]
+        );
+
+        ledger.note_workdir(kept, "/data/worktrees/app/three").unwrap();
+        ledger.note_workdir(lately, "/data/worktrees/app/two").unwrap();
+        ledger.commit(lately, "abc1234", 50 * day).unwrap();
+        assert_eq!(ledger.committed_copies().unwrap(), [(lately, "/work/app".to_string(), "/data/worktrees/app/two".to_string())]);
+    }
 
     fn call(role: &str, model: &str, cost: f64) -> Value {
         json!({
