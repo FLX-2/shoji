@@ -39,6 +39,8 @@ interface ComposerProps {
   sendLabel?: string;
   /** A task to offer in the empty box, which Tab places. */
   suggestion?: string;
+  /** In a short window, rests as one line until it is written in, so what's above it keeps the room. */
+  rests?: boolean;
 }
 
 /** One line of the list under the text: a file after @, or a command after a leading /. */
@@ -73,8 +75,28 @@ export function Composer({
   sendAlso,
   sendLabel = "Send",
   suggestion,
+  rests,
 }: ComposerProps) {
   const [text, setText] = useState(() => initial || (draft ? draftFor(draft) : ""));
+  const form = useRef<HTMLFormElement>(null);
+  // Opened by the focus, and kept open by anything written. The styles only draw it resting in a short window.
+  const [opened, setOpened] = useState(false);
+  const openedAt = useRef(0);
+  const resting = !!rests && !opened && text === "";
+  useEffect(() => {
+    if (!rests || !opened) return;
+    // It closes when a press or the focus lands outside it, not when the text loses the focus: on macOS a button
+    // pressed inside it takes no focus, and closing under the pointer would move that button away.
+    const outside = (e: Event) => {
+      if (!form.current?.contains(e.target as Node)) setOpened(false);
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("focusin", outside);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("focusin", outside);
+    };
+  }, [rests, opened]);
   useEffect(() => {
     if (draft) keepDraft(draft, text);
   }, [draft, text]);
@@ -148,7 +170,21 @@ export function Composer({
 
   return (
     <form
-      className={hero ? "composer hero" : "composer"}
+      ref={form}
+      className={hero ? "composer hero" : resting ? "composer resting" : "composer"}
+      onFocus={() => {
+        if (!rests || opened) return;
+        openedAt.current = performance.now();
+        setOpened(true);
+      }}
+      // Opening moves the choices under the pointer, where the text was. The second press of a double click
+      // mustn't pick one of them.
+      onClickCapture={(e) => {
+        if (e.detail > 0 && e.target !== box.current && performance.now() - openedAt.current < 500) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
       onSubmit={(e) => {
         e.preventDefault();
         send();

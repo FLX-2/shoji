@@ -632,6 +632,7 @@ export function ThreadView({
             commands={commands}
             {...(thread.id !== undefined && { draft: `thread:${thread.id}` })}
             {...(running && { onStop, stopping: last.stoppedByYou })}
+            rests={!running}
           >
             {!running && !thread.committed && (
               <div className="seg" role="radiogroup" aria-label="What to send">
