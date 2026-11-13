@@ -39,6 +39,10 @@ url = "2"
 jsonwebtoken = "9"
 tokio = { version = "1", features = ["net", "sync", "time", "io-util", "macros"] }
 
+[dev-dependencies]
+# A stand-in app, so a test can start a process the way a run's runtime is started.
+tauri = { version = "2", features = ["test"] }
+
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
