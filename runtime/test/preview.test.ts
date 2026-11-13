@@ -50,7 +50,8 @@ describe.skipIf(!browser)("looking at a page in a headless browser", () => {
     } finally {
       await preview.close();
     }
-  });
+    // A real browser and a real server: on a busy machine the two looks have taken over the usual 20 seconds.
+  }, 90_000);
 });
 
 describe("a dev server that can't start", () => {
