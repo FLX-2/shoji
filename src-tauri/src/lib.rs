@@ -432,6 +432,7 @@ fn start_run(
     request: RunRequest,
 ) -> Result<Started, String> {
     let ask = request.ask.clone();
+    let cap = request.cap;
     let _starting = run.reserve(request.changes.as_ref().map(|c| c.thread))?;
     let keys = run_keys(&app, &request.stack)?;
 
@@ -528,6 +529,7 @@ fn start_run(
         if let Some(ask) = &ask {
             ledger.note_ask(entry, ask)?;
         }
+        ledger.note_cap(entry, cap)?;
         Ok((thread, entry))
     })
     .map_err(|e| e.to_string());

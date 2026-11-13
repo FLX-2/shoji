@@ -57,12 +57,14 @@ interface ThreadViewProps {
   bridge: Bridge;
   thread: Thread;
   onStop: () => void;
-  onRequestChanges: (notes: string) => void;
+  /** Sending returns, or resolves to, false when it was held back, which keeps what was written. */
+  onRequestChanges: (notes: string) => void | boolean | Promise<void | boolean>;
   /** Gives a thread that stopped at its limit more to spend, and carries on. */
   onKeepGoing: () => void;
   /** Gives a thread the review sent back more to spend, and works through the review's notes. */
   onFix: () => void;
-  /** How much more Keep going and Fix it allow, in dollars. */
+  /** How much more Keep going and Fix it allow, in dollars. Sending from a thread that has spent its limit
+   *  allows the same. */
   more: number;
   /** Starts the thread's task over again, as a new thread, when it ended before it had a plan. */
   onRetry: () => void;
@@ -84,11 +86,11 @@ interface ThreadViewProps {
   /** Opens the thread's receipt. */
   onViewReceipt?: () => void;
   /** Plans again from the person's notes on the plan. */
-  onReplan: (notes: string) => void;
+  onReplan: (notes: string) => void | boolean | Promise<void | boolean>;
   /** Does a finished step of the latest work again on another model. */
   onRedo?: (role: Redo, model: ModelId) => void;
   /** Asks about the work; the answer changes nothing. */
-  onQuestion: (question: string) => void;
+  onQuestion: (question: string) => void | boolean | Promise<void | boolean>;
   onCommit: () => Promise<void>;
   /** Pushes the committed branch and opens the page for a pull request. Only the person's button does. */
   onPush: () => Promise<Pushed>;
@@ -327,8 +329,10 @@ export function ThreadView({
   const planned = lastWork.result?.status === "planned";
   // The review sent it back. Fixing can't help a check whose program isn't on this computer.
   const fixable = lastWork.result?.status === "needs-work" && !lastWork.result.checks.some((c) => c.missing);
-  // The work can take changes: it has a plan, isn't committed, and has money left.
-  const canChange = !running && !thread.committed && runs.some((run) => run.result?.plan) && spent < thread.cap;
+  // The limit is spent. The thread isn't closed by that: what's sent next allows `more`, and says so.
+  const spentOut = spent >= thread.cap;
+  // The work can take changes: it has a plan and isn't committed.
+  const canChange = !running && !thread.committed && runs.some((run) => run.result?.plan);
   const outcome = running
     ? undefined
     : lastWork.result
@@ -339,7 +343,7 @@ export function ThreadView({
 
   // Ended before there was a plan, so there's nothing to carry on: the task can only start again.
   const retryable = !running && !thread.committed && !thread.discarded && !hasPlan && !stopped;
-  // Broke off or was stopped after the plan, with money left: the work so far can be picked up.
+  // Broke off or was stopped after the plan: the work so far can be picked up.
   const resumable =
     !running &&
     !thread.committed &&
@@ -348,8 +352,7 @@ export function ThreadView({
     !planned &&
     !stopped &&
     !fixable &&
-    (outcome === "failed" || outcome === "stopped") &&
-    spent < thread.cap;
+    (outcome === "failed" || outcome === "stopped");
 
   const commit = () => {
     setCommitting(true);
@@ -558,7 +561,7 @@ export function ThreadView({
                   )}
                   {resumable && (
                     <button type="button" className="btn solid" onClick={onResume}>
-                      Pick up where it stopped
+                      Pick up where it stopped{spentOut && `, up to ${formatCost(more)} more`}
                     </button>
                   )}
                   {stopped && (
@@ -592,7 +595,7 @@ export function ThreadView({
                       <b>{formatCost(spent)}</b> in all
                     </>
                   ),
-                  !thread.committed && spent >= thread.cap && `the ${formatCost(thread.cap)} limit is spent`,
+                  !thread.committed && spentOut && `the ${formatCost(thread.cap)} limit is spent`,
                 ])}
               </span>
             </div>
@@ -620,7 +623,7 @@ export function ThreadView({
                     ? "What should the plan do differently?"
                     : "Describe the changes you want…"
             }
-            blocked={spent >= thread.cap}
+            {...(spentOut && !running && { sendLabel: `Send, up to ${formatCost(more)} more` })}
             onSend={(notes) =>
               (say === "question" || thread.committed || readsAsQuestion(notes)
                 ? onQuestion
@@ -660,6 +663,7 @@ export function ThreadView({
                 ))}
               </div>
             )}
+            {spentOut && !running && <span className="est">Up to {formatCost(more)} more</span>}
           </Composer>
         )}
       </div>

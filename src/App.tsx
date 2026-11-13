@@ -285,6 +285,21 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     setAsk({ spent: spentToday, reserved, cap, what, go });
     return false;
   };
+  // The thread on show has spent its limit. What's sent to it next raises the limit by the per-thread amount,
+  // as Keep going does, and the day is asked about first. A send held at that ask keeps what was written
+  // until the person answers.
+  const spentOut = !!thread && threadCost(thread) >= thread.cap;
+  const sending =
+    (send: (text: string, extra?: number) => void) =>
+    (text: string): void | Promise<boolean> => {
+      if (!spentOut) return send(text);
+      return new Promise((sent) => {
+        withinDay("Carrying this thread on", prefs.cap, () => {
+          send(text, prefs.cap);
+          sent(true);
+        });
+      });
+    };
 
   const anthropicKey = !!keyStatus && (keyStatus.saved || keyStatus.fromEnv);
   // Each step's provider must be connected: Anthropic by its key, ChatGPT by a sign-in. Ollama not running is said
@@ -999,7 +1014,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     bridge={bridge}
                     thread={thread}
                     onStop={stop}
-                    onRequestChanges={requestChanges}
+                    onRequestChanges={sending(requestChanges)}
                     onKeepGoing={() => withinDay("Keeping this thread going", prefs.cap, () => keepGoing(prefs.cap))}
                     onFix={() => withinDay("Fixing what the review found", prefs.cap, () => fix(prefs.cap))}
                     more={prefs.cap}
@@ -1015,7 +1030,11 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     onEditTask={() =>
                       bringHome(thread.repo, { task: thread.task, attachments: thread.attachments ?? [] })
                     }
-                    onResume={resume}
+                    onResume={() =>
+                      spentOut
+                        ? withinDay("Picking this thread up", prefs.cap, () => resume(prefs.cap))
+                        : resume()
+                    }
                     onContinue={() =>
                       bringHome(thread.repo, {
                         task: "",
@@ -1035,11 +1054,11 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                       onViewReceipt: () => viewReceipt(shownRecord.id),
                     })}
                     onTier={(t) => thread.id !== undefined && patch(thread.id, { stack: tierStack(stack.stack, t) })}
-                    onReplan={replan}
+                    onReplan={sending(replan)}
                     onRedo={(role, model) =>
                       withinDay("Doing this step again", prefs.cap, () => redo(role, model, prefs.cap))
                     }
-                    onQuestion={question}
+                    onQuestion={sending(question)}
                     onCommit={commit}
                     onPush={() =>
                       bridge.pushThread(
