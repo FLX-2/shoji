@@ -76,6 +76,30 @@ describe("quality tiers", () => {
     }
   });
 
+  it("keeps a draft on OpenRouter with the same maker, and stays put when that maker has nothing cheaper", () => {
+    const model = (label: string, output: number) => ({ label, input: output / 5, output, cacheRead: 0 });
+    applyFound("openrouter", {
+      "openrouter/anthropic/claude-sonnet-5.5": model("Claude Sonnet 5.5", 10),
+      "openrouter/anthropic/claude-haiku-5.5": model("Claude Haiku 5.5", 0.5),
+      // Cheaper than Sonnet and dearer than Haiku, from other makers: price alone would have picked these.
+      "openrouter/mistralai/mistral-large": model("Mistral Large", 6),
+      "openrouter/deepseek/deepseek-chat": model("DeepSeek Chat", 1.1),
+    });
+    try {
+      const stack = {
+        ...STACKS.balanced,
+        build: { model: "openrouter/anthropic/claude-sonnet-5.5", effort: "medium" as const },
+        review: { model: "openrouter/deepseek/deepseek-chat", effort: "low" as const },
+      };
+      const draft = tierStack(stack, "draft");
+      expect(draft.build.model).toBe("openrouter/anthropic/claude-haiku-5.5");
+      // DeepSeek has nothing cheaper here, so Review stays on it and doesn't cross to Haiku.
+      expect(draft.review.model).toBe("openrouter/deepseek/deepseek-chat");
+    } finally {
+      applyFound("openrouter", {});
+    }
+  });
+
   it("estimates from the middle of recent tasks, priced on the tier's models, once there are enough", () => {
     const history = [task(1, 10_000), task(2, 20_000)];
     expect(estimateCost(history, STACKS.balanced)).toBeNull();
