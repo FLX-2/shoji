@@ -358,6 +358,11 @@ export const bridge = {
   },
   /** Every thread in the ledger with its runs and calls, newest first. */
   ledgerThreads: () => invoke<LedgerThread[]>("ledger_threads"),
+  /** Bytes that clearing old data would free: the steps of committed or discarded threads archived over 30 days ago,
+   *  trials and pasted images that old, and the copies of committed threads. */
+  oldDataSize: () => invoke<number>("old_data_size"),
+  /** Clears old data and returns the bytes freed. The ledger, the projects and their branches stay. */
+  clearOldData: () => invoke<number>("clear_old_data"),
   /** Asks where to save a CSV file and writes it there. Returns the path, or null if cancelled. */
   exportCsv: (name: string, contents: string) => invoke<string | null>("export_csv", { name, contents }),
   /** stack.lock's contents, or null before anything has been saved. */

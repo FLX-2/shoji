@@ -24,7 +24,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   /** Each ledger run's events, as its log on disk would hold them; tests fill it. */
   const logs: Record<number, RuntimeEvent[]> = {};
   /** stack.lock as the app would find it on disk. */
-  const files = { stackLock: null as string | null, hasNotes: false };
+  const files = { stackLock: null as string | null, hasNotes: false, oldBytes: 0 };
   /** Projects "found" in Claude Code and Codex. */
   const found: FoundProject[] = [];
   const onEvent: ((run: number, event: RuntimeEvent) => void)[] = [];
@@ -48,6 +48,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     pushes: [] as { repo: string; branch: string; body: string | null }[],
     exports: [] as { name: string; contents: string }[],
     lockWrites: [] as string[],
+    cleared: [] as number[],
     pasted: [] as { name: string; bytes: number[] }[],
     answers: [] as boolean[],
     answeredRuns: [] as number[],
@@ -231,6 +232,13 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
       calls.zoom.push(scale);
     },
     runEvents: async (run) => logs[run] ?? [],
+    oldDataSize: async () => files.oldBytes,
+    clearOldData: async () => {
+      const freed = files.oldBytes;
+      calls.cleared.push(freed);
+      files.oldBytes = 0;
+      return freed;
+    },
     readShot: async (path) => {
       calls.shots.push(path);
       return `data:image/png;base64,${btoa(path)}`;

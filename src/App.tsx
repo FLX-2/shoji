@@ -1133,6 +1133,8 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 onSaveKey={(key) => bridge.saveKey(key).then(refreshKey)}
                 onForgetKey={() => bridge.forgetKey().then(refreshKey)}
                 onCopyDiagnostics={copyDiagnostics}
+                onOldDataSize={bridge.oldDataSize}
+                onClearOldData={bridge.clearOldData}
                 onRunSetup={() => setInSetup(true)}
               />
             ) : (

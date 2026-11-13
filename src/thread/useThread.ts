@@ -17,6 +17,8 @@ export interface Turn {
   /** Set when the run couldn't start. */
   error?: string;
   stoppedByYou?: boolean;
+  /** A past run whose steps were cleared with old data: its calls and how it ended are read from the ledger. */
+  cleared?: boolean;
 }
 
 export interface Thread {

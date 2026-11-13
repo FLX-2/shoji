@@ -341,4 +341,26 @@ describe("the thread list", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Add a FAQ");
     expect(screen.getByText("Changed the footer.")).toBeTruthy();
   });
+
+  it("opens a thread whose steps were cleared with how it ended and what it cost, from the ledger", async () => {
+    const fake = fakeBridge();
+    fake.ledger.push(...ledger(Date.now()));
+    // The committed thread's logs are gone.
+    await act(async () => {
+      render(<App bridge={fake.bridge} />);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Threads" }));
+    });
+    const list = screen.getByRole("navigation", { name: "Threads" });
+    await act(async () => {
+      fireEvent.click(within(list).getByText("Add a FAQ"));
+    });
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Add a FAQ");
+    expect(screen.getAllByText("This run's steps were cleared with old data. Receipts still have what it cost.")).toHaveLength(2);
+    // Not a failure, and the cost is the ledger's.
+    expect(screen.queryByText("Failed")).toBeNull();
+    expect(within(screen.getByRole("main")).getAllByText("$0.030").length).toBeGreaterThan(0);
+    expect(screen.getByText("abc1234")).toBeTruthy();
+  });
 });
