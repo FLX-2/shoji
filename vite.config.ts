@@ -41,8 +41,9 @@ export default defineConfig(() => ({
     setupFiles: ["src/test/setup.ts"],
     // The practice project's tests fail on purpose, for a first task to fix. They're Node's, not Shoji's.
     exclude: [...configDefaults.exclude, "src-tauri/practice/**"],
-    // Trial and runtime tests clone repositories and run checks as real processes, which Windows
-    // runners can take several seconds over; 5s timed them out there with nothing wrong.
-    testTimeout: 20_000,
+    // Trial and runtime tests clone repositories and run checks as real processes. Windows runners can
+    // take several seconds over them, and a macOS runner took over 20 while a headless browser started
+    // beside them for the first time, with nothing wrong either time.
+    testTimeout: 60_000,
   },
 }));
