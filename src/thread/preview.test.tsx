@@ -67,6 +67,10 @@ describe("Preview in a thread", () => {
   it("shows the dev server at the width picked, and remembers the project's address", async () => {
     await openPreview();
     const frame = screen.getByTitle("Preview at 1280 px") as HTMLIFrameElement;
+    // The page runs as in a browser, but can't navigate the window it's shown in.
+    const allowed = frame.getAttribute("sandbox")!.split(" ");
+    expect(allowed).toEqual(expect.arrayContaining(["allow-scripts", "allow-same-origin", "allow-forms"]));
+    expect(allowed.some((token) => token.startsWith("allow-top-navigation"))).toBe(false);
     expect(frame.getAttribute("src")).toBe("http://localhost:5173");
 
     fireEvent.click(screen.getByRole("radio", { name: "360 px" }));
