@@ -21,7 +21,7 @@ use std::fs;
 use std::path::{Component, Path};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -48,7 +48,39 @@ struct Live {
 #[derive(Default)]
 struct Run {
     live: Mutex<HashMap<u64, Live>>,
+    /// Threads a run is being started for: the copy is being made or brought back, and the runtime isn't up yet.
+    starting: Mutex<HashSet<i64>>,
     count: AtomicU64,
+}
+
+/// Holds a thread as starting, until its run is live or the start has failed.
+struct Starting<'a> {
+    run: &'a Run,
+    thread: Option<i64>,
+}
+
+impl Drop for Starting<'_> {
+    fn drop(&mut self) {
+        if let Some(thread) = self.thread {
+            self.run.starting.lock().unwrap().remove(&thread);
+        }
+    }
+}
+
+impl Run {
+    /// Takes a thread for a new run, or refuses when it has one going or starting. Starting a run makes or
+    /// restores the project's copy and reads the keychain, which can take seconds, so the list of live runs
+    /// isn't held meanwhile: Stop, an answer to an ask and the other threads' events all need it.
+    fn reserve(&self, thread: Option<i64>) -> Result<Starting<'_>, String> {
+        let live = self.live.lock().unwrap();
+        let mut starting = self.starting.lock().unwrap();
+        if let Some(thread) = thread {
+            if live.values().any(|l| l.thread == thread) || !starting.insert(thread) {
+                return Err("This thread is already running.".into());
+            }
+        }
+        Ok(Starting { run: self, thread })
+    }
 }
 
 fn now_ms() -> i64 {
@@ -389,7 +421,10 @@ struct Exit {
 /// Starts the runtime on a task and returns its run number. The run's events arrive as
 /// `runtime-event`, then one `runtime-exit`, each carrying that number. A new task gets
 /// its own branch, in its own copy of the project; changes carry on in the thread's copy.
-#[tauri::command]
+///
+/// Off the window's own thread: copying a large project, or macOS asking for the keychain, would
+/// otherwise hold the whole window still until it was done.
+#[tauri::command(async)]
 fn start_run(
     app: AppHandle,
     run: State<Run>,
@@ -397,12 +432,7 @@ fn start_run(
     request: RunRequest,
 ) -> Result<Started, String> {
     let ask = request.ask.clone();
-    let mut live = run.live.lock().unwrap();
-    if let Some(changes) = &request.changes {
-        if live.values().any(|l| l.thread == changes.thread) {
-            return Err("This thread is already running.".into());
-        }
-    }
+    let _starting = run.reserve(request.changes.as_ref().map(|c| c.thread))?;
     let keys = run_keys(&app, &request.stack)?;
 
     // Every event is kept on disk, so receipts have each call's tokens and cost.
@@ -525,7 +555,7 @@ fn start_run(
         }
     };
     let id = run.count.fetch_add(1, Ordering::Relaxed) + 1;
-    live.insert(id, Live { child, entry, thread });
+    run.live.lock().unwrap().insert(id, Live { child, entry, thread });
     watch(app, events, id, entry);
     Ok(Started { run: id, thread, branch, workdir })
 }
@@ -586,14 +616,13 @@ struct TrialRequest {
 
 /// Replays accepted tasks on a candidate stack in scratch copies of the project. The project
 /// itself is never touched. Its events and exit arrive like a thread's, under its run number.
-#[tauri::command]
+#[tauri::command(async)]
 fn start_trial(
     app: AppHandle,
     run: State<Run>,
     ledger: State<Ledger>,
     request: TrialRequest,
 ) -> Result<u64, String> {
-    let mut live = run.live.lock().unwrap();
     let keys = run_keys(&app, &request.stack)?;
     let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let runs = data.join("runs");
@@ -638,7 +667,7 @@ fn start_trial(
             e.to_string()
         })?;
     let id = run.count.fetch_add(1, Ordering::Relaxed) + 1;
-    live.insert(id, Live { child, entry, thread });
+    run.live.lock().unwrap().insert(id, Live { child, entry, thread });
     watch(app, events, id, entry);
     Ok(id)
 }
@@ -660,7 +689,7 @@ struct NotesRequest {
 /// Has the scout read the project and write SHOJI.md, the notes Plan reads before every task.
 /// Returns None when the project already has notes, since there's nothing to write. Otherwise
 /// its events and exit arrive like a thread's, under the returned run number.
-#[tauri::command]
+#[tauri::command(async)]
 fn start_notes(
     app: AppHandle,
     run: State<Run>,
@@ -670,7 +699,6 @@ fn start_notes(
     if Path::new(&request.repo).join("SHOJI.md").exists() {
         return Ok(None);
     }
-    let mut live = run.live.lock().unwrap();
     let keys = run_keys(&app, &request.stack)?;
     let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let runs = data.join("runs");
@@ -711,7 +739,7 @@ fn start_notes(
             e.to_string()
         })?;
     let id = run.count.fetch_add(1, Ordering::Relaxed) + 1;
-    live.insert(id, Live { child, entry, thread });
+    run.live.lock().unwrap().insert(id, Live { child, entry, thread });
     watch(app, events, id, entry);
     Ok(Some(id))
 }
@@ -1364,6 +1392,21 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_thread_starts_one_run_at_a_time_and_is_free_again_when_the_start_ends() {
+        let run = Run::default();
+        let first = run.reserve(Some(7)).unwrap();
+        assert_eq!(run.reserve(Some(7)).err().as_deref(), Some("This thread is already running."));
+        // Another thread, and a new task that has no thread yet, start alongside it.
+        let other = run.reserve(Some(8)).unwrap();
+        let new_task = run.reserve(None).unwrap();
+        drop((other, new_task));
+        // Live or failed, the start is over, and the thread can run again.
+        drop(first);
+        assert!(run.reserve(Some(7)).is_ok());
+        assert!(run.starting.lock().unwrap().is_empty());
+    }
 
     /// A throwaway repository with two committed files.
     fn repo(name: &str) -> String {
