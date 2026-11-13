@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { routedModel } from "../../runtime/src/found";
-import { applyFound, type ModelId } from "../../runtime/src/models";
+import { applyFound, type ModelId, MODELS } from "../../runtime/src/models";
 import type { Stack } from "../../runtime/src/stack";
 import type { Bridge, KeyStatus, RoutedModel } from "../bridge";
 
@@ -36,6 +36,14 @@ const known = (models: RoutedModel[]) =>
     "openrouter",
     Object.fromEntries(models.map((m) => routedModel(m.id, m.name, m.input, m.output, m.cacheRead))),
   );
+
+/**
+ * Whether a run can take an OpenRouter model. The spending limits rest on prices, so the runtime turns down a
+ * model listed at no charge unless its id says it's free, with :free. A stack that named any other one failed
+ * every run as it started, so such a model keeps its name for older threads but isn't offered.
+ */
+export const runnable = (id: ModelId): boolean =>
+  id.endsWith(":free") || ((MODELS[id]?.input ?? 0) > 0 && (MODELS[id]?.output ?? 0) > 0);
 
 export interface OpenRouter {
   /** "looking" until Shoji has read its key; "connecting" while the browser is open. */

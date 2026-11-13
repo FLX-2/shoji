@@ -26,7 +26,7 @@ import { SetupView } from "./setup/SetupView";
 import { notesProgress, useNotes } from "./setup/useNotes";
 import { useModelCatalog } from "./stack/catalog";
 import { useChatGPT } from "./stack/chatgpt";
-import { useOpenRouter } from "./stack/openrouter";
+import { runnable, useOpenRouter } from "./stack/openrouter";
 import { useGemini } from "./stack/gemini";
 import { providerPresets } from "./stack/presets";
 import { ReachContext } from "./stack/reach";
@@ -37,6 +37,7 @@ import { keyLabel } from "./settings/shortcuts";
 import { SEPARATOR, type MenuEntry } from "./shell/Menu";
 import { useStack } from "./stack/useStack";
 import { trialProgress, useTrial } from "./stack/useTrial";
+import { Broken, Crash } from "./shell/Crash";
 import { Mark } from "./shell/Mark";
 import { threadsMentioned, type SlashCommand } from "./shell/mention";
 import { Rail } from "./shell/Rail";
@@ -271,12 +272,17 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   // A thread's whole limit counts against the day when it starts, so its later changes stay inside what
   // was allowed then. Past the daily limit, Shoji asks first.
   const [ask, setAsk] = useState<Ask | null>(null);
+  // What the threads and the trial still running may yet spend. Each started with its whole limit counted, so
+  // that money is spoken for until the run ends, and the next thing to start is weighed on top of it.
+  const reserved =
+    live.reduce((sum, t) => sum + Math.max(0, t.cap - threadCost(t)), 0) +
+    (trials.trial && trialRunning ? Math.max(0, trials.trial.request.cap - trialProgress(trials.trial).spent) : 0);
   const withinDay = (what: string, cap: number, go: () => void): boolean => {
-    if (spentToday + cap <= prefs.dailyLimit) {
+    if (spentToday + reserved + cap <= prefs.dailyLimit) {
       go();
       return true;
     }
-    setAsk({ spent: spentToday, cap, what, go });
+    setAsk({ spent: spentToday, reserved, cap, what, go });
     return false;
   };
 
@@ -303,7 +309,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       const provider = providerOf(model);
       if (provider === "openai") return openaiConnected;
       if (provider === "chatgpt") return chatgpt.status === "signed-in";
-      if (provider === "openrouter") return openrouter.status === "connected";
+      if (provider === "openrouter") return openrouter.status === "connected" && runnable(model);
       if (provider === "gemini") return gemini.status === "connected" && gemini.models.includes(model);
       return true;
     },
@@ -316,7 +322,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     (schedules) => setPrefs({ schedules }),
     (schedule) => {
       if (!hasKey) return "there was no API key";
-      if (spentToday + prefs.cap > prefs.dailyLimit)
+      if (spentToday + reserved + prefs.cap > prefs.dailyLimit)
         return `it could have taken the day past your ${formatCost(prefs.dailyLimit)} limit`;
       start(schedule.task, schedule.repo, tierStack(stack.stack, schedule.tier), prefs.cap, false, [], true);
       return null;
@@ -329,7 +335,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   useEffect(() => {
     const next = prefs.queue[0];
     if (!idle || !next || !hasKey || !ledgerRead) return;
-    if (spentToday + prefs.cap > prefs.dailyLimit) {
+    if (spentToday + reserved + prefs.cap > prefs.dailyLimit) {
       const held = `Waiting: it could take today past your ${formatCost(prefs.dailyLimit)} limit`;
       if (next.held !== held) setPrefs((now) => ({ queue: now.queue.map((q, i) => (i ? q : { ...q, held })) }));
       return;
@@ -862,6 +868,11 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
         <div className="body">
           <Rail current={section} onSelect={setSection} />
           <main className="main">
+            {/* A screen that can't be drawn leaves the rest of the window working, and a move elsewhere clears it. */}
+            <Crash
+              at={`${section}:${thread?.id ?? ""}:${opening?.id ?? ""}`}
+              fallback={(problem, again) => <Broken problem={problem} version={__APP_VERSION__} onAgain={again} />}
+            >
             {section === "home" ? (
               <div className={projects.length > 1 ? "split" : "solo"}>
                 {projects.length > 1 && (
@@ -1116,6 +1127,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 </div>
               </>
             )}
+            </Crash>
           </main>
         </div>
       )}

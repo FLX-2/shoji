@@ -149,6 +149,8 @@ describe("Settings", () => {
     await send("Restyle the pricing table");
     expect(fake.calls.starts[0].devCommand).toBe("pnpm dev");
     expect(fake.calls.starts[0].lookReview).toBe(true);
+    // Each run ends before the next starts, so the day's limit has room for all three.
+    await act(async () => fake.exit(0));
 
     const toTools = async () => {
       await act(async () => {
@@ -167,6 +169,7 @@ describe("Settings", () => {
     await send("Restyle the header");
     expect(fake.calls.starts[1].devCommand).toBe("pnpm dev");
     expect(fake.calls.starts[1].lookReview).toBeUndefined();
+    await act(async () => fake.exit(0));
 
     await toTools();
     fireEvent.click(screen.getByRole("switch", { name: "Let Build look at pages" }));

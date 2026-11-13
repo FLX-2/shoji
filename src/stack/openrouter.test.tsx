@@ -51,6 +51,25 @@ describe("OpenRouter", () => {
     expect(screen.getByRole("button", { name: "Connect OpenRouter" })).toBeTruthy();
   });
 
+  it("doesn't offer a model listed at no charge whose id doesn't say it's free, which no run could take", async () => {
+    const fake = fakeBridge();
+    fake.openrouter.models.push(
+      { id: "vendor/promo", name: "Vendor: Promo", input: 0, output: 0, cacheRead: 0 },
+      { id: "vendor/half", name: "Vendor: Half", input: 0, output: 2, cacheRead: 0 },
+    );
+    fake.bridge.saveKey("sk-or-test", "openrouter");
+    localStorage.setItem("shoji.prefs", PREFS);
+    render(<App bridge={fake.bridge} />);
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: "Stack" }));
+    fireEvent.click(screen.getByRole("button", { name: "Build model" }));
+    const list = within(screen.getByRole("listbox"));
+    expect(list.getByRole("option", { name: /Vendor: Large/ })).toBeTruthy();
+    expect(list.getByRole("option", { name: /Vendor: Small/ })).toBeTruthy();
+    expect(list.queryByRole("option", { name: /Vendor: Promo/ })).toBeNull();
+    expect(list.queryByRole("option", { name: /Vendor: Half/ })).toBeNull();
+  });
+
   it("says what went wrong when connecting doesn't finish", async () => {
     const fake = fakeBridge();
     fake.openrouter.connectError = "That answer didn't come from OpenRouter. Try connecting again.";

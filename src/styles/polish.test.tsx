@@ -133,6 +133,12 @@ describe("a thread's small helps", () => {
       scrollHeight: { configurable: true, value: 2000 },
       clientHeight: { configurable: true, value: 500 },
     });
+    // At the end, following the work, then up by the person's own hand.
+    scroll.scrollTop = 1500;
+    await act(async () => {
+      fireEvent.scroll(scroll);
+    });
+    expect(screen.queryByRole("button", { name: "Latest" })).toBeNull();
     scroll.scrollTop = 200;
     await act(async () => {
       fireEvent.scroll(scroll);
@@ -143,5 +149,36 @@ describe("a thread's small helps", () => {
     });
     expect(scroll.scrollTo).toHaveBeenCalledWith({ top: 2000, behavior: "smooth" });
     expect(screen.queryByRole("button", { name: "Latest" })).toBeNull();
+  });
+
+  it("keeps following when several steps land at once and the view hasn't caught up yet", async () => {
+    const fake = await launch();
+    const box = screen.getByRole("textbox", { name: "Task" });
+    fireEvent.change(box, { target: { value: "Add a FAQ" } });
+    await act(async () => {
+      fireEvent.keyDown(box, { key: "Enter" });
+    });
+    await act(async () => {
+      fake.emit({ type: "step", step: "scout", role: "scout", model: HAIKU, status: "running" });
+    });
+    const scroll = document.querySelector(".thread .scroll") as HTMLDivElement;
+    Object.defineProperties(scroll, {
+      scrollHeight: { configurable: true, value: 2000 },
+      clientHeight: { configurable: true, value: 500 },
+    });
+    scroll.scrollTop = 1500;
+    await act(async () => {
+      fireEvent.scroll(scroll);
+    });
+    // More work arrives below before the scroll is heard: the end is now far off, but nobody scrolled up.
+    Object.defineProperty(scroll, "scrollHeight", { configurable: true, value: 2600 });
+    await act(async () => {
+      fireEvent.scroll(scroll);
+    });
+    expect(screen.queryByRole("button", { name: "Latest" })).toBeNull();
+    await act(async () => {
+      fake.emit({ type: "step", step: "scout", role: "scout", model: HAIKU, status: "done", output: "Read it." });
+    });
+    expect(scroll.scrollTop).toBe(2600);
   });
 });

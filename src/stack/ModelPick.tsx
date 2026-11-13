@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
-import { MODELS, PROVIDER_NAMES, providerOf, type ModelId } from "../../runtime/src/models";
+import { labelOf, type ModelId, MODELS, PROVIDER_NAMES, providerOf } from "../../runtime/src/models";
 import { useReaches } from "./reach";
 
 /** Past this many models the list gets a box to narrow it by name. */
@@ -8,7 +8,7 @@ const FILTER_FROM = 9;
 /** A model's family, such as Opus: the first word of an Anthropic model's name, or else its provider, since
  *  other providers name their models in ways that don't group. */
 export const familyOf = (id: ModelId) =>
-  providerOf(id) === "anthropic" ? MODELS[id].label.split(" ")[0] : PROVIDER_NAMES[providerOf(id)];
+  providerOf(id) === "anthropic" ? labelOf(id).split(" ")[0] : PROVIDER_NAMES[providerOf(id)];
 
 /**
  * Every model Shoji knows, in families: the family with the dearest model first, and in each family the newest
@@ -17,7 +17,7 @@ export const familyOf = (id: ModelId) =>
 export function modelGroups(ids: ModelId[] = Object.keys(MODELS)): { family: string; ids: ModelId[] }[] {
   const families = new Map<string, ModelId[]>();
   for (const id of ids) families.set(familyOf(id), [...(families.get(familyOf(id)) ?? []), id]);
-  const newest = (a: ModelId, b: ModelId) => MODELS[b].label.localeCompare(MODELS[a].label, "en", { numeric: true });
+  const newest = (a: ModelId, b: ModelId) => labelOf(b).localeCompare(labelOf(a), "en", { numeric: true });
   // Other providers' names don't say which is newer, so their models go dearest first.
   const order = (a: ModelId, b: ModelId) =>
     providerOf(a) === "anthropic" ? newest(a, b) : MODELS[b].output - MODELS[a].output || newest(a, b);
@@ -71,7 +71,7 @@ export function ModelPick({
   const all = Object.keys(MODELS).filter((m) => reaches(m) || m === value);
   const filtering = all.length >= FILTER_FROM;
   const wanted = filter.trim().toLowerCase();
-  const groups = modelGroups(all.filter((m) => !wanted || MODELS[m].label.toLowerCase().includes(wanted)));
+  const groups = modelGroups(all.filter((m) => !wanted || labelOf(m).toLowerCase().includes(wanted)));
   const shown = groups.flatMap((g) => g.ids);
   // Family names only help once a family has more than one model.
   const headed = groups.some((g) => g.ids.length > 1);
@@ -143,7 +143,7 @@ export function ModelPick({
       onMouseMove={() => model !== current && setActive(model)}
     >
       <b>
-        {MODELS[model].label}
+        {labelOf(model)}
         {fresh.includes(model) && <i className="new">New</i>}
       </b>
       <span>{priceLine(model)}</span>

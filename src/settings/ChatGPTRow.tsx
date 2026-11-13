@@ -1,4 +1,4 @@
-import { MODELS } from "../../runtime/src/models";
+import { labelOf } from "../../runtime/src/models";
 import type { ChatGPT } from "../stack/chatgpt";
 
 /** What the person's ChatGPT plan gives Shoji, in a sentence. */
@@ -12,7 +12,7 @@ export function chatgptNote(chatgpt: ChatGPT): string {
     case "signed-out":
       return "With ChatGPT Plus or Pro, OpenAI's models run on your plan, with no API key and no API bill.";
     case "signed-in": {
-      const names = chatgpt.models.map((m) => MODELS[m].label);
+      const names = chatgpt.models.map((m) => labelOf(m));
       const listed = names.length > 3 ? `${names.slice(0, 3).join(", ")} and ${names.length - 3} more` : names.join(", ");
       const who = chatgpt.email ? `Signed in as ${chatgpt.email}.` : "Signed in.";
       return listed ? `${who} ${listed}, on your plan.` : `${who} Your plan offers no models Shoji can use yet.`;

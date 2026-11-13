@@ -9,6 +9,7 @@ import "./styles/tokens.css";
 import "./styles/shell.css";
 import "./styles/views.css";
 import App from "./App";
+import { BrokenWindow, Crash } from "./shell/Crash";
 
 // The webview's own right-click menu (Back, Reload, Print) isn't Shoji's. It stays where it helps: in text boxes
 // and over selected text, for Cut, Copy and Paste. Shoji's own menus open where they're offered.
@@ -23,6 +24,8 @@ if (!import.meta.env.DEV) {
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <App />
+    <Crash fallback={(problem, again) => <BrokenWindow problem={problem} version={__APP_VERSION__} onAgain={again} />}>
+      <App />
+    </Crash>
   </React.StrictMode>,
 );

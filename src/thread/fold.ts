@@ -1,6 +1,6 @@
 import type { ComparedPage } from "../../runtime/src/compare";
 import type { CheckResult, RuntimeEvent, ThreadResult } from "../../runtime/src/events";
-import { MODELS, type ModelId } from "../../runtime/src/models";
+import { labelOf, type ModelId } from "../../runtime/src/models";
 import type { Role } from "../../runtime/src/stack";
 
 export interface ToolUse {
@@ -186,7 +186,7 @@ export function stepLabel(steps: StepView[], index: number): string {
 
 /** A model's short name, as the conversation shows it beside each step. */
 export function modelName(model: ModelId): string {
-  return MODELS[model].label.split(" ")[0];
+  return labelOf(model).split(" ")[0];
 }
 
 export function approves(review: string | undefined): boolean {

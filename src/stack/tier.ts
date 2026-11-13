@@ -12,13 +12,17 @@ export const TIERS: Record<Tier, { label: string; does: string }> = {
   max: { label: "Max", does: "Build runs on the Plan model" },
 };
 
-/** The next model down by output price from the same provider, or the same one when it's the cheapest. A draft
- *  never moves work to another provider, which the person may not have connected. */
+/** The next model down by output price from the same provider, or the same one when nothing there is cheaper. A
+ *  draft never moves work to another provider, which the person may not have connected. A model that charges
+ *  nothing stays put, since price is all that orders the others: so does one this copy no longer lists. */
 function cheaper(model: ModelId): ModelId {
-  const ladder = Object.keys(MODELS)
-    .filter((m) => providerOf(m) === providerOf(model) && !MODELS[m].billing === !MODELS[model].billing)
-    .sort((a, b) => MODELS[a].output - MODELS[b].output);
-  return ladder[Math.max(0, ladder.indexOf(model) - 1)];
+  const at = MODELS[model];
+  if (!at || at.output === 0) return model;
+  const below = Object.keys(MODELS)
+    .filter((m) => providerOf(m) === providerOf(model) && !MODELS[m].billing === !at.billing)
+    .filter((m) => MODELS[m].output > 0 && MODELS[m].output < at.output)
+    .sort((a, b) => MODELS[b].output - MODELS[a].output);
+  return below[0] ?? model;
 }
 
 /** The stack a task runs on at this tier. Plan and Scout never move, so the receipt's baseline stays put. */

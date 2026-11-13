@@ -5,12 +5,15 @@ import { failingIn } from "./failures";
 const TIMEOUT_MS = 5 * 60_000;
 const KEEP_CHARS = 4000;
 
-/** The environment for project commands, without the API key: the builder can edit the
- *  scripts these commands run, so they must never see it. */
+/** Every name a provider's key or sign-in reaches the runtime under: Shoji's own, and the ones a shell sets. */
+const SECRET = /^(SHOJI_(API|OPENAI|OPENROUTER|GEMINI)_KEY|SHOJI_CHATGPT_(TOKEN|EXPIRES)|(ANTHROPIC|OPENAI|OPENROUTER|GEMINI)_API_KEY)$/i;
+
+/** The environment for project commands, without any provider's key or sign-in: the builder can edit the
+ *  scripts these commands run, so they must never see one. */
 export function commandEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const clean: NodeJS.ProcessEnv = {};
   for (const [name, value] of Object.entries(env)) {
-    if (!/^(SHOJI|ANTHROPIC)_API_KEY$/i.test(name)) clean[name] = value;
+    if (!SECRET.test(name)) clean[name] = value;
   }
   return { ...clean, CI: "1", FORCE_COLOR: "0" };
 }

@@ -1,4 +1,4 @@
-import { MODELS, type ModelId } from "../../runtime/src/models";
+import { labelOf, type ModelId } from "../../runtime/src/models";
 import { ROLES, type Role, type Stack } from "../../runtime/src/stack";
 import type { LedgerThread } from "../bridge";
 import { firstTry, isNotes, isTrial, reworked } from "../receipts/receipts";
@@ -107,7 +107,7 @@ export function watch(ledger: LedgerThread[], stack: Stack, now: number): Watch 
     const drop = judged ? rate(beforeThreads) - rate(recentThreads) : 0;
 
     const since = day(Math.min(...recent.map((s) => s.at)));
-    const name = MODELS[model].label;
+    const name = labelOf(model);
     const label = ROLE_NAMES[role].label;
     const changes: { headline: string; said: string; size: number }[] = [];
     if (slower >= RISE)

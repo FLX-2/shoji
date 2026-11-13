@@ -45,16 +45,32 @@ export interface ModelInfo {
   output: number;
   cacheRead: number;
   billing?: Billing;
+  /** Dearer prices for a call whose whole prompt runs past `over` tokens, cache reads and writes counted, as
+   *  Haiku 5.5 charges past 100,000. Each call is priced on its own length. */
+  long?: LongPrompt;
 }
 
-/** Listed prices on 28 Oct 2026. Cache writes cost 1.25x input. A downloaded catalog can add to these
+export interface LongPrompt {
+  over: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+}
+
+/** Listed prices on the day below. Cache writes cost 1.25x input. A downloaded catalog can add to these
  *  and change their prices, but never take one away. */
-const BUILT_IN_LISTED = "2026-11-10";
+const BUILT_IN_LISTED = "2026-11-12";
 
 export const BUILT_IN: Readonly<Record<string, ModelInfo>> = {
   "claude-opus-5-5": { label: "Opus 5.5", input: 4, output: 20, cacheRead: 0.2 },
-  "claude-sonnet-5-5": { label: "Sonnet 5.5", input: 2, output: 10, cacheRead: 0.2 },
-  "claude-haiku-5-5": { label: "Haiku 5.5", input: 0.1, output: 0.5, cacheRead: 0.01 },
+  "claude-sonnet-5-5": { label: "Sonnet 5.5", input: 2, output: 10, cacheRead: 0.1 },
+  "claude-haiku-5-5": {
+    label: "Haiku 5.5",
+    input: 0.1,
+    output: 0.5,
+    cacheRead: 0.01,
+    long: { over: 100_000, input: 0.5, output: 2.5, cacheRead: 0.05 },
+  },
   "openai/gpt-6-astra": { label: "GPT-6 Astra", input: 10, output: 50, cacheRead: 1 },
   "openai/gpt-6.1-sol": { label: "GPT-6.1 Sol", input: 2, output: 10, cacheRead: 0.1 },
   "openai/gpt-6.1-terra": { label: "GPT-6.1 Terra", input: 1, output: 5, cacheRead: 0.05 },
@@ -66,6 +82,10 @@ export type ModelId = string;
 
 /** The models Shoji knows and their prices: the built-in list, with the catalog's on top. */
 export const MODELS: Record<ModelId, ModelInfo> = { ...BUILT_IN };
+
+/** A model's name as Shoji shows it. A thread or a receipt can name a model this copy no longer lists, as when
+ *  its provider retired it or the person disconnected it; that one keeps the name its provider knows it by. */
+export const labelOf = (id: ModelId): string => MODELS[id]?.label ?? apiName(id);
 
 /** The list of models and prices that Shoji downloads, so a new model or price needs no release. */
 export interface Catalog {
@@ -85,6 +105,16 @@ const MOST_MODELS = 50;
  *  limits rest on prices. */
 const price = (value: unknown, free = false): value is number =>
   typeof value === "number" && Number.isFinite(value) && (free ? value >= 0 : value > 0) && value <= 1000;
+
+/** A model's dearer prices for long prompts, checked like its others. */
+function longPrompt(id: string, value: unknown): LongPrompt {
+  const { over, input, output, cacheRead } = (value ?? {}) as Partial<Record<keyof LongPrompt, unknown>>;
+  const length = typeof over === "number" && Number.isInteger(over) && over > 0 && over <= 10_000_000;
+  if (!length || !price(input) || !price(output) || !price(cacheRead, true)) {
+    throw new Error(`The model list's prices for ${id} aren't usable.`);
+  }
+  return { over: over as number, input, output, cacheRead };
+}
 
 /** A downloaded catalog, checked field by field. Throws on anything malformed, so a bad file changes nothing. */
 export function parseCatalog(value: unknown): Catalog {
@@ -108,6 +138,7 @@ export function parseCatalog(value: unknown): Catalog {
       output,
       cacheRead,
       billing,
+      long,
     } = (entry ?? {}) as Partial<Record<keyof ModelInfo, unknown>>;
     const label = typeof named === "string" ? named.trim() : "";
     if (!MODEL_ID.test(id) || !label || label.length > 40 || /[\u0000-\u001f]/.test(label)) {
@@ -122,7 +153,14 @@ export function parseCatalog(value: unknown): Catalog {
     if (!price(input, free) || !price(output, free) || !price(cacheRead, true)) {
       throw new Error(`The model list's prices for ${id} aren't usable.`);
     }
-    models[id] = { label, input, output, cacheRead, ...(billing !== undefined && { billing: billing as Billing }) };
+    models[id] = {
+      label,
+      input,
+      output,
+      cacheRead,
+      ...(billing !== undefined && { billing: billing as Billing }),
+      ...(long !== undefined && { long: longPrompt(id, long) }),
+    };
   }
   return { updated: data.updated, models };
 }
@@ -170,21 +208,41 @@ export function costOf(model: ModelId, usage: Anthropic.Usage): number {
   return MODELS[model].billing ? 0 : listedCostOf(model, usage);
 }
 
-/** What a call's tokens cost at the model's listed prices, whether or not anyone was charged them. */
-export function listedCostOf(model: ModelId, usage: Anthropic.Usage): number {
-  const p = MODELS[model];
-  const written = usage.cache_creation_input_tokens ?? 0;
-  const read = usage.cache_read_input_tokens ?? 0;
+/** One call's tokens, by how each kind is charged. */
+export interface Tokens {
+  input: number;
+  cacheWrite: number;
+  cacheRead: number;
+  output: number;
+}
+
+/** What tokens cost at a model's listed prices: its dearer ones when the whole prompt runs past where they start. */
+export function tokensCost(model: ModelId, tokens: Tokens): number {
+  const listed = MODELS[model];
+  const prompt = tokens.input + tokens.cacheWrite + tokens.cacheRead;
+  const p = listed.long && prompt > listed.long.over ? listed.long : listed;
   return (
-    (usage.input_tokens * p.input +
-      written * p.input * CACHE_WRITE +
-      read * p.cacheRead +
-      usage.output_tokens * p.output) /
+    (tokens.input * p.input +
+      tokens.cacheWrite * p.input * CACHE_WRITE +
+      tokens.cacheRead * p.cacheRead +
+      tokens.output * p.output) /
     1e6
   );
 }
 
-/** The most one call can cost in output, used to stop before a call could cross the cap. */
+/** What a call's tokens cost at the model's listed prices, whether or not anyone was charged them. */
+export function listedCostOf(model: ModelId, usage: Anthropic.Usage): number {
+  return tokensCost(model, {
+    input: usage.input_tokens,
+    cacheWrite: usage.cache_creation_input_tokens ?? 0,
+    cacheRead: usage.cache_read_input_tokens ?? 0,
+    output: usage.output_tokens,
+  });
+}
+
+/** The most one call can cost in output, used to stop before a call could cross the cap. Shoji can't know the
+ *  prompt's length before the provider counts it, so a model with dearer prices for long prompts is held to those. */
 export function worstCaseOutput(model: ModelId, maxTokens: number): number {
-  return MODELS[model].billing ? 0 : (maxTokens * MODELS[model].output) / 1e6;
+  const listed = MODELS[model];
+  return listed.billing ? 0 : (maxTokens * Math.max(listed.output, listed.long?.output ?? 0)) / 1e6;
 }

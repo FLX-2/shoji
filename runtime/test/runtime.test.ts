@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { MAX_TOKENS } from "../src/agent";
 import type { RuntimeEvent } from "../src/events";
 import { commandEnv, runCommand } from "../src/commands";
+import { KEY_ENV } from "../src/connect";
 import { LEAST_OUTPUT } from "../src/meter";
 import { costOf } from "../src/models";
 import { runThread } from "../src/pipeline";
@@ -74,6 +75,12 @@ describe("project commands", () => {
   it("never pass the API key to the project's scripts", () => {
     const env = commandEnv({ PATH: "/bin", SHOJI_API_KEY: "sk-1", ANTHROPIC_API_KEY: "sk-2", HOME: "/h" });
     expect(env).toEqual({ PATH: "/bin", HOME: "/h", CI: "1", FORCE_COLOR: "0" });
+
+    // Every provider's key, under each name it can reach the runtime by, and the ChatGPT sign-in.
+    const names = [...Object.values(KEY_ENV).flat(), "SHOJI_CHATGPT_TOKEN", "SHOJI_CHATGPT_EXPIRES"];
+    expect(names.length).toBeGreaterThan(8);
+    const all = commandEnv({ PATH: "/bin", ...Object.fromEntries(names.map((name) => [name, "secret"])) });
+    expect(all).toEqual({ PATH: "/bin", CI: "1", FORCE_COLOR: "0" });
 
     const saved = process.env.SHOJI_API_KEY;
     process.env.SHOJI_API_KEY = "sk-test-not-real";

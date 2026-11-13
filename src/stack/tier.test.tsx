@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { ollamaModel } from "../../runtime/src/found";
+import { applyFound } from "../../runtime/src/models";
 import { STACKS } from "../../runtime/src/stack";
 import App from "../App";
 import type { LedgerCall, LedgerThread } from "../bridge";
@@ -55,6 +57,23 @@ describe("quality tiers", () => {
     });
     expect(tierStack(STACKS.opus, "draft").build.model).toBe("claude-sonnet-5-5");
     expect(tierStack(STACKS.balanced, "max")).toEqual({ ...STACKS.balanced, build: STACKS.balanced.plan });
+  });
+
+  it("leaves a model that charges nothing, or one it no longer lists, where it is for a draft", () => {
+    applyFound(
+      "ollama",
+      Object.fromEntries([ollamaModel("qwen3-coder:30b"), ollamaModel("llama4:8b"), ollamaModel("gemma4:12b")]),
+    );
+    try {
+      const local = (model: string) => ({ ...STACKS.balanced, build: { model, effort: "medium" as const } });
+      // Free models all cost the same, so price can't say which is the smaller one.
+      for (const model of ["ollama/qwen3-coder:30b", "ollama/llama4:8b", "ollama/gemma4:12b"]) {
+        expect(tierStack(local(model), "draft").build.model).toBe(model);
+      }
+      expect(tierStack(local("gemini/retired-model"), "draft").build.model).toBe("gemini/retired-model");
+    } finally {
+      applyFound("ollama", {});
+    }
   });
 
   it("estimates from the middle of recent tasks, priced on the tier's models, once there are enough", () => {

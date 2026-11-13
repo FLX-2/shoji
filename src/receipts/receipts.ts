@@ -1,10 +1,7 @@
-import { MODELS, type ModelId } from "../../runtime/src/models";
+import { labelOf, type ModelId, MODELS, tokensCost } from "../../runtime/src/models";
 import { STACKS } from "../../runtime/src/stack";
 import type { LedgerCall, LedgerThread } from "../bridge";
 import { stackOf, stackSummary } from "../stack/lock";
-
-/** Cache writes cost this much more than plain input, as in the runtime's pricing. */
-const CACHE_WRITE = 1.25;
 
 function known(model: string): model is ModelId {
   return model in MODELS;
@@ -12,14 +9,12 @@ function known(model: string): model is ModelId {
 
 /** What a call would have cost on another model with the same tokens. */
 export function priceAs(model: ModelId, call: LedgerCall): number {
-  const p = MODELS[model];
-  return (
-    (call.inputTokens * p.input +
-      call.cacheWriteTokens * p.input * CACHE_WRITE +
-      call.cacheReadTokens * p.cacheRead +
-      call.outputTokens * p.output) /
-    1e6
-  );
+  return tokensCost(model, {
+    input: call.inputTokens,
+    cacheWrite: call.cacheWriteTokens,
+    cacheRead: call.cacheReadTokens,
+    output: call.outputTokens,
+  });
 }
 
 /** The one model a thread is compared against: its stack's Plan model. */
@@ -152,7 +147,7 @@ export function months(threads: LedgerThread[]): string[] {
 }
 
 export function modelLabel(model: string): string {
-  return known(model) ? MODELS[model].label : model;
+  return known(model) ? labelOf(model) : model;
 }
 
 /** The models a thread used, short names in the order it first used them. */
