@@ -113,6 +113,21 @@ describe("Chat Completions, as Gemini takes it", () => {
     expect(message.usage).toMatchObject({ input_tokens: 600, output_tokens: 50, cache_read_input_tokens: 400 });
   });
 
+  it("reads an answer that ran out of room as cut off, even when it holds a tool call", () => {
+    const message = toMessage(
+      {
+        choices: [
+          {
+            finish_reason: "length",
+            message: { content: null, tool_calls: [{ id: "c3", function: { name: "write_file", arguments: '{"path":"a","content":"exp' } }] },
+          },
+        ],
+      },
+      FLASH,
+    );
+    expect(message.stop_reason).toBe("max_tokens");
+  });
+
   it("calls Gemini on the key, and leaves out a field the model turns down once", async () => {
     const { sent, fetch } = service(
       { status: 400, body: [{ error: { message: "Invalid value for reasoning_effort" } }] },

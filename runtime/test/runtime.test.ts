@@ -4,7 +4,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { MAX_TOKENS } from "../src/agent";
+import { CARRY_ON, MAX_TOKENS } from "../src/agent";
 import type { RuntimeEvent } from "../src/events";
 import { commandEnv, runCommand } from "../src/commands";
 import { KEY_ENV } from "../src/connect";
@@ -450,6 +450,84 @@ describe("thread pipeline", () => {
     expect(result.checks[0]).toMatchObject({ ok: false });
     expect(result.checks[0].failedBefore).toBeUndefined();
     expect(result.status).toBe("needs-work");
+  });
+
+  /** An answer that ran out of room: what came back is only its start. */
+  const cutOff = (message: ReturnType<typeof reply>) => ({ ...message, stop_reason: "max_tokens" as const });
+
+  it("doesn't build from a plan that was cut off", async () => {
+    const scripted = team(() => true);
+    const provider = new ScriptedProvider((request) =>
+      roleOf(request) === "planner" ? cutOff(reply([{ text: "1. Change the gree" }])) : scripted.answer(request, 0),
+    );
+    const { result, events } = await run(provider);
+
+    expect(result.status).toBe("failed");
+    expect(result.reason).toMatch(/^The plan ran past the length one answer can be and was cut off/);
+    expect(provider.requests.some((r) => roleOf(r) === "builder")).toBe(false);
+    expect(events.some((e) => e.type === "step" && e.step === "plan" && e.status === "done")).toBe(false);
+  });
+
+  it("doesn't take a review that was cut off for a verdict", async () => {
+    const scripted = team(() => true);
+    const provider = new ScriptedProvider((request) =>
+      roleOf(request) === "reviewer" ? cutOff(reply([{ text: "The change looks" }])) : scripted.answer(request, 0),
+    );
+    const { result, root } = await run(provider);
+
+    expect(result.status).toBe("failed");
+    expect(result.reason).toMatch(/^The review ran past the length one answer can be/);
+    // The work stays, for the thread to be picked up from.
+    expect(fs.readFileSync(path.join(root, "src/hello.js"), "utf8")).toBe("export default 'hello, shoji';\n");
+  });
+
+  it("asks a build whose answer was cut off to carry on once, and keeps none of the half answer", async () => {
+    const scripted = team(() => true);
+    let builds = 0;
+    const provider = new ScriptedProvider((request) =>
+      roleOf(request) === "builder" && builds++ === 0
+        ? // The file's text stops part way through.
+          cutOff(reply([{ tool: "write_file", input: { path: "src/hello.js", content: "export default 'hel" } }]))
+        : scripted.answer(request, 0),
+    );
+    const { result, root, events } = await run(provider);
+
+    expect(result.status).toBe("ready");
+    expect(fs.readFileSync(path.join(root, "src/hello.js"), "utf8")).toBe("export default 'hello, shoji';\n");
+    // The half-written file was never written, and the builder was told why its answer wasn't kept.
+    expect(events.filter((e) => e.type === "tool" && e.tool === "write_file")).toHaveLength(1);
+    const second = provider.requests.filter((r) => roleOf(r) === "builder")[1];
+    expect(second.messages.map((m) => m.role)).toEqual(["user", "user"]);
+    expect(second.messages[1].content).toBe(CARRY_ON);
+  });
+
+  it("stops a step whose answers keep being cut off, and says so", async () => {
+    const scripted = team(() => true);
+    const provider = new ScriptedProvider((request) =>
+      roleOf(request) === "builder"
+        ? cutOff(reply([{ tool: "write_file", input: { path: "src/hello.js", content: "export default 'hel" } }]))
+        : scripted.answer(request, 0),
+    );
+    const { result, root } = await run(provider);
+
+    expect(result.status).toBe("failed");
+    expect(result.reason).toMatch(/kept running past the length one answer can be/);
+    expect(provider.requests.filter((r) => roleOf(r) === "builder")).toHaveLength(2);
+    expect(provider.requests.some((r) => roleOf(r) === "reviewer")).toBe(false);
+    expect(fs.readFileSync(path.join(root, "src/hello.js"), "utf8")).toBe("export default 'hello';\n");
+  });
+
+  it("ends a thread as its limit does when an answer the limit shortened was cut off", async () => {
+    const cap = 0.3; // The planner's worst case is 16k tokens of Opus, $0.32, so it gets a little less.
+    const scripted = team(() => true);
+    const provider = new ScriptedProvider((request) =>
+      roleOf(request) === "planner" ? cutOff(reply([{ text: "1. Change the gree" }])) : scripted.answer(request, 0),
+    );
+    const { result } = await run(provider, cap);
+
+    expect(provider.requests.find((r) => roleOf(r) === "planner")!.maxTokens).toBeLessThan(MAX_TOKENS);
+    expect(result.status).toBe("stopped");
+    expect(result.reason).toMatch(/there wasn't room under the \$0\.30 limit for the whole of the next answer/);
   });
 
   it("shortens a call near the cap instead of stopping, while it still has room to work", async () => {

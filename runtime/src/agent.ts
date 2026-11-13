@@ -12,6 +12,25 @@ export const MAX_TOKENS = 16000;
 /** What a step answers when it used every turn without finishing. */
 export const OUT_OF_TURNS = "(The step ran out of turns before it finished.)";
 
+/** A step's answer ran past the length one answer can be, so what came back is only its start. */
+export class CutOffError extends Error {}
+
+/** What a step is told, once, when its answer was cut off. The cut-off answer isn't kept: a tool call in it
+ *  may be half written, and half a file is worse than none. */
+export const CARRY_ON =
+  "Your last answer ran past the length one answer can be and was cut off, so none of it was kept. Carry on from where the work stands, and keep each answer short: make one tool call at a time, and build a long file up over several edits.";
+
+/** A plan or a review, which is one answer. Cut off part way it reads as finished and isn't, so it's refused. */
+export function whole(message: Anthropic.Message, what: "plan" | "review"): string {
+  if (message.stop_reason === "max_tokens")
+    throw new CutOffError(
+      what === "plan"
+        ? "The plan ran past the length one answer can be and was cut off, so Shoji didn't build from half a plan. Try again, or split the task into smaller ones."
+        : "The review ran past the length one answer can be and was cut off before its verdict. The work so far is kept.",
+    );
+  return textOf(message);
+}
+
 export interface AgentRun {
   meter: Meter;
   workspace: Workspace;
@@ -94,6 +113,7 @@ export async function runAgent(run: AgentRun): Promise<string> {
     return runTool(workspace, allowedCommands, name, input);
   };
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }];
+  let cutOff = false;
 
   for (let turn = 0; turn < maxTurns; turn++) {
     const response = await meter.send(role, step, {
@@ -104,6 +124,17 @@ export async function runAgent(run: AgentRun): Promise<string> {
       tools,
       maxTokens: MAX_TOKENS,
     });
+    // A cut-off answer isn't a finished one, and a tool call in it may be half written. The step is asked to
+    // carry on once, in smaller steps; a second time ends it, with the work so far kept.
+    if (response.stop_reason === "max_tokens") {
+      if (cutOff)
+        throw new CutOffError(
+          "The step's answers kept running past the length one answer can be, so Shoji stopped it. The work so far is kept.",
+        );
+      cutOff = true;
+      messages.push({ role: "user", content: CARRY_ON });
+      continue;
+    }
     // Thinking blocks go back unchanged, as the API expects.
     messages.push({ role: "assistant", content: response.content });
     const uses = response.content.filter((block) => block.type === "tool_use");

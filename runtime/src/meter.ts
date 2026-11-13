@@ -24,6 +24,7 @@ export class Meter {
   ) {}
 
   async send(role: Role, step: string, request: ModelRequest): Promise<Anthropic.Message> {
+    let shortened = false;
     if (this.spent + worstCaseOutput(request.model, request.maxTokens) > this.cap) {
       // Near the cap, a call may still answer at shorter length, as long as that leaves it room to work.
       const room = Math.floor(((this.cap - this.spent) / worstCaseOutput(request.model, 1e6)) * 1e6);
@@ -33,12 +34,20 @@ export class Meter {
         );
       }
       request = { ...request, maxTokens: room };
+      shortened = true;
     }
     const started = Date.now();
     const response = await this.provider.send(request);
     this.record(role, step, request.model, request, response, started);
     if (response.stop_reason === "refusal") {
       throw new RefusedError(`${request.model} declined the ${step} step.`);
+    }
+    // An answer the limit had shortened, and which needed the room, ends the thread as the limit does:
+    // more to spend is what lets it finish.
+    if (shortened && response.stop_reason === "max_tokens") {
+      throw new BudgetExceeded(
+        `Stopped at $${this.spent.toFixed(2)}: there wasn't room under the $${this.cap.toFixed(2)} limit for the whole of the next answer.`,
+      );
     }
     return response;
   }

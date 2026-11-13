@@ -98,6 +98,14 @@ describe("the Responses translation", () => {
     expect(message.usage).toMatchObject({ input_tokens: 200, cache_read_input_tokens: 1000, output_tokens: 80 });
   });
 
+  it("reads an answer that ran out of room as cut off, even when it holds a tool call", () => {
+    const message = toMessage(
+      { status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, output: [toolCall] },
+      "chatgpt/gpt-6",
+    );
+    expect(message.stop_reason).toBe("max_tokens");
+  });
+
   it("counts only a finished answer, and throws a failure that arrives partway", async () => {
     await expect(readStream(stream({ type: "response.output_text.delta", delta: "Hi" }, completed([])))).resolves.toMatchObject({
       status: "completed",
