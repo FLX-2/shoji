@@ -331,8 +331,24 @@ describe("thread pipeline", () => {
 
     expect(result.status).toBe("needs-work");
     expect(result.reason).toMatch(/^The fix ran out of turns before it finished, so Shoji stopped/);
+    // Build's steps get 30 turns: each file read or edited and each check takes one.
+    const fixes = provider.requests.filter(
+      (r) => roleOf(r) === "builder" && String(r.messages[0].content).includes("Fix what's wrong"),
+    );
+    expect(fixes).toHaveLength(30);
     expect(provider.requests.filter((r) => roleOf(r) === "reviewer")).toHaveLength(1);
     expect(events.filter((e) => e.type === "step" && e.step === "review" && e.status === "done")).toHaveLength(1);
+  });
+
+  it("keeps Scout to 12 turns, since it only reads", async () => {
+    const scripted = team(() => true);
+    // The scout keeps reading and never writes its brief.
+    const provider = new ScriptedProvider((request) =>
+      roleOf(request) === "scout" ? reply([{ tool: "read_file", input: { path: "src/hello.js" } }]) : scripted.answer(request, 0),
+    );
+    await run(provider, 1);
+
+    expect(provider.requests.filter((r) => roleOf(r) === "scout")).toHaveLength(12);
   });
 
   it("fixes a test the build broke inside a suite that was already failing", async () => {
