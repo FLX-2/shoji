@@ -75,8 +75,7 @@ describe("a thread whose plan ran out", () => {
     },
   };
 
-  async function stopOnPlan(local: string[] | null) {
-    const fake = fakeBridge({ saved: false, fromEnv: false });
+  async function stopOnPlan(local: string[] | null, fake = fakeBridge({ saved: false, fromEnv: false })) {
     fake.chatgpt.email = "bob@example.com";
     fake.ollama.models = local;
     fake.files.stackLock = JSON.stringify({ versions: [{ at: 1, stack: PLAN }] });
@@ -109,6 +108,13 @@ describe("a thread whose plan ran out", () => {
       changes: { thread: 1, plan: "1. Add a billing toggle." },
     });
     expect(screen.getByText("Carry on with Ollama").className).toBe("umsg");
+  });
+
+  it("names a local server as the person knows it", async () => {
+    const fake = fakeBridge({ saved: false, fromEnv: false });
+    fake.local.found = { name: "LM Studio", models: ["qwen/qwen3-coder-30b"] };
+    await stopOnPlan(null, fake);
+    expect(screen.getByRole("button", { name: "Carry on with LM Studio" })).toBeTruthy();
   });
 
   it("offers only picking up later when nothing else is connected", async () => {

@@ -30,6 +30,8 @@ export function carryOnRoutes(
   limited: ProviderId,
   candidates: ProviderPreset[],
   reaches: (model: ModelId) => boolean,
+  /** A provider's name as the person knows it, such as LM Studio for the local server that answered. */
+  nameOf: (provider: ProviderId) => string = (provider) => PROVIDER_NAMES[provider],
 ): Route[] {
   const moved = ROLES.filter((role) => providerOf(stack[role].model) === limited);
   if (!moved.length) return [];
@@ -38,7 +40,7 @@ export function carryOnRoutes(
     const seats = moved.map((role) => [role, candidate.stack[role]] as const);
     if (seats.some(([, seat]) => providerOf(seat.model) === limited || !reaches(seat.model))) continue;
     const next = { ...stack, ...Object.fromEntries(seats) } as Stack;
-    const name = [...new Set(seats.map(([, seat]) => PROVIDER_NAMES[providerOf(seat.model)]))].join(" and ");
+    const name = [...new Set(seats.map(([, seat]) => nameOf(providerOf(seat.model))))].join(" and ");
     if (routes.some((r) => r.name === name)) continue;
     routes.push({ name, stack: next, free: seats.every(([, seat]) => costsNothing(seat.model)) });
   }

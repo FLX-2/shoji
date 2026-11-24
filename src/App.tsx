@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { MODELS, pricesListed, providerOf, type ModelId, type ProviderId } from "../runtime/src/models";
+import { MODELS, PROVIDER_NAMES, pricesListed, providerOf, type ModelId, type ProviderId } from "../runtime/src/models";
 import { ROLES, type Stack } from "../runtime/src/stack";
 import { LimitAsk, type Ask } from "./budget/LimitAsk";
 import { spentOn } from "./budget/daily";
@@ -348,8 +348,12 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   /** Where a thread can carry on when a provider's free tier or plan ran out: each preset, then the person's own
    *  stack, with Anthropic's models only when its key is saved. */
   const routesFor = (stackNow: Stack) => (limited: ProviderId) =>
-    carryOnRoutes(stackNow, limited, [...presets, { name: "Your stack", stack: stack.stack }], (model) =>
-      providerOf(model) === "anthropic" ? anthropicKey : reaches(model),
+    carryOnRoutes(
+      stackNow,
+      limited,
+      [...presets, { name: "Your stack", stack: stack.stack }],
+      (model) => (providerOf(model) === "anthropic" ? anthropicKey : reaches(model)),
+      (provider) => (provider === "local" && local.name ? local.name : PROVIDER_NAMES[provider]),
     );
   const hasKey = !unconnected;
   // Scheduled tasks start by themselves, never past the daily limit, since nobody may be here to say yes.
