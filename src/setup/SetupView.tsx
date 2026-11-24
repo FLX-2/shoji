@@ -10,11 +10,13 @@ import { Mark } from "../shell/Mark";
 import { describeStack, presetOf, PRESETS, sameStack } from "../stack/lock";
 import type { ChatGPT } from "../stack/chatgpt";
 import type { Ollama } from "../stack/ollama";
+import type { LocalServer } from "../stack/local";
 import type { OpenRouter } from "../stack/openrouter";
 import type { Gemini } from "../stack/gemini";
 import { providerPresets, type ProviderPreset } from "../stack/presets";
 import { ChatGPTRow } from "../settings/ChatGPTRow";
 import { OllamaRow } from "../settings/OllamaRow";
+import { LocalRow } from "../settings/LocalRow";
 import { OpenRouterRow } from "../settings/OpenRouterRow";
 import { GeminiRow } from "../settings/GeminiRow";
 import { formatCost } from "../thread/fold";
@@ -26,6 +28,7 @@ interface SetupViewProps {
   /** Reads the key's status again after it changes. */
   onKeyChanged: () => Promise<void>;
   ollama: Ollama;
+  local: LocalServer;
   chatgpt: ChatGPT;
   openrouter: OpenRouter;
   gemini: Gemini;
@@ -52,6 +55,7 @@ export function SetupView(props: SetupViewProps) {
     openai: false,
     chatgpt: props.chatgpt,
     ollama: props.ollama,
+    local: props.local,
     openrouterFree: props.openrouter.free,
     gemini: free ? { free: props.gemini.models } : { paid: props.gemini.models },
   });
@@ -60,6 +64,7 @@ export function SetupView(props: SetupViewProps) {
     anthropic && "Anthropic",
     props.chatgpt.status === "signed-in" && "ChatGPT",
     props.ollama.status === "ready" && "Ollama",
+    props.local.status === "ready" && props.local.name,
     props.openrouter.status === "connected" && "OpenRouter",
     props.gemini.status === "connected" && "Gemini",
   ].filter(Boolean) as string[];
@@ -85,6 +90,7 @@ export function SetupView(props: SetupViewProps) {
           </p>
         </div>
         <Models bridge={props.bridge} status={props.keyStatus} onKeyChanged={props.onKeyChanged} ollama={props.ollama}
+          local={props.local}
           chatgpt={props.chatgpt}
           openrouter={props.openrouter}
           gemini={props.gemini}
@@ -126,6 +132,7 @@ function Models({
   status,
   onKeyChanged,
   ollama,
+  local,
   chatgpt,
   openrouter,
   gemini,
@@ -136,6 +143,7 @@ function Models({
   status: KeyStatus | null;
   onKeyChanged: () => Promise<void>;
   ollama: Ollama;
+  local: LocalServer;
   chatgpt: ChatGPT;
   openrouter: OpenRouter;
   gemini: Gemini;
@@ -216,6 +224,7 @@ function Models({
         </div>
         <ChatGPTRow chatgpt={chatgpt} onManageUsage={() => void bridge.chatgptManageUsage().catch(() => {})} setup />
         <OllamaRow ollama={ollama} setup />
+        <LocalRow local={local} setup />
         <OpenRouterRow openrouter={openrouter} />
         <GeminiRow gemini={gemini} tier={prefs.geminiTier} onTier={(geminiTier) => onChange({ geminiTier })} />
       </div>

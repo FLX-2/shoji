@@ -1,6 +1,6 @@
 import type { Comparison } from "./compare";
 import type { McpEvent } from "./mcp";
-import type { Effort, ModelId } from "./models";
+import type { Effort, ModelId, ProviderId } from "./models";
 import type { Role } from "./stack";
 
 /** One model call, as logged for receipts. */
@@ -60,6 +60,8 @@ export interface ThreadResult {
   status: "ready" | "needs-work" | "stopped" | "failed" | "planned" | "answered";
   /** Why the thread stopped or failed, in plain words. */
   reason?: string;
+  /** Stopped because a free tier or the person's plan ran out for now: whose, and when it lifts if that's known. */
+  limit?: { provider: ProviderId; resetsAt?: number };
   plan: string;
   diff: string;
   review: string;

@@ -8,11 +8,10 @@ import { diffOf, discardWork } from "./git";
 import { projectInstructions, projectNotes } from "./instructions";
 import { holdToLook, lookBlocks } from "./look";
 import { BudgetExceeded, Meter, RefusedError } from "./meter";
-import { PlanLimitError } from "./openai";
 import * as prompts from "./prompts";
 import { type Mcp, NO_MCP } from "./mcp";
 import { NO_PREVIEW, type Preview } from "./preview";
-import type { ModelProvider } from "./provider";
+import { RouteLimitError, type ModelProvider } from "./provider";
 import { findSkills } from "./skills";
 import { expandCommand } from "./slash";
 import { ROLES, type Role, type Seat, type Stack } from "./stack";
@@ -317,8 +316,14 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     }
     return finish(status);
   } catch (error) {
-    // A plan out of room for now stops the thread as its own limit does, so it can carry on later.
-    if (error instanceof BudgetExceeded || error instanceof PlanLimitError) return finish("stopped", error.message);
+    // A free tier or a plan out of room for now stops the thread as its own limit does, so it can carry on with
+    // another provider, or later.
+    if (error instanceof RouteLimitError)
+      return finish("stopped", error.message, {
+        provider: error.provider,
+        ...(error.resetsAt !== undefined && { resetsAt: error.resetsAt }),
+      });
+    if (error instanceof BudgetExceeded) return finish("stopped", error.message);
     if (error instanceof RefusedError) return finish("failed", error.message);
     return finish("failed", error instanceof Error ? error.message : String(error));
   }
@@ -362,13 +367,14 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
       : "";
   }
 
-  function finish(status: ThreadResult["status"], reason?: string): ThreadResult {
+  function finish(status: ThreadResult["status"], reason?: string, limit?: ThreadResult["limit"]): ThreadResult {
     const costByRole = Object.fromEntries(
       ROLES.map((role) => [role, meter.calls.filter((c) => c.role === role).reduce((sum, c) => sum + c.cost, 0)]),
     ) as Record<Role, number>;
     const result: ThreadResult = {
       status,
       reason,
+      ...(limit && { limit }),
       plan: state.plan,
       diff: diffOf(workspace.root),
       review: state.review,

@@ -3,6 +3,7 @@ mod chatgpt;
 mod keys;
 mod ledger;
 mod old;
+mod local;
 mod ollama;
 mod gemini;
 mod openrouter;
@@ -241,6 +242,15 @@ async fn chatgpt_models(store: State<'_, chatgpt::Store>) -> Result<Vec<chatgpt:
 async fn ollama_models() -> Result<Vec<ollama::Pulled>, String> {
     let host = std::env::var("OLLAMA_HOST").ok();
     tauri::async_runtime::spawn_blocking(move || ollama::pulled(host.as_deref()))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// LM Studio or llama.cpp's server on this computer, and the models it has loaded.
+#[tauri::command]
+async fn local_models() -> Result<local::Found, String> {
+    let given = std::env::var("SHOJI_LOCAL_URL").ok();
+    tauri::async_runtime::spawn_blocking(move || local::found(given.as_deref()))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -1396,6 +1406,7 @@ pub fn run() {
             use_shell_key,
             forget_key,
             ollama_models,
+            local_models,
             chatgpt_status,
             chatgpt_sign_in,
             chatgpt_sign_out,

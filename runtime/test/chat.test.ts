@@ -4,7 +4,7 @@ import { ChatProvider, GEMINI_API, toMessage, toMessages, toRequest } from "../s
 import { connect } from "../src/connect";
 import { geminiModel } from "../src/found";
 import { applyFound, costOf } from "../src/models";
-import { KeyRejectedError } from "../src/provider";
+import { KeyRejectedError, nextPacificMidnight, RouteLimitError } from "../src/provider";
 
 const FLASH = "gemini/gemini-3.5-flash";
 
@@ -160,9 +160,37 @@ describe("Chat Completions, as Gemini takes it", () => {
       fetch: service({ status: 429, body: [{ error: { message: "Resource has been exhausted" } }] }).fetch,
       backoff: 0,
     });
-    await expect(limited.send(request)).rejects.toThrow(
-      "Gemini's free tier has reached its limit for now. Wait a while or until tomorrow, or pick another model in Stack.",
-    );
+    const error = await limited.send(request).catch((e) => e);
+    expect(error).toBeInstanceOf(RouteLimitError);
+    expect(error).toMatchObject({ message: "Gemini's free tier has reached its limit for now.", provider: "gemini" });
+    expect(error.resetsAt).toBeUndefined();
+  });
+
+  it("waits out a free tier's per-minute limit once, and says when a daily one lifts", async () => {
+    applyFound("gemini", Object.fromEntries([geminiModel("gemini-3.5-flash", "Gemini 3.5 Flash", true)!]));
+    const minute = { status: 429, body: [{ error: { message: "Quota exceeded for metric: requests per minute. Please retry in 12.5s." } }] };
+    const waited = new ChatProvider({
+      service: "Gemini",
+      baseURL: GEMINI_API,
+      key: "AIza-test",
+      fetch: service(minute, { body: reply("Done.") }).fetch,
+      backoff: 0,
+    });
+    expect((await waited.send(request)).content).toMatchObject([{ type: "text", text: "Done." }]);
+
+    const day = { status: 429, body: [{ error: { message: "Quota exceeded for metric: GenerateRequestsPerDayPerProjectPerModel-FreeTier. Please retry in 30s." } }] };
+    const daily = new ChatProvider({ service: "Gemini", baseURL: GEMINI_API, key: "AIza-test", fetch: service(day).fetch, backoff: 0 });
+    const error = await daily.send(request).catch((e) => e);
+    expect(error).toMatchObject({ message: "Gemini's free tier has reached its limit for today.", provider: "gemini" });
+    expect(error.resetsAt).toBeGreaterThan(Date.now());
+    expect(error.resetsAt - Date.now()).toBeLessThanOrEqual(86_400_000);
+  });
+
+  it("finds the next midnight in California", () => {
+    // 3 PM in Los Angeles on 2026-11-24 (UTC-8) is 23:00 UTC; midnight there is 08:00 UTC the next day.
+    expect(new Date(nextPacificMidnight(Date.UTC(2026, 10, 24, 23, 0, 0))).toISOString()).toBe("2026-11-25T08:00:00.000Z");
+    // Just after midnight there, the next one is a whole day off.
+    expect(new Date(nextPacificMidnight(Date.UTC(2026, 10, 25, 8, 0, 1))).toISOString()).toBe("2026-11-26T08:00:00.000Z");
   });
 
   it("reaches Gemini's models when a run is handed the key", () => {

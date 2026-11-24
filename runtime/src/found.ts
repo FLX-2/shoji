@@ -72,6 +72,22 @@ export function geminiModel(id: string, name: string, free: boolean): [ModelId, 
   ];
 }
 
+/** A model loaded on LM Studio or llama.cpp's server, by its own name, free, on this computer. A name like
+ *  qwen/qwen3-coder-30b is listed by its last part. */
+export function localModel(name: string): [ModelId, ModelInfo] {
+  const label = name.split("/").at(-1)!.replace(/\.gguf$/i, "");
+  return [
+    `local/${name}`,
+    {
+      label: label.length > LONGEST_LABEL ? `${label.slice(0, LONGEST_LABEL - 1)}…` : label,
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      billing: "local",
+    },
+  ];
+}
+
 /** The models a stack names that live on the person's own connections, Ollama's and their ChatGPT plan's, so a
  *  run knows them however the app found them. */
 export function foundModelsIn(stack: unknown): Record<ModelId, ModelInfo> {
@@ -79,8 +95,14 @@ export function foundModelsIn(stack: unknown): Record<ModelId, ModelInfo> {
   const found: [ModelId, ModelInfo][] = [];
   for (const seat of seats) {
     const model = (seat as { model?: unknown } | null)?.model;
-    if (typeof model !== "string" || !/^(ollama|chatgpt)\/./.test(model)) continue;
-    found.push(model.startsWith("ollama/") ? ollamaModel(apiName(model)) : planModel(apiName(model)));
+    if (typeof model !== "string" || !/^(ollama|local|chatgpt)\/./.test(model)) continue;
+    found.push(
+      model.startsWith("ollama/")
+        ? ollamaModel(apiName(model))
+        : model.startsWith("local/")
+          ? localModel(apiName(model))
+          : planModel(apiName(model)),
+    );
   }
   return Object.fromEntries(found);
 }

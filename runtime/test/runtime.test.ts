@@ -12,7 +12,7 @@ import { LEAST_OUTPUT } from "../src/meter";
 import { costOf } from "../src/models";
 import { runThread } from "../src/pipeline";
 import { defaultChecks } from "../src/project";
-import { AnthropicProvider, type ModelProvider } from "../src/provider";
+import { AnthropicProvider, RouteLimitError, type ModelProvider } from "../src/provider";
 import { STACKS } from "../src/stack";
 import { runTool } from "../src/tools";
 import { Workspace } from "../src/workspace";
@@ -202,6 +202,21 @@ describe("thread pipeline", () => {
     } finally {
       server.close();
     }
+  });
+
+  it("stops when a free tier runs out, and says whose it was and when it lifts", async () => {
+    const resetsAt = Date.UTC(2026, 10, 25, 8);
+    const scripted = team(() => true);
+    const limited: ModelProvider = {
+      send: (request) =>
+        roleOf(request) === "planner"
+          ? Promise.reject(new RouteLimitError("Gemini's free tier has reached its limit for today.", "gemini", resetsAt))
+          : scripted.send(request),
+    };
+    const { result } = await run(limited);
+    expect(result.status).toBe("stopped");
+    expect(result.reason).toBe("Gemini's free tier has reached its limit for today.");
+    expect(result.limit).toEqual({ provider: "gemini", resetsAt });
   });
 
   it("stops before a call could pass the cap, and never goes over it", async () => {

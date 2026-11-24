@@ -11,13 +11,14 @@ import {
 } from "react";
 import type { ComparedPage } from "../../runtime/src/compare";
 import type { CheckResult } from "../../runtime/src/events";
-import { labelOf, type ModelId, MODELS } from "../../runtime/src/models";
+import { labelOf, type ModelId, MODELS, type ProviderId } from "../../runtime/src/models";
 import type { Bridge, Pushed } from "../bridge";
 import { CodeView } from "../code/CodeView";
 import { commentsNote, type LineComment } from "../code/comments";
 import { useChanges } from "../code/useChanges";
 import { ClipIcon } from "../shell/ClipIcon";
 import { ROLE_NAMES } from "../stack/lock";
+import { opensAt, type Route } from "../stack/routes";
 import { modelGroups } from "../stack/ModelPick";
 import { useReaches } from "../stack/reach";
 import { TIERS, type Tier } from "../stack/tier";
@@ -72,6 +73,10 @@ interface ThreadViewProps {
   onEditTask: () => void;
   /** Picks the work up where a run stopped or broke off. */
   onResume: () => void;
+  /** Where the thread can carry on when a free tier or plan ran out on a provider: others the person connected. */
+  routesFor?: (limited: ProviderId) => Route[];
+  /** Carries on with another route. `fresh` when the thread had no plan yet, so the task starts again on it. */
+  onCarryOnWith?: (route: Route, fresh: boolean) => void;
   /** Starts a new thread from this one's committed branch. */
   onContinue: () => void;
   /** Builds the plan the person has read. */
@@ -161,6 +166,8 @@ export function ThreadView({
   onRetry,
   onEditTask,
   onResume,
+  routesFor,
+  onCarryOnWith,
   onContinue,
   onBuild,
   tier,
@@ -324,7 +331,11 @@ export function ThreadView({
   const [commitError, setCommitError] = useState<string | null>(null);
 
   // Stopped at its limit, so the way on is more to spend.
-  const stopped = lastWork.result?.status === "stopped";
+  const stopped = lastWork.result?.status === "stopped" && !lastWork.result.limit;
+  // A free tier or plan ran out, so the way on is another provider, or the same one once it opens again.
+  const limited =
+    !running && !thread.committed && !thread.discarded && lastWork.result?.status === "stopped" && !!lastWork.result.limit;
+  const routes = limited && routesFor ? routesFor(lastWork.result!.limit!.provider) : [];
   // Paused after the plan, for the person to build it or ask for a different one.
   const planned = lastWork.result?.status === "planned";
   // The review sent it back. Fixing can't help a check whose program isn't on this computer.
@@ -549,9 +560,21 @@ export function ThreadView({
                 </>
               ) : (
                 <>
+                  {limited &&
+                    onCarryOnWith &&
+                    routes.map((route, i) => (
+                      <button
+                        key={route.name}
+                        type="button"
+                        className={i === 0 ? "btn solid" : "btn"}
+                        onClick={() => onCarryOnWith(route, !hasPlan)}
+                      >
+                        Carry on with {route.name}
+                      </button>
+                    ))}
                   {retryable && (
                     <>
-                      <button type="button" className="btn solid" onClick={onRetry}>
+                      <button type="button" className={limited && routes.length ? "btn" : "btn solid"} onClick={onRetry}>
                         Try again
                       </button>
                       <button type="button" className="btn" onClick={onEditTask}>
@@ -560,7 +583,7 @@ export function ThreadView({
                     </>
                   )}
                   {resumable && (
-                    <button type="button" className="btn solid" onClick={onResume}>
+                    <button type="button" className={limited && routes.length ? "btn" : "btn solid"} onClick={onResume}>
                       Pick up where it stopped{spentOut && `, up to ${formatCost(more)} more`}
                     </button>
                   )}
@@ -577,7 +600,7 @@ export function ThreadView({
                   {thread.branch && fileCount > 0 && (
                     <button
                       type="button"
-                      className={stopped || fixable ? "btn" : "btn solid"}
+                      className={stopped || fixable || limited ? "btn" : "btn solid"}
                       onClick={commit}
                       disabled={committing}
                     >
@@ -1226,6 +1249,10 @@ function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean 
       "The review found problems, listed above. Fix it has Shoji work through them. You can also ask for changes of your own, or accept the work as it is.";
   else if (result.status === "planned")
     text = "Here's the plan. Build it as it is, or say what to change first. Nothing in the project has changed yet.";
+  else if (result.status === "stopped" && result.limit)
+    text = `${result.reason ?? "The provider's limit ran out for now."}${
+      result.limit.resetsAt ? ` It opens again ${opensAt(result.limit.resetsAt)}.` : ""
+    }${result.plan ? " The work so far is kept." : ""}`;
   else if (result.status === "stopped")
     text =
       "Shoji stopped before the next step could take this thread past its limit. Keep going gives it more to spend, or you can accept the work as it is.";

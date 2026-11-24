@@ -72,6 +72,8 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
   const release = { update: null as AvailableUpdate | null, installError: null as string | null, checks: 0, installs: 0 };
   /** Ollama's tool-ready models, largest first, or null when it isn't running; tests set it. */
   const ollama = { models: null as string[] | null };
+  /** LM Studio or llama.cpp's server and its loaded models, or null when none is running; tests set it. */
+  const local = { found: null as { name: string; models: string[] } | null };
   /** ChatGPT: who is signed in, the plan's models, and what signing in fails with; tests set these. */
   const chatgpt = {
     email: null as string | null,
@@ -134,6 +136,10 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     ollamaModels: async () => {
       if (!ollama.models) throw new Error("Ollama isn't running on this computer.");
       return ollama.models.map((name, i) => ({ name, size: 1000 - i }));
+    },
+    localModels: async () => {
+      if (!local.found) throw new Error("No local server with a model loaded is running on this computer.");
+      return { ...local.found, models: [...local.found.models] };
     },
     chatgptStatus: async () => ({ signedIn: chatgpt.email !== null, email: chatgpt.email }),
     chatgptSignIn: async () => {
@@ -349,6 +355,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     picked,
     release,
     ollama,
+    local,
     chatgpt,
     setOpenAIKey: (status: KeyStatus) => {
       openai = status;

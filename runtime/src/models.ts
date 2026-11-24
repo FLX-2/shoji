@@ -6,13 +6,14 @@ export type Effort = (typeof EFFORTS)[number];
 
 /** Where models run. Anthropic's models keep their bare ids, such as claude-sonnet-5-5. Every other model's id
  *  starts with its provider, such as ollama/qwen3-coder, so no two providers' models can share an id. */
-export const PROVIDERS = ["anthropic", "ollama", "openai", "chatgpt", "openrouter", "gemini"] as const;
+export const PROVIDERS = ["anthropic", "ollama", "local", "openai", "chatgpt", "openrouter", "gemini"] as const;
 
 export type ProviderId = (typeof PROVIDERS)[number];
 
 export const PROVIDER_NAMES: Readonly<Record<ProviderId, string>> = {
   anthropic: "Anthropic",
   ollama: "Ollama",
+  local: "your local server",
   openai: "OpenAI",
   chatgpt: "ChatGPT",
   openrouter: "OpenRouter",

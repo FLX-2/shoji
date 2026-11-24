@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { connect, planToken, unreachable } from "../src/connect";
 import { Inbox } from "../src/inbox";
 import { OpenAIProvider, PlanLimitError, readStream, toInput, toMessage, toRequest, type ResponsesResult } from "../src/openai";
-import { KeyRejectedError } from "../src/provider";
+import { KeyRejectedError, RouteLimitError } from "../src/provider";
 
 const request = {
   model: "chatgpt/gpt-6",
@@ -174,6 +174,37 @@ describe("OpenAIProvider", () => {
     const { fake } = openai(ok(midway));
     const provider = new OpenAIProvider({ plan: true, credential: async () => "tok", fetch: fake });
     await expect(provider.send(request)).rejects.toBeInstanceOf(PlanLimitError);
+  });
+
+  it("says whose plan ran out, and when it opens again when ChatGPT says", async () => {
+    const at = Date.UTC(2026, 10, 24, 23, 40) / 1000;
+    const midway = { type: "response.failed", response: { error: { code: "subscription_sharing_usage_limit_exceeded", resets_at: at } } };
+    const provider = new OpenAIProvider({ plan: true, credential: async () => "tok", fetch: openai(ok(midway)).fake });
+    const error = await provider.send(request).catch((e) => e);
+    expect(error).toBeInstanceOf(RouteLimitError);
+    expect(error).toMatchObject({ provider: "chatgpt", resetsAt: at * 1000, message: "Your ChatGPT plan has reached its limit for Shoji for now." });
+  });
+
+  it("waits out OpenRouter's per-minute limit on a free model once, and stops for the day's", async () => {
+    const limited = (message: string, reset: number) => () =>
+      new Response(JSON.stringify({ error: { code: 429, message } }), { status: 429, headers: { "x-ratelimit-reset": String(reset) } });
+    const free = { ...request, model: "openrouter/vendor/small:free" };
+    const options = { plan: false, service: "OpenRouter", baseURL: "https://openrouter.ai/api/v1", credential: async () => "sk-or", backoff: 0 };
+    const minute = new OpenAIProvider({
+      ...options,
+      fetch: openai(limited("Rate limit exceeded: free-models-per-min.", Date.now() + 20_000), ok(completed([toolCall]))).fake,
+    });
+    expect((await minute.send(free)).stop_reason).toBe("tool_use");
+
+    const tomorrow = Date.now() + 6 * 3_600_000;
+    const day = new OpenAIProvider({ ...options, fetch: openai(limited("Rate limit exceeded: free-models-per-day.", tomorrow)).fake });
+    const error = await day.send(free).catch((e) => e);
+    expect(error).toBeInstanceOf(RouteLimitError);
+    expect(error).toMatchObject({ provider: "openrouter", resetsAt: tomorrow, message: "OpenRouter's free models have reached their limit for today." });
+
+    // A paid model's limit is about speed, so it still says to wait a minute.
+    const paid = new OpenAIProvider({ ...options, fetch: openai(limited("Rate limit exceeded", 0)).fake });
+    await expect(paid.send({ ...request, model: "openrouter/vendor/large" })).rejects.toThrow("OpenRouter is limiting how fast");
   });
 
   it("renews a turned-down sign-in once, and then says to sign in again", async () => {

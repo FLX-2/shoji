@@ -35,7 +35,7 @@ pub fn address(host: Option<&str>) -> (String, u16) {
 }
 
 /// One plain HTTP/1.0 exchange, so the answer comes whole with no chunking, and its body if it's a 200.
-fn exchange(host: &(String, u16), method: &str, path: &str, body: &str) -> Result<String, String> {
+pub(crate) fn exchange(host: &(String, u16), method: &str, path: &str, body: &str) -> Result<String, String> {
     let gone = || "Ollama isn't running on this computer.".to_string();
     let addr = (host.0.as_str(), host.1).to_socket_addrs().map_err(|_| gone())?.next().ok_or_else(gone)?;
     let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(800)).map_err(|_| gone())?;
@@ -67,15 +67,24 @@ fn tags(body: &str) -> Vec<(String, u64)> {
         .collect()
 }
 
-/// Whether /api/show says the model can call tools.
+/// Whether /api/show says the model can call tools and is made to hold a whole step.
 fn uses_tools(body: &str) -> bool {
     let value: serde_json::Value = serde_json::from_str(body).unwrap_or_default();
-    value["capabilities"]
+    let tools = value["capabilities"]
         .as_array()
-        .is_some_and(|caps| caps.iter().any(|c| c.as_str() == Some("tools")))
+        .is_some_and(|caps| caps.iter().any(|c| c.as_str() == Some("tools")));
+    // A model made for fewer tokens than this can't hold a step's instructions, plan and files together, so it isn't
+    // offered. Ollama names the length after the model's family, as in "gemma3.context_length".
+    let context = value["model_info"]
+        .as_object()
+        .and_then(|info| info.iter().find(|(key, _)| key.ends_with(".context_length")))
+        .and_then(|(_, length)| length.as_u64());
+    tools && context.is_none_or(|length| length >= SMALLEST_CONTEXT)
 }
 
-/// The pulled models that can call tools, largest first.
+/// Fewer tokens than this, and a model can't do a step's work.
+const SMALLEST_CONTEXT: u64 = 16_384;
+
 pub fn pulled(host: Option<&str>) -> Result<Vec<Pulled>, String> {
     let host = address(host);
     let mut found: Vec<Pulled> = tags(&exchange(&host, "GET", "/api/tags", "")?)
@@ -127,7 +136,7 @@ mod tests {
             r#"{"models":[{"name":"tiny:1b","size":800},{"name":"embed:latest","size":300},{"name":"gemma4:31b","size":19000}]}"#,
             r#"{"capabilities":["completion","tools"]}"#,
             r#"{"capabilities":["embedding"]}"#,
-            r#"{"capabilities":["completion","tools","thinking"]}"#,
+            r#"{"capabilities":["completion","tools","thinking"],"model_info":{"gemma3.context_length":131072}}"#,
         ]);
         let found = pulled(Some(&host)).unwrap();
         assert_eq!(
@@ -137,6 +146,16 @@ mod tests {
                 Pulled { name: "tiny:1b".into(), size: 800 }
             ]
         );
+    }
+
+    #[test]
+    fn leaves_out_models_too_short_to_hold_a_step() {
+        let host = ollama(vec![
+            r#"{"models":[{"name":"old:8b","size":4000},{"name":"qwen3:4b","size":2500}]}"#,
+            r#"{"capabilities":["completion","tools"],"model_info":{"llama.context_length":8192}}"#,
+            r#"{"capabilities":["completion","tools"],"model_info":{"qwen3.context_length":40960}}"#,
+        ]);
+        assert_eq!(pulled(Some(&host)).unwrap(), vec![Pulled { name: "qwen3:4b".into(), size: 2500 }]);
     }
 
     #[test]

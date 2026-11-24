@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { MODELS, pricesListed, providerOf, type ModelId } from "../runtime/src/models";
-import { ROLES } from "../runtime/src/stack";
+import { MODELS, PROVIDER_NAMES, pricesListed, providerOf, type ModelId, type ProviderId } from "../runtime/src/models";
+import { ROLES, type Stack } from "../runtime/src/stack";
 import { LimitAsk, type Ask } from "./budget/LimitAsk";
 import { spentOn } from "./budget/daily";
 import {
@@ -29,8 +29,10 @@ import { useChatGPT } from "./stack/chatgpt";
 import { runnable, useOpenRouter } from "./stack/openrouter";
 import { useGemini } from "./stack/gemini";
 import { providerPresets } from "./stack/presets";
+import { carryOnRoutes } from "./stack/routes";
 import { ReachContext } from "./stack/reach";
 import { useOllama } from "./stack/ollama";
+import { useLocalServer } from "./stack/local";
 import { StackView } from "./stack/StackView";
 import { estimateCost, tierOf, tierStack, TIERS, type Tier } from "./stack/tier";
 import { keyLabel } from "./settings/shortcuts";
@@ -85,6 +87,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("look");
   const catalog = useModelCatalog(prefs.updateModels);
   const ollama = useOllama(given);
+  const local = useLocalServer(given);
   const chatgpt = useChatGPT(given);
   const openrouter = useOpenRouter(given);
   const gemini = useGemini(given, prefs.geminiTier);
@@ -119,6 +122,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     start,
     requestChanges,
     keepGoing,
+    carryOnWith,
     fix,
     resume,
     build,
@@ -326,10 +330,31 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       if (provider === "chatgpt") return chatgpt.status === "signed-in";
       if (provider === "openrouter") return openrouter.status === "connected" && runnable(model);
       if (provider === "gemini") return gemini.status === "connected" && gemini.models.includes(model);
+      if (provider === "local") return local.models.includes(model);
       return true;
     },
-    [openaiConnected, chatgpt.status, openrouter.status, gemini.status, gemini.models],
+    [openaiConnected, chatgpt.status, openrouter.status, gemini.status, gemini.models, local.models],
   );
+  // The one-tap stacks the person's connections allow, beside Anthropic's.
+  const presets = providerPresets({
+    anthropic: anthropicKey,
+    openai: openaiConnected,
+    chatgpt,
+    ollama,
+    local,
+    openrouterFree: openrouter.free,
+    gemini: prefs.geminiTier === "free" ? { free: gemini.models } : { paid: gemini.models },
+  });
+  /** Where a thread can carry on when a provider's free tier or plan ran out: each preset, then the person's own
+   *  stack, with Anthropic's models only when its key is saved. */
+  const routesFor = (stackNow: Stack) => (limited: ProviderId) =>
+    carryOnRoutes(
+      stackNow,
+      limited,
+      [...presets, { name: "Your stack", stack: stack.stack }],
+      (model) => (providerOf(model) === "anthropic" ? anthropicKey : reaches(model)),
+      (provider) => (provider === "local" && local.name ? local.name : PROVIDER_NAMES[provider]),
+    );
   const hasKey = !unconnected;
   // Scheduled tasks start by themselves, never past the daily limit, since nobody may be here to say yes.
   useSchedules(
@@ -863,6 +888,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
             keyStatus={keyStatus}
             onKeyChanged={refreshKey}
             ollama={ollama}
+            local={local}
             chatgpt={chatgpt}
             openrouter={openrouter}
             gemini={gemini}
@@ -930,14 +956,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 error={stack.error}
                 onSave={stack.save}
                 ledger={ledger}
-                presets={providerPresets({
-                  anthropic: anthropicKey,
-                  openai: openaiConnected,
-                  chatgpt,
-                  ollama,
-                  openrouterFree: openrouter.free,
-                  gemini: prefs.geminiTier === "free" ? { free: gemini.models } : { paid: gemini.models },
-                })}
+                presets={presets}
                 seenModels={prefs.seenModels ?? Object.keys(MODELS)}
                 onSeeModels={(models) =>
                   setPrefs({ seenModels: [...new Set([...(prefs.seenModels ?? Object.keys(MODELS)), ...models])] })
@@ -1035,6 +1054,18 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                         ? withinDay("Picking this thread up", prefs.cap, () => resume(prefs.cap))
                         : resume()
                     }
+                    routesFor={routesFor(thread.stack)}
+                    onCarryOnWith={(route, fresh) =>
+                      fresh
+                        ? withinDay("This thread", thread.cap, () => {
+                            const first = thread.id;
+                            start(thread.task, thread.repo, route.stack, thread.cap, prefs.planFirst, thread.attachments);
+                            if (first !== undefined) bridge.discardThread(first).then(reread, () => {});
+                          })
+                        : spentOut
+                          ? withinDay("Carrying this thread on", prefs.cap, () => carryOnWith(route.stack, route.name, prefs.cap))
+                          : carryOnWith(route.stack, route.name)
+                    }
                     onContinue={() =>
                       bringHome(thread.repo, {
                         task: "",
@@ -1123,6 +1154,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 onOpenStack={() => setSection("stack")}
                 keyStatus={keyStatus}
                 ollama={ollama}
+                local={local}
                 chatgpt={chatgpt}
                 openaiKey={openaiKey}
                 openrouter={openrouter}

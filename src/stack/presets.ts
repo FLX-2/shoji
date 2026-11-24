@@ -2,6 +2,7 @@ import type { ModelId } from "../../runtime/src/models";
 import type { Stack } from "../../runtime/src/stack";
 import { planStack, type ChatGPT } from "./chatgpt";
 import { localStack, type Ollama } from "./ollama";
+import type { LocalServer } from "./local";
 import { freeStack } from "./openrouter";
 import { geminiStack } from "./gemini";
 
@@ -32,6 +33,8 @@ export function providerPresets(connected: {
   openai: boolean;
   chatgpt: ChatGPT;
   ollama: Ollama;
+  /** LM Studio or llama.cpp's server; left out where the person isn't asked about it. */
+  local?: Pick<LocalServer, "status" | "models">;
   /** OpenRouter's free models, largest first; empty when it isn't connected. */
   openrouterFree: ModelId[];
   /** Gemini's models on the person's key, on its free tier or paid; empty when no key is saved. */
@@ -43,6 +46,8 @@ export function providerPresets(connected: {
   if (connected.openai) presets.push({ name: "OpenAI", stack: OPENAI_STACK });
   if (connected.ollama.status === "ready")
     presets.push({ name: "On this computer", stack: localStack(connected.ollama.models) });
+  if (connected.local?.status === "ready" && connected.local.models.length)
+    presets.push({ name: "On my local server", stack: localStack(connected.local.models) });
   if (connected.ollama.status === "ready" && connected.anthropic)
     presets.push({ name: "Claude checks", stack: checkedStack(connected.ollama.models) });
   if (connected.openrouterFree.length)
