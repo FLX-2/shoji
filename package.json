@@ -28,6 +28,7 @@
     "@fontsource/hanken-grotesk": "^5.3.0",
     "@modelcontextprotocol/sdk": "1.20.0",
     "@tauri-apps/api": "^2",
+    "@vercel/analytics": "^2.0.1",
     "@xterm/addon-fit": "0.10.0",
     "@xterm/xterm": "5.5.0",
     "react": "^19.1.0",
