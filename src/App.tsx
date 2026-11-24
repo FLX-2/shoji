@@ -32,6 +32,7 @@ import { providerPresets } from "./stack/presets";
 import { carryOnRoutes } from "./stack/routes";
 import { ReachContext } from "./stack/reach";
 import { useOllama } from "./stack/ollama";
+import { useLocalServer } from "./stack/local";
 import { StackView } from "./stack/StackView";
 import { estimateCost, tierOf, tierStack, TIERS, type Tier } from "./stack/tier";
 import { keyLabel } from "./settings/shortcuts";
@@ -86,6 +87,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("look");
   const catalog = useModelCatalog(prefs.updateModels);
   const ollama = useOllama(given);
+  const local = useLocalServer(given);
   const chatgpt = useChatGPT(given);
   const openrouter = useOpenRouter(given);
   const gemini = useGemini(given, prefs.geminiTier);
@@ -328,9 +330,10 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       if (provider === "chatgpt") return chatgpt.status === "signed-in";
       if (provider === "openrouter") return openrouter.status === "connected" && runnable(model);
       if (provider === "gemini") return gemini.status === "connected" && gemini.models.includes(model);
+      if (provider === "local") return local.models.includes(model);
       return true;
     },
-    [openaiConnected, chatgpt.status, openrouter.status, gemini.status, gemini.models],
+    [openaiConnected, chatgpt.status, openrouter.status, gemini.status, gemini.models, local.models],
   );
   // The one-tap stacks the person's connections allow, beside Anthropic's.
   const presets = providerPresets({
@@ -338,6 +341,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     openai: openaiConnected,
     chatgpt,
     ollama,
+    local,
     openrouterFree: openrouter.free,
     gemini: prefs.geminiTier === "free" ? { free: gemini.models } : { paid: gemini.models },
   });
@@ -880,6 +884,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
             keyStatus={keyStatus}
             onKeyChanged={refreshKey}
             ollama={ollama}
+            local={local}
             chatgpt={chatgpt}
             openrouter={openrouter}
             gemini={gemini}
@@ -1145,6 +1150,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                 onOpenStack={() => setSection("stack")}
                 keyStatus={keyStatus}
                 ollama={ollama}
+                local={local}
                 chatgpt={chatgpt}
                 openaiKey={openaiKey}
                 openrouter={openrouter}

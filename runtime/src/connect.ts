@@ -2,6 +2,7 @@ import { providerOf, type ModelId, type ProviderId } from "./models";
 import { OllamaProvider, ollamaUrl } from "./ollama";
 import { OpenAIError, OpenAIProvider } from "./openai";
 import { ChatProvider, GEMINI_API } from "./chat";
+import { LocalProvider, localServers } from "./local";
 
 /** OpenRouter's API, which takes OpenAI's Responses format for every model it routes to. */
 export const OPENROUTER_API = "https://openrouter.ai/api/v1";
@@ -70,6 +71,8 @@ export function connect(env: NodeJS.ProcessEnv, options: Connections = {}): Prov
     });
   // Ollama needs no key, so it's always there to try. A call to it when it isn't running says so.
   connected.ollama = new OllamaProvider(ollamaUrl(env.OLLAMA_HOST));
+  // So are LM Studio and llama.cpp's server, which are looked for when a step first calls one of their models.
+  connected.local = new LocalProvider(localServers(env.SHOJI_LOCAL_URL));
   return new Providers(connected);
 }
 

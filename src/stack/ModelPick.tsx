@@ -8,7 +8,11 @@ const FILTER_FROM = 9;
 /** A model's family, such as Opus: the first word of an Anthropic model's name, or else its provider, since
  *  other providers name their models in ways that don't group. */
 export const familyOf = (id: ModelId) =>
-  providerOf(id) === "anthropic" ? labelOf(id).split(" ")[0] : PROVIDER_NAMES[providerOf(id)];
+  providerOf(id) === "anthropic"
+    ? labelOf(id).split(" ")[0]
+    : providerOf(id) === "local"
+      ? "Local server"
+      : PROVIDER_NAMES[providerOf(id)];
 
 /**
  * Every model Shoji knows, in families: the family with the dearest model first, and in each family the newest

@@ -1,11 +1,13 @@
 import type { ChatGPT } from "../stack/chatgpt";
 import type { Ollama } from "../stack/ollama";
+import type { LocalServer } from "../stack/local";
 import { ChatGPTRow } from "./ChatGPTRow";
 import { OpenRouterRow } from "./OpenRouterRow";
 import type { OpenRouter } from "../stack/openrouter";
 import { GeminiRow } from "./GeminiRow";
 import type { Gemini } from "../stack/gemini";
 import { OllamaRow } from "./OllamaRow";
+import { LocalRow } from "./LocalRow";
 import { useEffect, useState } from "react";
 import { type McpServer, parseMcpServers } from "../../runtime/src/mcpConfig";
 import { DEFAULT_PRIVATE } from "../../runtime/src/private";
@@ -41,6 +43,7 @@ interface SettingsViewProps {
   onOpenStack: () => void;
   keyStatus: KeyStatus | null;
   ollama: Ollama;
+  local: LocalServer;
   chatgpt: ChatGPT;
   onManageUsage: () => void;
   openaiKey: KeyStatus | null;
@@ -83,6 +86,7 @@ export function SettingsView({
   onOpenStack,
   keyStatus,
   ollama,
+  local,
   chatgpt,
   onManageUsage,
   openaiKey,
@@ -163,6 +167,7 @@ export function SettingsView({
                     <OpenRouterRow openrouter={openrouter} />
                     <GeminiRow gemini={gemini} tier={prefs.geminiTier} onTier={(geminiTier) => onChange({ geminiTier })} />
                     <OllamaRow ollama={ollama} />
+                    <LocalRow local={local} />
                   </div>
                 </section>
                 <section className="sgroup" aria-labelledby="s-threads">

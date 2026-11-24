@@ -175,6 +175,8 @@ export interface ChatOptions {
   fetch?: typeof fetch;
   /** How long to wait before trying a busy service again, in ms; tests make it 0. */
   backoff?: number;
+  /** A server on this computer, which sets each model's context when it loads the model. */
+  local?: boolean;
 }
 
 /** Fields a model may not take. One that's turned down is left out once, rather than failing the step. */
@@ -242,6 +244,12 @@ export class ChatProvider implements ModelProvider {
     const name = MODELS[model]?.label ?? apiName(model);
     if (error.status === null)
       return new Error(`Shoji couldn't reach ${who} after 3 tries. Check your internet connection, then try again.`);
+    if (this.options.local && /context|n_ctx|too long|exceeds/i.test(error.message))
+      return new Error(
+        `${name}'s context on ${who} is too short for this step. Load it with a context of at least 32K in ${who}, then try again.`,
+      );
+    if (error.status === null && this.options.local)
+      return new Error(`Shoji couldn't reach ${who} on this computer. Start its server, then try again.`);
     if (error.status === 401 || error.status === 403 || (error.status === 400 && /api key/i.test(error.message)))
       return new KeyRejectedError(`${who} didn't accept your key. Check it in Settings.`);
     if (error.status === 404) return new Error(`${who} doesn't offer ${name} to your key. Pick another model in Stack.`);

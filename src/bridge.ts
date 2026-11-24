@@ -15,6 +15,12 @@ export interface PulledModel {
   size: number;
 }
 
+/** LM Studio or llama.cpp's server, whichever answered on this computer, and the models it has loaded. */
+export interface FoundServer {
+  name: string;
+  models: string[];
+}
+
 /** Whether Shoji is signed in with ChatGPT, and as whom. */
 export interface ChatGPTStatus {
   signedIn: boolean;
@@ -279,6 +285,8 @@ export const bridge = {
   /** The models pulled into Ollama on this computer that can use tools, largest first. Fails when Ollama
    *  isn't running. */
   ollamaModels: () => invoke<PulledModel[]>("ollama_models"),
+  /** The local server running on this computer and its loaded models. Fails when none answers. */
+  localModels: () => invoke<FoundServer>("local_models"),
   chatgptStatus: () => invoke<ChatGPTStatus>("chatgpt_status"),
   /** Opens ChatGPT's sign-in page in the browser and waits for the person to allow Shoji, or not. */
   chatgptSignIn: () => invoke<ChatGPTStatus>("chatgpt_sign_in"),
