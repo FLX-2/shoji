@@ -21,7 +21,7 @@ export function endedNote(turn: Turn): string | null {
     case "answered":
       return "Answered your question.";
     case "stopped":
-      return "Stopped at its spending limit.";
+      return result.limit ? (result.reason ?? "Stopped: the provider's limit ran out for now.") : "Stopped at its spending limit.";
     case "failed":
       return result.reason ? `Failed: ${result.reason}` : "Failed before it finished.";
   }

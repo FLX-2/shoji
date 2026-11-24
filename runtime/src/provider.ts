@@ -20,6 +20,41 @@ export interface ModelProvider {
 
 export class NotConnectedError extends Error {}
 
+/**
+ * A free tier, or the person's plan, has run out for now. The thread stops as it does at its own limit, and can
+ * carry on with another provider the person connected, or on the same one once it opens again.
+ */
+export class RouteLimitError extends Error {
+  constructor(
+    message: string,
+    readonly provider: ProviderId,
+    /** When the limit lifts, in ms since 1970, when the provider says or the tier's rules tell. */
+    readonly resetsAt?: number,
+  ) {
+    super(message);
+  }
+}
+
+/** The next midnight in California, when Google's free-tier daily limits reset. It can be an hour out on the two
+ *  nights the clocks change. */
+export function nextPacificMidnight(now = Date.now()): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(now));
+  const part = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const sinceMidnight = ((part("hour") * 60 + part("minute")) * 60 + part("second")) * 1000 + (now % 1000);
+  return now - sinceMidnight + 86_400_000;
+}
+
+/** How long to wait out a per-minute limit before trying once more: what the provider said, at most a minute. Tests
+ *  make the wait 0 with a `backoff` of 0. */
+export const perMinuteWait = (ms: number, backoff: number | undefined) =>
+  backoff === 0 ? 0 : Math.max(1000, Math.min(60_000, ms));
+
 /** The message for a model whose provider isn't connected. */
 export const notConnected = (provider: ProviderId) =>
   `Shoji isn't connected to ${PROVIDER_NAMES[provider]}. Connect it in Settings, or pick another model in Stack.`;

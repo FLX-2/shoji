@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { apiName, MODELS, type Effort, type ModelId } from "./models";
-import { KeyRejectedError, type ModelProvider, type ModelRequest } from "./provider";
+import { apiName, MODELS, providerOf, type Effort, type ModelId } from "./models";
+import { KeyRejectedError, perMinuteWait, RouteLimitError, type ModelProvider, type ModelRequest } from "./provider";
 
 /**
  * OpenAI's models through its Responses API: on the person's ChatGPT plan (Sign in with ChatGPT) or on their
@@ -14,7 +14,7 @@ export const OPENAI_API = "https://api.openai.com/v1";
 export const NAMESPACE = "shoji";
 
 /** A plan has run out for now, as a thread's limit does: the thread stops and can carry on later. */
-export class PlanLimitError extends Error {}
+export class PlanLimitError extends RouteLimitError {}
 
 /** OpenAI's reasoning efforts. Shoji's two highest have no match everywhere, so they ask for OpenAI's highest. */
 const EFFORT: Record<Effort, string> = { low: "low", medium: "medium", high: "high", xhigh: "high", max: "high" };
@@ -175,10 +175,22 @@ export class OpenAIError extends Error {
     readonly code: string | null,
     message: string,
     readonly param: string | null = null,
+    /** When a limit lifts, in ms since 1970, when the service said. */
+    readonly resetsAt: number | null = null,
   ) {
     super(message);
   }
 }
+
+/** When a limit lifts, from what ChatGPT says in a failed answer: a time, or seconds from now. */
+function resetOf(error: { resets_at?: unknown; resets_in_seconds?: unknown } | undefined): number | null {
+  if (typeof error?.resets_at === "number") return error.resets_at * 1000;
+  if (typeof error?.resets_in_seconds === "number") return Date.now() + error.resets_in_seconds * 1000;
+  return null;
+}
+
+/** A model that runs on a provider's free allowance, such as OpenRouter's :free models. */
+const isFree = (model: ModelId) => MODELS[model]?.billing === "free" || model.endsWith(":free");
 
 /** Reads a streamed answer to its end. Only a completed (or cut-short) response counts; a failure, even one
  *  that arrives partway, is thrown. */
@@ -190,7 +202,8 @@ export async function readStream(body: ReadableStream<Uint8Array>): Promise<Resp
     if (!line.startsWith("data:")) return;
     const data = line.slice(5).trim();
     if (!data || data === "[DONE]") return;
-    let event: { type?: string; response?: ResponsesResult & { error?: { code?: string; message?: string } }; code?: string; message?: string; error?: { code?: string; message?: string } };
+    type Failure = { code?: string; message?: string; resets_at?: unknown; resets_in_seconds?: unknown };
+    let event: { type?: string; response?: ResponsesResult & { error?: Failure }; code?: string; message?: string; error?: Failure } & Failure;
     try {
       event = JSON.parse(data);
     } catch {
@@ -199,10 +212,10 @@ export async function readStream(body: ReadableStream<Uint8Array>): Promise<Resp
     if (event.type === "response.completed" || event.type === "response.incomplete") finished = event.response ?? {};
     else if (event.type === "response.failed") {
       const error = event.response?.error;
-      throw new OpenAIError(null, error?.code ?? null, error?.message ?? "The answer failed partway.");
+      throw new OpenAIError(null, error?.code ?? null, error?.message ?? "The answer failed partway.", null, resetOf(error));
     } else if (event.type === "error") {
       const error = event.error ?? event;
-      throw new OpenAIError(null, error.code ?? null, error.message ?? "The answer failed partway.");
+      throw new OpenAIError(null, error.code ?? null, error.message ?? "The answer failed partway.", null, resetOf(error));
     }
   };
   const reader = body.getReader();
@@ -247,6 +260,7 @@ export class OpenAIProvider implements ModelProvider {
     let refreshed = false;
     let busy = 0;
     let dropped = 0;
+    let waited = false;
     for (;;) {
       try {
         return await this.once(request, drop, refreshed);
@@ -270,6 +284,15 @@ export class OpenAIProvider implements ModelProvider {
           dropped++;
           await new Promise((done) => setTimeout(done, (this.options.backoff ?? 4000) * dropped * 0.25));
           continue;
+        }
+        // A free model's per-minute limit lifts within a minute, so it's waited out once rather than stopping.
+        if (error.status === 429 && !waited && isFree(request.model) && !/per-?day|daily/i.test(error.message)) {
+          const lifts = error.resetsAt !== null ? error.resetsAt - Date.now() : 20_000;
+          if (lifts <= 65_000) {
+            waited = true;
+            await new Promise((done) => setTimeout(done, perMinuteWait(lifts, this.options.backoff)));
+            continue;
+          }
         }
         const unavailable = error.status === 503 || /usage_unavailable|user_unavailable/.test(error.code ?? "");
         if (unavailable && busy < 2) {
@@ -301,12 +324,15 @@ export class OpenAIProvider implements ModelProvider {
     }
     if (!answer.ok || !answer.body) {
       const said = (await answer.json().catch(() => ({}))) as { error?: { code?: string; message?: string; param?: string } };
+      // OpenRouter says when a rate limit lifts, in ms since 1970.
+      const reset = Number(answer.headers?.get?.("x-ratelimit-reset"));
       throw new OpenAIError(
         answer.status,
         // OpenRouter's codes are numbers, the HTTP status again; only OpenAI's words say more.
         typeof said.error?.code === "string" ? said.error.code : null,
         said.error?.message ?? answer.statusText,
         said.error?.param ?? null,
+        Number.isFinite(reset) && reset > 0 ? reset : null,
       );
     }
     let result: ResponsesResult;
@@ -331,7 +357,9 @@ export class OpenAIProvider implements ModelProvider {
       return new Error(`Shoji couldn't reach ${who} after 3 tries (${error.message}). Check your internet connection, then try again.`);
     if (code === "subscription_sharing_usage_limit_exceeded")
       return new PlanLimitError(
-        "Your ChatGPT plan has reached its limit for Shoji for now. Manage usage in ChatGPT's settings, then carry on.",
+        "Your ChatGPT plan has reached its limit for Shoji for now.",
+        "chatgpt",
+        error.resetsAt ?? undefined,
       );
     if (code === "subscription_sharing_user_not_eligible")
       return new Error("Your ChatGPT plan can't be used in other apps. Plus and Pro plans can.");
@@ -342,6 +370,14 @@ export class OpenAIProvider implements ModelProvider {
       return new Error(`Your ${who} account is out of credit. Add credit on ${who}'s site, then try again.`);
     if (error.status === 404 || code === "model_not_found")
       return new Error(`${plan ? "Your ChatGPT plan" : who} doesn't offer ${name} here. Pick another model in Stack.`);
+    if (error.status === 429 && !plan && isFree(model))
+      return new RouteLimitError(
+        /per-?day|daily/i.test(error.message)
+          ? `${who}'s free models have reached their limit for today.`
+          : `${who}'s free models have reached their limit for now.`,
+        providerOf(model),
+        error.resetsAt ?? undefined,
+      );
     if (error.status === 429) return new Error(`${who} is limiting how fast Shoji can send. Wait a minute, then try again.`);
     if (error.status === 503 || /unavailable/.test(code))
       return new Error(`${who} couldn't take the request right now. Try again in a few minutes.`);

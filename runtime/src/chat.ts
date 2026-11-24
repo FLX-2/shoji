@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { apiName, MODELS, type Effort, type ModelId } from "./models";
-import { KeyRejectedError, type ModelProvider, type ModelRequest } from "./provider";
+import { apiName, MODELS, providerOf, type Effort, type ModelId } from "./models";
+import { KeyRejectedError, nextPacificMidnight, perMinuteWait, RouteLimitError, type ModelProvider, type ModelRequest } from "./provider";
 
 /**
  * A model behind an OpenAI-style Chat Completions API, such as Gemini's on a Google AI Studio key. The roles speak
@@ -187,6 +187,7 @@ export class ChatProvider implements ModelProvider {
   async send(request: ModelRequest): Promise<Anthropic.Message> {
     const drop: string[] = [];
     let tries = 0;
+    let waited = false;
     for (;;) {
       try {
         return await this.once(request, drop);
@@ -201,6 +202,14 @@ export class ChatProvider implements ModelProvider {
         if ((error.status === null || error.status >= 500) && tries < 2) {
           tries++;
           await new Promise((done) => setTimeout(done, (this.options.backoff ?? 4000) * tries * 0.5));
+          continue;
+        }
+        // A free tier's per-minute limit lifts within a minute, so it's waited out once rather than stopping. Google
+        // says how long: "Please retry in 41.2s".
+        const retry = Number(error.message.match(/retry in ([\d.]+)\s*s/i)?.[1]);
+        if (error.status === 429 && !waited && !/per ?day|daily/i.test(error.message) && retry <= 65) {
+          waited = true;
+          await new Promise((done) => setTimeout(done, perMinuteWait(retry * 1000, this.options.backoff)));
           continue;
         }
         throw this.plain(error, request.model);
@@ -236,12 +245,16 @@ export class ChatProvider implements ModelProvider {
     if (error.status === 401 || error.status === 403 || (error.status === 400 && /api key/i.test(error.message)))
       return new KeyRejectedError(`${who} didn't accept your key. Check it in Settings.`);
     if (error.status === 404) return new Error(`${who} doesn't offer ${name} to your key. Pick another model in Stack.`);
-    if (error.status === 429)
-      return new Error(
-        MODELS[model]?.billing === "free"
-          ? `${who}'s free tier has reached its limit for now. Wait a while or until tomorrow, or pick another model in Stack.`
-          : `${who} is limiting how fast Shoji can send. Wait a minute, then try again.`,
+    if (error.status === 429 && MODELS[model]?.billing === "free") {
+      // Google's free-tier daily limits reset at midnight in California.
+      const daily = /per ?day|daily/i.test(error.message);
+      return new RouteLimitError(
+        `${who}'s free tier has reached its limit ${daily ? "for today" : "for now"}.`,
+        providerOf(model),
+        daily ? nextPacificMidnight() : undefined,
       );
+    }
+    if (error.status === 429) return new Error(`${who} is limiting how fast Shoji can send. Wait a minute, then try again.`);
     if (error.status >= 500) return new Error(`${who} couldn't take the request right now. Try again in a few minutes.`);
     return new Error(`${who} turned the request down: ${error.message}`);
   }

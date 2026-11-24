@@ -311,7 +311,17 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
     [carryOn],
   );
 
-  /** Builds the plan the person read and approved. */
+  /** Picks the work up where it stopped on another stack, as when a free tier or plan ran out and the person moved
+   *  its seats to another provider. The thread keeps the new stack. */
+  const carryOnWith = useCallback(
+    (stack: Stack, name: string, extra = 0) => {
+      if (!shown) return;
+      carryOnHeld({ ...shown, thread: { ...shown.thread, stack } }, `Carry on with ${name}`, RESUME, "changes", extra);
+    },
+    [shown, carryOnHeld],
+  );
+
+    /** Builds the plan the person read and approved. */
   const build = useCallback(() => carryOn("Build it", "", "build"), [carryOn]);
 
   /** Plans again from the person's notes on the plan, and pauses again. */
@@ -418,6 +428,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
     start,
     requestChanges,
     keepGoing,
+    carryOnWith,
     fix,
     resume,
     build,
