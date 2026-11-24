@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <sub>macOS · Windows · Linux &nbsp;|&nbsp; Anthropic, OpenAI, ChatGPT, Gemini, OpenRouter or Ollama &nbsp;|&nbsp; MIT license</sub>
+  <sub>macOS · Windows · Linux &nbsp;|&nbsp; Anthropic, OpenAI, ChatGPT, Gemini, OpenRouter, Ollama or LM Studio &nbsp;|&nbsp; MIT license</sub>
 </p>
 
 <br>
@@ -131,12 +131,24 @@ Download the installer for your system from the [latest release](https://github.
 | Windows 10 or 11 | `.exe` or `.msi` installer |
 | Linux | `.AppImage` or `.deb` |
 
-The builds aren't signed yet, so your system asks once before opening one.
+Or install it with a package manager, from this repository:
+
+```sh
+# macOS, with Homebrew
+brew tap flx-2/shoji https://github.com/FLX-2/shoji
+brew install --cask flx-2/shoji/shoji
+
+# Windows, with Scoop
+scoop bucket add shoji https://github.com/FLX-2/shoji
+scoop install shoji/shoji
+```
+
+The builds aren't signed yet, so your system asks once before opening one. The Homebrew cask clears that check for Shoji when it installs.
 
 - **Mac:** the first time, Control-click the app and choose Open. If macOS still blocks it, allow it under System Settings, Privacy & Security.
 - **Windows:** if SmartScreen stops the installer, choose More info, then Run anyway.
 
-Shoji is free. You pay for the models your tasks use, with your own API key from Anthropic, OpenAI, Google or OpenRouter. You can also start without paying: sign in with ChatGPT Plus or Pro and run OpenAI's models on your plan, run models on your computer with [Ollama](https://ollama.com), or use Gemini's free tier or OpenRouter's free models, which have daily limits. The first time Shoji opens, one Welcome page connects a provider, picks a starting stack and opens a project, or a practice project if you'd rather try it first. A project must be a git repo with at least one commit.
+Shoji is free. You pay for the models your tasks use, with your own API key from Anthropic, OpenAI, Google or OpenRouter. You can also start without paying: sign in with ChatGPT Plus or Pro and run OpenAI's models on your plan, run models on your computer with [Ollama](https://ollama.com), LM Studio or llama.cpp, or use Gemini's free tier or OpenRouter's free models, which have daily limits. When one runs out partway, the thread offers to carry on with another provider you've connected. The first time Shoji opens, one Welcome page connects a provider, picks a starting stack and opens a project, or a practice project if you'd rather try it first. A project must be a git repo with at least one commit.
 
 ## Build from source
 
@@ -164,7 +176,7 @@ The agent runtime in `runtime/` also runs on its own, on any git project. See [t
 
 ## Status
 
-Shoji 0.3 starts at $0: Gemini's free tier, OpenRouter's free models and a Claude checks stack that builds on your computer and pays only for the review. Receipts says what free work would have cost on Claude, copies a receipt as an image, and puts it in the pull request. 0.2 added OpenAI, ChatGPT plans, OpenRouter and Ollama. Mac comes first, and Windows and Linux build from the same code on every change.
+Shoji 0.4 runs on what you have: when a free tier or your ChatGPT plan runs out partway, a thread carries on with another provider you've connected; Ollama models get room for a coding step; LM Studio and llama.cpp join Ollama; Intel Macs get their own build; and Homebrew and Scoop can install it. 0.3 started at $0: Gemini's free tier, OpenRouter's free models and a Claude checks stack that builds on your computer and pays only for the review. Receipts says what free work would have cost on Claude, copies a receipt as an image, and puts it in the pull request. 0.2 added OpenAI, ChatGPT plans, OpenRouter and Ollama. Mac comes first, and Windows and Linux build from the same code on every change.
 
 Found a bug or want something? [Open an issue](https://github.com/FLX-2/shoji/issues/new/choose). To work on Shoji itself, read [CONTRIBUTING](CONTRIBUTING.md).
 

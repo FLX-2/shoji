@@ -3,6 +3,7 @@
 export const WHATS_NEW: Record<string, string> = {
   "0.2": "Shoji 0.2 runs more models: ChatGPT, OpenAI, OpenRouter and Ollama.",
   "0.3": "Shoji 0.3 adds free ways to run: Gemini's free tier, OpenRouter's free models and Claude checks.",
+  "0.4": "Shoji 0.4 carries a thread on with another provider when a free limit runs out, gives Ollama models room to work, and runs LM Studio and llama.cpp.",
 };
 
 /** "0.2" for 0.2.3. Point releases share their minor release's news. */
