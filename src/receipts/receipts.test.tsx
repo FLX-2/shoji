@@ -10,6 +10,7 @@ import { fakeBridge } from "../test/fakeBridge";
 import {
   dailySpend,
   firstTry,
+  reworked,
   monthOf,
   oneModelCost,
   outcome,
@@ -109,6 +110,19 @@ describe("receipts", () => {
     expect(s.perAccepted).toBeCloseTo((4 * spentPerRun) / 2);
     expect(s.firstTry).toBeCloseTo(1 / 3);
     expect(firstTry(threads[1])).toBe(false);
+  });
+
+  it("doesn't count picking the work up where it stopped as a request for changes", () => {
+    const pickedUp = (ask: string) => ({ ...run("changes", "ready", routed()), ask });
+    const t = thread(1, "Add a toggle", [
+      run("task", "stopped", routed()),
+      pickedUp("Keep going"),
+      pickedUp("Pick up where it stopped"),
+      pickedUp("Carry on with Ollama"),
+    ], { committed: "a1" });
+    expect(t.runs.filter(reworked)).toHaveLength(0);
+    expect(firstTry(t)).toBe(true);
+    expect(reworked(pickedUp("Make it blue"))).toBe(true);
   });
 
   it("counts trials and project notes as spend, but not as work to accept", () => {

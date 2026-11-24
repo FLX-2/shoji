@@ -72,8 +72,13 @@ export const isTrial = (thread: LedgerThread) => thread.runs[0]?.kind === "trial
 /** Scout reading a project to write its SHOJI.md. It spends once per project, and isn't work to accept either. */
 export const isNotes = (thread: LedgerThread) => thread.runs[0]?.kind === "notes";
 
+/** Runs that pick the work up where it stopped, at the thread's limit or a provider's, rather than redo it: Keep
+ *  going, Pick up where it stopped, and Carry on with another provider. */
+const PICKED_UP = /^(Keep going|Pick up where it stopped|Carry on with .+)$/;
+
 /** A run that redid the work: changes the person asked for, or the plan built again from the start. */
-export const reworked = (run: LedgerThread["runs"][number]) => run.kind === "changes" || run.kind === "rebuild";
+export const reworked = (run: LedgerThread["runs"][number]) =>
+  (run.kind === "changes" && !PICKED_UP.test(run.ask ?? "")) || run.kind === "rebuild";
 
 /** Accepted without a request for changes. */
 export const firstTry = (thread: LedgerThread) => accepted(thread) && !thread.runs.some(reworked);
