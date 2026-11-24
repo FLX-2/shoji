@@ -23,6 +23,10 @@ jobs:
         include:
           - name: macOS
             os: macos-latest
+          # Built on the same Apple silicon runner, for Macs with Intel processors.
+          - name: macOS Intel
+            os: macos-latest
+            target: x86_64-apple-darwin
           - name: Windows
             os: windows-latest
           - name: Linux
@@ -55,11 +59,15 @@ jobs:
       # The build compiles the agent runtime with Bun and bundles it beside the app.
       - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target || '' }}
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
       - run: pnpm install --frozen-lockfile
+      # The tests already ran on this runner for Apple silicon.
       - run: pnpm test
+        if: ${{ !matrix.target }}
       - name: Sign for the updater
         shell: bash
         env:
@@ -94,3 +102,5 @@ jobs:
             The builds aren't signed yet: see the README's Install section before opening Shoji for the first time.
           releaseDraft: true
           prerelease: false
+          # The sidecar script reads the target Tauri builds for, so the runtime is compiled for it too.
+          args: ${{ matrix.target && format('--target {0}', matrix.target) || '' }}

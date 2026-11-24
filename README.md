@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <sub>macOS (Apple silicon) · Windows · Linux &nbsp;|&nbsp; Anthropic, OpenAI, ChatGPT, Gemini, OpenRouter or Ollama &nbsp;|&nbsp; MIT license</sub>
+  <sub>macOS · Windows · Linux &nbsp;|&nbsp; Anthropic, OpenAI, ChatGPT, Gemini, OpenRouter or Ollama &nbsp;|&nbsp; MIT license</sub>
 </p>
 
 <br>
@@ -127,7 +127,7 @@ Download the installer for your system from the [latest release](https://github.
 
 | System | Download |
 | --- | --- |
-| macOS 12 or later, Apple silicon | `.dmg` |
+| macOS 12 or later | `aarch64.dmg` for Apple silicon, `x64.dmg` for Intel |
 | Windows 10 or 11 | `.exe` or `.msi` installer |
 | Linux | `.AppImage` or `.deb` |
 

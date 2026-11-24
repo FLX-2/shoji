@@ -37,6 +37,10 @@ jobs:
         include:
           - name: macOS
             os: macos-latest
+          # Macs with Intel processors, built on the same Apple silicon runner.
+          - name: macOS Intel
+            os: macos-latest
+            target: x86_64-apple-darwin
           - name: Windows
             os: windows-latest
           - name: Linux
@@ -57,15 +61,17 @@ jobs:
       # The build compiles the agent runtime with Bun and bundles it beside the app.
       - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target || '' }}
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
       - run: pnpm install --frozen-lockfile
       # The web job runs the tests on Linux; run them where people build, too.
       - name: Test on ${{ matrix.name }}
-        if: runner.os != 'Linux'
+        if: runner.os != 'Linux' && !matrix.target
         run: pnpm test
-      - run: pnpm tauri build
+      - run: pnpm tauri build ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
       - name: Test the Rust side
         if: runner.os == 'Linux'
         run: cargo test --manifest-path src-tauri/Cargo.toml
@@ -74,6 +80,7 @@ jobs:
           name: shoji-${{ matrix.name }}
           path: |
             src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/*/release/bundle/dmg/*.dmg
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/appimage/*.AppImage
