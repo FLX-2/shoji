@@ -60,6 +60,10 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
     if !enabled(&app) {
         return Err("This build of Shoji can't update itself.".into());
     }
+    // Scoop keeps Shoji in its own folder, which an installer would put a second copy beside.
+    if std::env::current_exe().is_ok_and(|exe| from_scoop(&exe)) {
+        return Err("This Shoji came from Scoop, so update it there: scoop update shoji".into());
+    }
     let updater = app.updater().map_err(|e| e.to_string())?;
     let update = updater
         .check()
@@ -73,8 +77,21 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
     app.restart();
 }
 
+/// Whether Shoji runs from Scoop's apps folder, as in C:\Users\bob\scoop\apps\shoji\current\shoji.exe.
+fn from_scoop(exe: &std::path::Path) -> bool {
+    let parts: Vec<String> = exe.components().map(|c| c.as_os_str().to_string_lossy().to_lowercase()).collect();
+    parts.windows(3).any(|w| w[0] == "scoop" && w[1] == "apps" && w[2] == "shoji")
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn knows_a_shoji_scoop_installed() {
+        use std::path::Path;
+        assert!(super::from_scoop(Path::new("/home/bob/scoop/apps/shoji/current/shoji.exe")));
+        assert!(!super::from_scoop(Path::new("/Applications/Shoji.app/Contents/MacOS/shoji")));
+    }
+
     /// The updater plugin reads its settings when Shoji starts, and settings it can't read stop Shoji opening.
     #[test]
     fn the_updater_settings_can_be_read() {
