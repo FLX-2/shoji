@@ -15,6 +15,7 @@ import { RouteLimitError, type ModelProvider } from "./provider";
 import { findSkills } from "./skills";
 import { expandCommand } from "./slash";
 import { ROLES, type Role, type Seat, type Stack } from "./stack";
+import { NO_STEERING, type Steering } from "./steer";
 import { COMMAND_TOOLS, READ_TOOLS, WRITE_TOOLS } from "./tools";
 import type { Workspace } from "./workspace";
 
@@ -35,6 +36,10 @@ export interface ThreadInput {
   changes?: { plan: string; notes: string };
   /** Stop once the plan is written, so the person can build it or ask for a different one. */
   planOnly?: boolean;
+  /** A small change: skip scout and plan, and build the task as it's written, then check and review it. */
+  quick?: boolean;
+  /** What the person writes to the run while it works. */
+  steering?: Steering;
   /** A plan the person approved: the thread skips scout and plan and builds it. */
   approved?: string;
   /** The person's notes on an earlier plan, which the planner writes a new one from. */
@@ -88,6 +93,18 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   const mcp = input.mcp ?? NO_MCP;
   const skills = findSkills(workspace);
   const preview = input.preview ?? NO_PREVIEW;
+  const steering = input.steering ?? NO_STEERING;
+  /** Tells the app a step took in what the person wrote. */
+  const steered = (name: string) => (said: string[]) => {
+    for (const text of said) emit({ type: "steered", step: name, said: text });
+  };
+  /** For a step that is one answer: what the person wrote before it started, told to it in its prompt. */
+  const toldBefore = (name: string) => {
+    const said = steering.take();
+    if (!said.length) return "";
+    steered(name)(said);
+    return `\n\nThe person also said, while the work ran:\n${said.join("\n")}`;
+  };
 
   const step = async (name: string, role: Role, seat: Seat, work: () => Promise<string>) => {
     emit({ type: "step", step: name, role, model: seat.model, status: "running" });
@@ -125,6 +142,8 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
         mcp: input.mcp,
         skills,
         preview,
+        steering,
+        onSteer: steered(name),
         onTool: (tool, input) =>
           emit({
             type: "tool",
@@ -171,7 +190,10 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     step("review", "review", stack.review, async () => {
       if (recheck) check("review");
       const diff = diffOf(workspace.root, (file) => workspace.isPrivate(file));
-      const prompt = withAttachments(reviewPrompt(task + asked + guide, diff, state.checks, state.report), input.attachments);
+      const prompt = withAttachments(
+        reviewPrompt(task + asked + toldBefore("review") + guide, diff, state.checks, state.report),
+        input.attachments,
+      );
       const shots = await pagesToJudge(diff);
       const content: string | Anthropic.ContentBlockParam[] = shots.length
         ? [
@@ -211,7 +233,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
       return finish(passing && approves(state.review) ? "ready" : "needs-work");
     }
     if (approved && input.fresh) discardWork(workspace.root);
-    state.plan = changes ? changes.plan : (approved ?? (await planFor()));
+    state.plan = changes ? changes.plan : input.quick ? QUICK_PLAN : (approved ?? (await planFor()));
     if (input.planOnly) return finish("planned");
     // A changes run is told what failed before the thread's first build. When nothing was recorded, as
     // when the first run stopped before it built anything, the project is still as it was, so look now.
@@ -348,7 +370,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
             {
               role: "user",
               content: withAttachments(
-                `Task: ${task}${projectNotes(workspace)}${guide}${replanNotes()}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief, mentionedFiles(`${task}${replan ? ` ${replan.notes}` : ""}`))}`,
+                `Task: ${task}${projectNotes(workspace)}${guide}${replanNotes()}${toldBefore("plan")}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief, mentionedFiles(`${task}${replan ? ` ${replan.notes}` : ""}`))}`,
                 input.attachments,
               ),
             },
@@ -385,10 +407,17 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
       cost: meter.spent,
       costByRole,
     };
+    // Written after the last step read: the app sends it on as the person's next message.
+    const unheard = steering.take();
+    if (unheard.length) result.unheard = unheard;
     emit({ type: "result", result });
     return result;
   }
 }
+
+/** The plan a quick change builds from, since it skips Scout and Plan. */
+export const QUICK_PLAN =
+  "No plan was written: the person asked for a quick change. Do what the task says, keeping the change as small as it can be. Read what you need first.";
 
 export function approves(review: string): boolean {
   return /^\s*VERDICT:\s*APPROVE/i.test(review);

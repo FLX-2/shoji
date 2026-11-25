@@ -47,6 +47,8 @@ export type RuntimeEvent =
   | { type: "ask"; step: string; command: string; tool?: true }
   | { type: "answer"; step: string; command: string; allowed: boolean }
   | { type: "escalate"; step: string; from: ModelId; to: ModelId; reason: string }
+  /** The step took in what the person wrote to the run while it worked. */
+  | { type: "steered"; step: string; said: string }
   | { type: "result"; result: ThreadResult }
   /** After a run that changed pages Build looked at: screenshots of each before the work and after it. */
   | { type: "compare"; status: "running" }
@@ -73,6 +75,8 @@ export interface ThreadResult {
   escalated: boolean;
   cost: number;
   costByRole: Record<Role, number>;
+  /** What the person wrote to the run that came too late for any step to read, for the app to send next. */
+  unheard?: string[];
 }
 
 export type Emit = (event: RuntimeEvent) => void;

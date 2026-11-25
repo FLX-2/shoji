@@ -3,6 +3,7 @@ import type { Mcp } from "./mcp";
 import type { Meter } from "./meter";
 import type { Preview } from "./preview";
 import type { Skills } from "./skills";
+import { steerNote, type Steering } from "./steer";
 import type { Role, Seat } from "./stack";
 import { runTool } from "./tools";
 import type { Workspace } from "./workspace";
@@ -60,6 +61,10 @@ export interface AgentRun {
   skills?: Skills;
   /** The project's pages, which a role with the look_at_page tool can see. */
   preview?: Preview;
+  /** What the person writes while the step works. It's read at each turn, and once more before the step answers. */
+  steering?: Steering;
+  /** Called with what the person wrote, once the step has taken it in. */
+  onSteer?: (said: string[]) => void;
 }
 
 type ToolContent = Exclude<Anthropic.ToolResultBlockParam["content"], undefined>;
@@ -89,7 +94,15 @@ export async function runAgent(run: AgentRun): Promise<string> {
     mcp,
     skills,
     preview,
+    steering,
+    onSteer,
   } = run;
+  /** What the person wrote since the step last looked, told to the step as it takes it in. */
+  const heard = () => {
+    const said = steering?.take() ?? [];
+    if (said.length) onSteer?.(said);
+    return said;
+  };
   const use = async (name: string, input: Record<string, string>): Promise<ToolContent> => {
     if (preview?.owns(name)) {
       onTool?.(name, input);
@@ -145,7 +158,13 @@ export async function runAgent(run: AgentRun): Promise<string> {
     // Thinking blocks go back unchanged, as the API expects.
     messages.push({ role: "assistant", content: response.content });
     const uses = response.content.filter((block) => block.type === "tool_use");
-    if (response.stop_reason !== "tool_use" || uses.length === 0) return textOf(response);
+    if (response.stop_reason !== "tool_use" || uses.length === 0) {
+      // The person wrote while the step was answering: it carries on with their words, while it has turns left.
+      const said = turn < maxTurns - 1 ? heard() : [];
+      if (!said.length) return textOf(response);
+      messages.push({ role: "user", content: steerNote(said) });
+      continue;
+    }
 
     // One at a time, since a command may wait for the person.
     const results: Anthropic.ToolResultBlockParam[] = [];
@@ -153,7 +172,12 @@ export async function runAgent(run: AgentRun): Promise<string> {
       const input = call.input as Record<string, string>;
       results.push({ type: "tool_result", tool_use_id: call.id, content: await use(call.name, input) });
     }
-    messages.push({ role: "user", content: results });
+    // What the person wrote while the tools ran rides along with their results, so the next turn reads it.
+    const said = heard();
+    messages.push({
+      role: "user",
+      content: said.length ? [...results, { type: "text", text: steerNote(said) }] : results,
+    });
   }
   return OUT_OF_TURNS;
 }
