@@ -109,11 +109,21 @@ export interface ChatResult {
   usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } };
 }
 
+/** An answer's words without the thinking some models write into them, as Gemma does in `<thought>…</thought>`.
+ *  A thought that never closes was cut off, so nothing after it is the answer. */
+export function withoutThoughts(text: string): string {
+  if (!text.includes("<thought>")) return text;
+  const out = text.replace(/<thought>[\s\S]*?<\/thought>/g, "");
+  const open = out.indexOf("<thought>");
+  return (open === -1 ? out : out.slice(0, open)).trim();
+}
+
 /** An answer as the Anthropic message the roles read. */
 export function toMessage(result: ChatResult, model: ModelId): Anthropic.Message {
   const choice = result.choices?.[0];
   const content: Record<string, unknown>[] = [];
-  if (choice?.message?.content) content.push({ type: "text", text: choice.message.content, citations: null });
+  const text = withoutThoughts(choice?.message?.content ?? "");
+  if (text) content.push({ type: "text", text, citations: null });
   (choice?.message?.tool_calls ?? []).forEach((call, i) => {
     let input: unknown = {};
     try {
@@ -182,6 +192,13 @@ export interface ChatOptions {
 /** Fields a model may not take. One that's turned down is left out once, rather than failing the step. */
 const OPTIONAL = ["reasoning_effort", "max_tokens"];
 
+/** The words a service turns a field down with, when it doesn't name the field. Gemini turns Gemma's effort down as
+ *  "Thinking level is not supported for this model". */
+const TURNED_DOWN: Record<string, RegExp> = {
+  reasoning_effort: /reasoning_effort|thinking level|thinking is not supported|reasoning is not supported/i,
+  max_tokens: /max_tokens/,
+};
+
 /** A service that speaks Chat Completions on the person's key. */
 export class ChatProvider implements ModelProvider {
   constructor(private options: ChatOptions) {}
@@ -195,7 +212,7 @@ export class ChatProvider implements ModelProvider {
         return await this.once(request, drop);
       } catch (error) {
         if (!(error instanceof ChatError)) throw error;
-        const field = OPTIONAL.find((f) => !drop.includes(f) && error.message.includes(f));
+        const field = OPTIONAL.find((f) => !drop.includes(f) && TURNED_DOWN[f].test(error.message));
         if (error.status === 400 && field) {
           drop.push(field);
           continue;
