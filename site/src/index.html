@@ -345,16 +345,20 @@ html[data-motion="on"] .tilt { animation: rise 1.8s var(--e-lift) both; }
   box-shadow: 0 -1px 0 0 rgba(255, 196, 170, 0.95), 0 -6px 18px -2px rgba(255, 120, 84, 0.9), 0 -40px 90px 0 rgba(var(--safe-rgb), 0.45), 0 -140px 220px 40px rgba(var(--safe-rgb), 0.16);
 }
 .plats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 880px; margin: clamp(40px, 5vw, 60px) auto 0; border: 1px solid var(--hair); border-radius: 8px; overflow: hidden; background: rgba(6, 5, 5, 0.6); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); text-align: left; }
-.plat { display: grid; grid-template-rows: auto 1fr auto; gap: 6px; padding: 22px 22px 20px; text-decoration: none; color: inherit; transition: background-color var(--d-quick) var(--e-out); }
-.plat:hover { background: rgba(var(--ink-rgb), 0.05); }
+.plat { display: grid; grid-template-rows: auto 1fr auto; gap: 6px; padding: 22px 22px 20px; }
 .plat + .plat { border-left: 1px solid var(--hair); }
 .plat h3 { font-size: 19px; }
 .plat p { font-size: var(--t-sm); color: var(--z6); }
-.plat .state { margin-top: 12px; font: 500 var(--t-micro)/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--z10); }
+.plat .files { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 8px; }
+.plat .files a { padding: 6px 0; font: 500 var(--t-micro)/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--z10); text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px; transition: text-decoration-color var(--d-quick) var(--e-out); }
+.plat .files a:hover, .plat .files a:focus-visible { text-decoration-color: currentColor; }
+.first { box-sizing: border-box; max-width: 880px; margin: 0 auto; padding: 16px 22px; border: 1px solid var(--hair); border-top: 0; border-radius: 0 0 8px 8px; background: rgba(6, 5, 5, 0.6); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); text-align: left; display: grid; gap: 4px; font-size: var(--t-sm); color: var(--z6); }
+.first b { font-weight: 500; color: var(--z8); }
+.plats:has(+ .first) { border-radius: 8px 8px 0 0; }
 .close .ctas { justify-content: center; margin-top: 28px; }
-.close .signed { margin-top: 18px; }
-.close .signed a { color: var(--z8); }
-.close .signed a:hover { color: var(--z10); }
+.close .ver { margin-top: 18px; }
+.close .ver a { color: var(--z8); }
+.close .ver a:hover { color: var(--z10); }
 @media (max-width: 680px) { .plats { grid-template-columns: minmax(0, 1fr); } .plat + .plat { border-left: 0; border-top: 1px solid var(--hair); } }
 
 /* ---------------------------------------------------------------- questions */
@@ -675,11 +679,16 @@ html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="
       <p class="lede">Bring your own key from Anthropic, OpenAI, Google or OpenRouter, sign in with ChatGPT, or run models free with Ollama. Pay only for the models your tasks use. {{name}} is open source, under the MIT license.</p>
     </div>
     <div class="plats">
-      <a class="plat" href="{{download}}"><h3>macOS</h3><p>Apple silicon or Intel, macOS 12 or later</p><span class="state">Download →</span></a>
-      <a class="plat" href="{{download}}"><h3>Windows</h3><p>Installer, .exe or .msi</p><span class="state">Download →</span></a>
-      <a class="plat" href="{{download}}"><h3>Linux</h3><p>AppImage or .deb, built from the same code</p><span class="state">Download →</span></a>
+      <div class="plat"><h3>macOS</h3><p>macOS 12 or later. Apple silicon is any Mac with an M chip.</p><span class="files"><a href="{{macArm}}" download>Apple silicon ↓</a><a href="{{macIntel}}" download>Intel ↓</a></span></div>
+      <div class="plat"><h3>Windows</h3><p>Windows 10 or 11, 64-bit.</p><span class="files"><a href="{{winExe}}" download>Installer ↓</a><a href="{{winMsi}}" download>.msi ↓</a></span></div>
+      <div class="plat"><h3>Linux</h3><p>x86-64, built from the same code.</p><span class="files"><a href="{{linuxAppImage}}" download>AppImage ↓</a><a href="{{linuxDeb}}" download>.deb ↓</a><a href="{{linuxRpm}}" download>.rpm ↓</a></span></div>
     </div>
-    <p class="note signed">The builds aren't signed yet, so your system asks once before opening one. <a href="#faq-open" data-open="faq-open">Here's how to open it.</a></p>
+    <div class="first" id="first-open">
+      <p><b>The first time you open it.</b> The builds aren't signed yet, so your system asks once.</p>
+      <p><b>Mac:</b> open {{name}}, then choose Open Anyway under System Settings › Privacy &amp; Security.</p>
+      <p><b>Windows:</b> if SmartScreen stops the installer, choose More info, then Run anyway.</p>
+    </div>
+    <p class="note ver">{{name}} {{version}} · <a href="{{notes}}">What's new</a> · <a href="{{download}}">All downloads</a></p>
     <div class="ctas">
       <a class="btn ghost" href="{{github}}"><svg><use href="#gh"/></svg>View the source on GitHub</a>
     </div>
@@ -699,7 +708,7 @@ html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="
       <details><summary>Do I need an account?</summary><p>No {{name}} account. You need one way to reach models (an API key, which stays in your system keychain, a ChatGPT Plus or Pro sign-in, or Ollama) and a project in git with at least one commit.</p></details>
       <details><summary>Can it run up a bill while I'm away?</summary><p>Every thread has a spending limit, and {{name}} stops before any call that could pass it. A daily limit asks before a new thread or a trial could take the day past it, and a scheduled task that could pass it is skipped and says why.</p></details>
       <details><summary>Will it work with my setup?</summary><p>It follows your project's <code>AGENTS.md</code> and <code>CLAUDE.md</code>, uses your commands, skills and MCP servers, previews your own dev server, and commits with your own git name.</p></details>
-      <details id="faq-open"><summary>My Mac or Windows won't open it. What do I do?</summary><p>The builds aren't signed yet. The first time you open {{name}} on a Mac, Control-click the app and choose Open; if macOS still blocks it, allow it under System Settings, Privacy &amp; Security. On Windows, if SmartScreen stops the installer, choose More info, then Run anyway.</p></details>
+      <details id="faq-open"><summary>My Mac or Windows won't open it. What do I do?</summary><p>The builds aren't signed yet. The first time you open {{name}} on a Mac, macOS says it can't check it: open System Settings, then Privacy &amp; Security, scroll down and choose Open Anyway. On macOS 14 or earlier, Control-clicking the app and choosing Open works too. On Windows, if SmartScreen stops the installer, choose More info, then Run anyway.</p></details>
       <details><summary>Is it open source?</summary><p>Yes, under the MIT license. The code is on <a href="{{github}}">GitHub</a>.</p></details>
     </dl>
   </div>

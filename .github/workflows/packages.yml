@@ -1,6 +1,7 @@
 name: Packages
 
-# Points Homebrew and Scoop at a release: writes Casks/shoji.rb and bucket/shoji.json on main, which
+# Points Homebrew, Scoop, the README's download table and the website's Download links at a release. It writes
+# Casks/shoji.rb, bucket/shoji.json, README.md and site/site.json on main. The first two are what
 # `brew tap flx-2/shoji https://github.com/FLX-2/shoji` and `scoop bucket add shoji https://github.com/FLX-2/shoji`
 # read. It needs the release published and its installers attached, and those can come in either order: publishing
 # a release from GitHub's page pushes its tag, and the Release workflow attaches the installers a while later, while
@@ -53,7 +54,7 @@ jobs:
         if: steps.ready.outputs.go
         with:
           ref: main
-      - name: Write the cask and the Scoop manifest
+      - name: Write the cask, the Scoop manifest and the download links
         if: steps.ready.outputs.go
         run: |
           mkdir -p "$RUNNER_TEMP/assets"
@@ -64,7 +65,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Casks bucket
+          git add Casks bucket README.md site/site.json
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m "Homebrew and Scoop point to Shoji $TAG"
+          git commit -m "Homebrew, Scoop and the download links point to Shoji $TAG"
           git push origin HEAD:main

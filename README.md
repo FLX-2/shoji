@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/FLX-2/shoji/releases/latest"><b>Download</b></a>
+  <a href="#install"><b>Download</b></a>
   &nbsp;·&nbsp;
   <a href="https://shoji-app.vercel.app/">Website</a>
   &nbsp;·&nbsp;
@@ -131,13 +131,22 @@ Once a day Shoji downloads the list of models and their prices from this reposit
 
 ## Install
 
-Download the installer for your system from the [latest release](https://github.com/FLX-2/shoji/releases/latest).
+Pick the installer for your system. Each link downloads it straight away.
 
+<!-- downloads: scripts/packages.mjs writes this table when a release is published -->
 | System | Download |
 | --- | --- |
-| macOS 12 or later | `aarch64.dmg` for Apple silicon, `x64.dmg` for Intel |
-| Windows 10 or 11 | `.exe` or `.msi` installer |
-| Linux | `.AppImage` or `.deb` |
+| macOS 12 or later | [Apple silicon](https://github.com/FLX-2/shoji/releases/download/v0.5.0/Shoji_0.5.0_aarch64.dmg) (M chips) · [Intel](https://github.com/FLX-2/shoji/releases/download/v0.5.0/Shoji_0.5.0_x64.dmg) |
+| Windows 10 or 11 | [Installer](https://github.com/FLX-2/shoji/releases/download/v0.5.0/Shoji_0.5.0_x64-setup.exe) · [.msi](https://github.com/FLX-2/shoji/releases/download/v0.5.0/Shoji_0.5.0_x64_en-US.msi) |
+| Linux | [AppImage](https://github.com/FLX-2/shoji/releases/download/v0.5.0/Shoji_0.5.0_amd64.AppImage) · [.deb](https://github.com/FLX-2/shoji/releases/download/v0.5.0/Shoji_0.5.0_amd64.deb) · [.rpm](https://github.com/FLX-2/shoji/releases/download/v0.5.0/Shoji-0.5.0-1.x86_64.rpm) |
+
+This is Shoji 0.5.0. Every version is on the [releases page](https://github.com/FLX-2/shoji/releases).
+<!-- /downloads -->
+
+**The first time you open it:** the builds aren't signed yet, so your system asks once.
+
+- **Mac:** open Shoji, and macOS says it can't check it. Open System Settings, then Privacy & Security, scroll down and choose Open Anyway. On macOS 14 or earlier, Control-clicking the app and choosing Open works too.
+- **Windows:** if SmartScreen stops the installer, choose More info, then Run anyway.
 
 Or install it with a package manager, from this repository:
 
@@ -151,10 +160,7 @@ scoop bucket add shoji https://github.com/FLX-2/shoji
 scoop install shoji/shoji
 ```
 
-The builds aren't signed yet, so your system asks once before opening one. The Homebrew cask clears that check for Shoji when it installs.
-
-- **Mac:** the first time, Control-click the app and choose Open. If macOS still blocks it, allow it under System Settings, Privacy & Security.
-- **Windows:** if SmartScreen stops the installer, choose More info, then Run anyway.
+The Homebrew cask clears the Mac's check for Shoji when it installs.
 
 Shoji is free. You pay for the models your tasks use, with your own API key from Anthropic, OpenAI, Google or OpenRouter. You can also start without paying: sign in with ChatGPT Plus or Pro and run OpenAI's models on your plan, run models on your computer with [Ollama](https://ollama.com), LM Studio or llama.cpp, or use Gemini's free tier or OpenRouter's free models, which have daily limits. When one runs out partway, the thread offers to carry on with another provider you've connected. The first time Shoji opens, one Welcome page connects a provider, picks a starting stack and opens a project, or a practice project if you'd rather try it first. A project must be a git repo with at least one commit.
 

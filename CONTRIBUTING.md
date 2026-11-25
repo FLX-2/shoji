@@ -46,7 +46,7 @@ Shoji's look is the Zone design system, and restraint is part of it.
 
 ## Releasing
 
-For maintainers. Set the same version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, merge it, then push a tag for it, such as `v0.2.0`. The Release workflow builds each system and attaches the installers to a draft release. Read the draft, then publish it. Publish it as a full release, not a pre-release: the website's download buttons and Shoji's update check both use GitHub's latest release, which skips pre-releases.
+For maintainers. Set the same version in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, merge it, then push a tag for it, such as `v0.2.0`. The Release workflow builds each system and attaches the installers to a draft release. Read the draft, then publish it. Publish it as a full release, not a pre-release: Shoji's update check uses GitHub's latest release, which skips pre-releases. Once it's published with its installers, the Packages workflow points Homebrew, Scoop, the README's download table and the website's Download links at it. Release notes should send people to the installers under Assets, not to the website, which links back here.
 
 ### Update signing
 

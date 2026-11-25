@@ -99,7 +99,11 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Shoji ${{ github.ref_name }}
           releaseBody: |
-            The builds aren't signed yet: see the README's Install section before opening Shoji for the first time.
+            ## Install
+
+            Download the installer for your system below, under Assets: `aarch64.dmg` for a Mac with an M chip, `x64.dmg` for an Intel Mac, `x64-setup.exe` for Windows, and `.AppImage`, `.deb` or `.rpm` for Linux.
+
+            The builds aren't signed yet, so your system asks once. On a Mac, open Shoji, then choose Open Anyway under System Settings › Privacy & Security. On Windows, if SmartScreen stops the installer, choose More info, then Run anyway.
           releaseDraft: true
           prerelease: false
           # The sidecar script reads the target Tauri builds for, so the runtime is compiled for it too.
