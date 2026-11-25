@@ -311,76 +311,80 @@ export function HomeView({
             )
           }
         >
-          {!repeat && (
-            <button
-              type="button"
-              className="chip icon"
-              aria-label="Attach screenshots or files"
-              title="Attach screenshots or files. You can also paste a screenshot."
-              onClick={() => attach(onPickAttachments())}
-            >
-              <ClipIcon />
-            </button>
-          )}
-          <button
-            type="button"
-            className="chip"
-            title={repo ?? undefined}
-            {...(others.length > 0 && onChooseProject && { "aria-haspopup": "menu" as const, "aria-expanded": !!choosing })}
-            onClick={(e) =>
-              others.length > 0 && onChooseProject
-                ? setChoosing(choosing ? null : under(e.currentTarget))
-                : onPickProject()
-            }
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M3 6h6l2 2h10v11H3z" />
-            </svg>
-            {repo ? folderName(repo) : "Choose a project"}
-          </button>
-          {!repeat && stack && (
-            <>
+          {/* What the task is and where it goes, on a line of its own, so the box keeps one height whichever
+              route it takes. Quality, the estimate and Send sit on the line under it. */}
+          <div className={repeat ? "picks inline" : "picks"}>
+            {!repeat && (
               <button
                 type="button"
-                className={picked ? "chip route" : "chip route guessed"}
-                aria-haspopup="menu"
-                aria-expanded={!!routeAt}
-                title={`${ROUTE_NAMES[route.kind].does}. Pick another route`}
-                onClick={(e) => setRouteAt(routeAt ? null : under(e.currentTarget))}
+                className="chip icon"
+                aria-label="Attach screenshots or files"
+                title="Attach screenshots or files. You can also paste a screenshot."
+                onClick={() => attach(onPickAttachments())}
               >
-                {routeMark(route, stack)}
-                <svg viewBox="0 0 12 12" aria-hidden="true">
-                  <path d="m3 4.5 3 3 3-3" />
-                </svg>
+                <ClipIcon />
               </button>
-              {routeAt && (
-                <Menu
-                  at={routeAt}
-                  label="Route this task"
-                  items={ROUTES.home.map((kind) => ({
-                    label: ROUTE_NAMES[kind].label,
-                    hint: kind === route.kind ? "✓" : modelName(stack[LEADS[kind]].model),
-                    run: () => setPicked(kind),
-                  }))}
-                  onClose={() => setRouteAt(null)}
-                />
-              )}
-            </>
-          )}
-          {!repeat && route.kind === "task" && (
+            )}
             <button
               type="button"
               className="chip"
-              aria-pressed={planFirst}
-              onClick={onTogglePlanFirst}
-              title="Pause after the plan, to build it or change it first"
+              title={repo ?? undefined}
+              {...(others.length > 0 && onChooseProject && { "aria-haspopup": "menu" as const, "aria-expanded": !!choosing })}
+              onClick={(e) =>
+                others.length > 0 && onChooseProject
+                  ? setChoosing(choosing ? null : under(e.currentTarget))
+                  : onPickProject()
+              }
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                {planFirst ? <path d="M5 12l5 5 9-10" /> : <path d="M6 12h12" />}
+                <path d="M3 6h6l2 2h10v11H3z" />
               </svg>
-              Check the plan first
+              {repo ? folderName(repo) : "Choose a project"}
             </button>
-          )}
+            {!repeat && stack && (
+              <>
+                <button
+                  type="button"
+                  className={picked ? "chip route" : "chip route guessed"}
+                  aria-haspopup="menu"
+                  aria-expanded={!!routeAt}
+                  title={`${ROUTE_NAMES[route.kind].does}. Pick another route`}
+                  onClick={(e) => setRouteAt(routeAt ? null : under(e.currentTarget))}
+                >
+                  {routeMark(route, stack)}
+                  <svg viewBox="0 0 12 12" aria-hidden="true">
+                    <path d="m3 4.5 3 3 3-3" />
+                  </svg>
+                </button>
+                {routeAt && (
+                  <Menu
+                    at={routeAt}
+                    label="Route this task"
+                    items={ROUTES.home.map((kind) => ({
+                      label: ROUTE_NAMES[kind].label,
+                      hint: kind === route.kind ? "✓" : modelName(stack[LEADS[kind]].model),
+                      run: () => setPicked(kind),
+                    }))}
+                    onClose={() => setRouteAt(null)}
+                  />
+                )}
+              </>
+            )}
+            {!repeat && route.kind === "task" && (
+              <button
+                type="button"
+                className="chip"
+                aria-pressed={planFirst}
+                onClick={onTogglePlanFirst}
+                title="Pause after the plan, to build it or change it first"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  {planFirst ? <path d="M5 12l5 5 9-10" /> : <path d="M6 12h12" />}
+                </svg>
+                Check the plan first
+              </button>
+            )}
+          </div>
           <div className="seg" role="radiogroup" aria-label="Quality">
             {(Object.keys(TIERS) as Tier[]).map((id) => (
               <button
@@ -449,7 +453,7 @@ export function HomeView({
               </li>
               <li>
                 The chip under the box says which route Shoji will take: the full task, a quick change that skips the
-                plan, or an answer that changes nothing. Pick another if it reads you wrong.
+                plan, or an answer that changes nothing. Pick another if it reads you wrong, or let a lead decide.
               </li>
               <li>
                 <kbd>/</kbd> starts with one of the project's commands from <code>.claude/commands</code>.
