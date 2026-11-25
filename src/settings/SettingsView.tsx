@@ -301,8 +301,8 @@ export function SettingsView({
                   <>
                     <PrivateRow prefs={prefs} onChange={onChange} />
                     <SwitchRow
-                      label="Receipt in pull requests"
-                      description="Push and open PR fills in the pull request's description with each step's model and cost, the total and Review's verdict, for you to change before you open it. No code, task or file names."
+                      label="Cost in pull requests"
+                      description="Push and open PR describes what changed and lists the files, for you to change before you open it. With this on, one short line at the end adds what it cost, on which models, and Review's verdict."
                       on={prefs.receiptInPR}
                       onToggle={() => onChange({ receiptInPR: !prefs.receiptInPR })}
                     />

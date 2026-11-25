@@ -24,12 +24,13 @@ describe("what a running step is doing", () => {
     const calls = events.filter((e) => e.type === "call");
     const thinking = events.filter((e) => e.type === "doing" && e.what === "thinking");
     expect(thinking.length).toBe(calls.length);
+    const lastDoing = (before: number) => events.slice(0, before).filter((e) => e.type === "doing").at(-1);
     events.forEach((e, i) => {
-      if (e.type === "call") expect(events.slice(0, i).findLast((d) => d.type === "doing")).toMatchObject({ step: e.call.step, what: "thinking" });
+      if (e.type === "call") expect(lastDoing(i)).toMatchObject({ step: e.call.step, what: "thinking" });
     });
     // The checks after the build are told before they run.
     const checks = events.findIndex((e) => e.type === "checks");
-    expect(events.slice(0, checks).findLast((e) => e.type === "doing")).toMatchObject({ step: "build", what: "checks" });
+    expect(lastDoing(checks)).toMatchObject({ step: "build", what: "checks" });
     // Steps, tools and what's doing carry when they started.
     for (const e of events) {
       if ((e.type === "step" && e.status === "running") || e.type === "tool" || e.type === "doing")
