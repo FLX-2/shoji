@@ -4,9 +4,9 @@
 cask "shoji" do
   arch arm: "aarch64", intel: "x64"
 
-  version "0.5.0"
-  sha256 arm:   "2f368d29e38d8c4a93adc8fa3897a7adc34322d6f2a82f61c09413361a952780",
-         intel: "8492b3e731e454dc07a99d5282135fca1589721e46b6437826724ba6757fcca5"
+  version "0.5.1"
+  sha256 arm:   "2b92a417b479f05184b51fca360a46c0fe0962d259f8928849cb5664c00bf8b6",
+         intel: "84cc0c56fd446f8cbeb36371b9af4d4d526168637cd9d853b832a573d6abcc01"
 
   url "https://github.com/FLX-2/shoji/releases/download/v#{version}/Shoji_#{version}_#{arch}.dmg"
   name "Shoji"
