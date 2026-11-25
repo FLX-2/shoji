@@ -63,6 +63,8 @@ export interface RunRequest {
   planOnly?: boolean;
   /** A small change in a new thread: Build, checks and Review, skipping Scout and Plan. */
   quick?: boolean;
+  /** A new thread a lead runs, calling the seats it needs. Check and Review still run on what it changes. */
+  lead?: boolean;
   /** A new thread that starts with a question, which Scout answers without changing anything. */
   answer?: boolean;
   /** Screenshots and files attached to the thread's task, as paths. */

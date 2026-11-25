@@ -185,6 +185,8 @@ export function stepLabel(steps: StepView[], index: number): string {
       return tense("Making your changes", "Made your changes");
     case "answer":
       return tense("Reading the work to answer", "Answered");
+    case "lead":
+      return tense("Leading the work", "Led the work");
     case "review":
       return before.some((s) => s.name === "review")
         ? tense("Reviewing again", "Reviewed again")

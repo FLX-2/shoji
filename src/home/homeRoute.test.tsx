@@ -92,6 +92,46 @@ describe("routing from Home", () => {
     expect(fake.calls.starts[0].quick).toBe(true);
   });
 
+  it("hands the task to a lead only when the person picks it, and shows the lead's answer", async () => {
+    const { fake, type, send, mark } = await home();
+    type("Is the pricing data cached?");
+    expect(mark()).not.toMatch(/^Lead decides/);
+    fireEvent.click(document.querySelector(".chip.route")!);
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Lead decides/ }));
+    expect(mark()).toBe("Lead decides · Lead on Haiku 5.5");
+    // A lead decides whether to plan, so there's no plan to check first.
+    expect(screen.queryByRole("button", { name: "Check the plan first" })).toBeNull();
+    await send();
+    expect(fake.calls.starts[0]).toMatchObject({ task: "Is the pricing data cached?", lead: true });
+    expect(fake.calls.starts[0].planOnly).toBeUndefined();
+    await act(async () => {
+      fake.emit(
+        { type: "step", step: "lead", role: "scout", model: "claude-haiku-5-5", status: "running" },
+        { type: "step", step: "scout", role: "scout", model: "claude-haiku-5-5", status: "running" },
+        { type: "step", step: "scout", role: "scout", model: "claude-haiku-5-5", status: "done", output: "It's read once." },
+        { type: "step", step: "lead", role: "scout", model: "claude-haiku-5-5", status: "done", output: "" },
+        { type: "step", step: "answer", role: "scout", model: "claude-haiku-5-5", status: "running" },
+        { type: "step", step: "answer", role: "scout", model: "claude-haiku-5-5", status: "done", output: "Yes, for an hour." },
+        {
+          type: "result",
+          result: {
+            status: "answered",
+            plan: "",
+            diff: "",
+            review: "",
+            checks: [],
+            escalated: false,
+            cost: 0.01,
+            costByRole: { scout: 0.01, plan: 0, build: 0, review: 0 },
+          },
+        },
+      );
+      fake.exit(0);
+    });
+    expect(screen.getByText("Led the work")).toBeTruthy();
+    expect(screen.getByText("Yes, for an hour.")).toBeTruthy();
+  });
+
   it("starts with a named seat on a named model, for that run only", async () => {
     const { fake, type, send, mark } = await home({ planFirst: false });
     type("@plan on sonnet: add a FAQ page");

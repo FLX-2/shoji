@@ -325,6 +325,9 @@ struct RunRequest {
     /// A small change: skip Scout and Plan, build the task as written, then check and review it.
     #[serde(default)]
     quick: bool,
+    /// A lead on the Scout seat's model runs the task, calling the seats it needs. Check and Review still run.
+    #[serde(default)]
+    lead: bool,
     /// A new thread that starts with a question: Scout answers it and nothing changes.
     #[serde(default)]
     answer: bool,
@@ -504,6 +507,9 @@ fn start_run(
     }
     if request.quick && request.changes.is_none() {
         args.push("--quick".into());
+    }
+    if request.lead && request.changes.is_none() {
+        args.push("--lead".into());
     }
     // A thread can start with a question, which needs no plan.
     let answering = request.answer && request.changes.is_none();

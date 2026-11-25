@@ -13,8 +13,10 @@ import { readsAsQuestion } from "./asks";
  * - change: Build, checks, Review, on top of the thread's work and plan.
  * - replan: Scout and Plan write the plan again from the message, and pause.
  * - review: the checks and Review look at the work again.
+ * - led: a lead on the Scout seat's model calls the seats it needs. What it changes is still checked and reviewed.
+ *   Only ever picked: the fixed routes stay the default.
  */
-export type RouteKind = "task" | "quick" | "answer" | "change" | "replan" | "review";
+export type RouteKind = "task" | "quick" | "answer" | "change" | "replan" | "review" | "led";
 
 /** A next step said in words, which does what its chip does and calls no model by itself. */
 export type Move = "commit" | "push" | "build" | "retry" | "resume" | "keep-going" | "fix";
@@ -33,7 +35,7 @@ export type Said = { route: Route; text: string } | { move: Move };
 
 /** The routes each place offers, in the order the menu lists them. */
 export const ROUTES: Record<Place, RouteKind[]> = {
-  home: ["task", "quick", "answer"],
+  home: ["task", "quick", "answer", "led"],
   // A thread whose first run stopped before it had a plan: it can take changes, built without one.
   fresh: ["change", "answer"],
   planned: ["replan", "answer"],
@@ -48,6 +50,7 @@ export const LEADS: Record<RouteKind, Role> = {
   change: "build",
   replan: "plan",
   review: "review",
+  led: "scout",
 };
 
 export const ROUTE_NAMES: Record<RouteKind, { label: string; does: string }> = {
@@ -57,6 +60,7 @@ export const ROUTE_NAMES: Record<RouteKind, { label: string; does: string }> = {
   change: { label: "Change", does: "Build, checks, Review, on top of the work" },
   replan: { label: "Rethink the plan", does: "Plan again from what you write" },
   review: { label: "Review again", does: "The checks and Review look at the work again" },
+  led: { label: "Lead decides", does: "A lead calls the seats it needs. Check and Review always run" },
 };
 
 /** The seats a person can hand a message to by name, and the route each one takes from a place. */
@@ -157,7 +161,8 @@ export function readMessage(text: string, reading: Reading, picked?: RouteKind):
 export function routeMark(route: Route, stack: Stack): string {
   const lead = LEADS[route.kind];
   const model = route.model ?? stack[lead].model;
-  const seat = lead[0].toUpperCase() + lead.slice(1);
+  // A led route's lead seat is the lead itself, which runs on the Scout seat's model.
+  const seat = route.kind === "led" ? "Lead" : lead[0].toUpperCase() + lead.slice(1);
   return `${ROUTE_NAMES[route.kind].label} · ${seat} on ${labelOf(model)}`;
 }
 

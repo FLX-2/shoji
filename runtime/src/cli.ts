@@ -44,6 +44,8 @@ Options:
                       nothing. The stack's scout answers; with --plan-file it reads the plan too
   --quick             A small change: skip scout and plan, build the task as written, then
                       check and review it
+  --lead              A lead on the scout's model runs the task, calling the seats it needs;
+                      a change it makes is still checked and reviewed before the thread ends
   --plan-only         Stop once the plan is written, for the person to build or change
   --build             Build the plan in --plan-file, which the person approved, skipping
                       scout and plan
@@ -238,6 +240,7 @@ async function main() {
       changes: { type: "string" },
       "plan-only": { type: "boolean", default: false },
       quick: { type: "boolean", default: false },
+      lead: { type: "boolean", default: false },
       build: { type: "boolean", default: false },
       fresh: { type: "boolean", default: false },
       review: { type: "boolean", default: false },
@@ -312,6 +315,7 @@ async function main() {
   if (continuing && values.question === undefined && !values["plan-file"])
     fail("--changes, --build, --review and --replan need --plan-file.");
   if (values.quick && (continuing || values["plan-only"])) fail("--quick starts a thread; use it alone.");
+  if (values.lead && (continuing || values["plan-only"] || values.quick)) fail("--lead starts a thread; use it alone.");
   if (values.fresh && !values.build) fail("--fresh goes with --build.");
   const plan = values["plan-file"] ? fs.readFileSync(values["plan-file"], "utf8") : "";
   const changes = values.changes !== undefined ? { notes: values.changes, plan } : undefined;
@@ -414,6 +418,7 @@ async function main() {
       changes,
       planOnly: values["plan-only"],
       ...(values.quick && { quick: true }),
+      ...(values.lead && { lead: true }),
       steering,
       approved: values.build ? plan : undefined,
       ...(values.fresh && { fresh: true }),

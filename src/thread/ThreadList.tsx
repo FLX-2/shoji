@@ -25,7 +25,8 @@ export function threadStatus(thread: LedgerThread): string {
   const asked = thread.runs.at(-1)?.status;
   if (asked && thread.runs.every((run) => run.kind === "question")) return asked === "answered" ? "Answered" : STATUS[asked];
   const last = thread.runs.findLast((run) => run.kind !== "question")?.status;
-  return last && last !== "answered" ? STATUS[last] : "Running";
+  // A lead can answer without changing anything, which ends a task run as a question does.
+  return last === "answered" ? "Answered" : last ? STATUS[last] : "Running";
 }
 
 /** Runs that change the work. */

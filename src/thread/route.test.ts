@@ -71,6 +71,8 @@ describe("routing a message", () => {
     const stack = STACKS.balanced;
     expect(routeMark({ kind: "change" }, stack)).toBe("Change · Build on Sonnet 5.5");
     expect(routeMark({ kind: "answer", model: "claude-opus-5-5" }, stack)).toBe("Answer · Scout on Opus 5.5");
+    // The lead runs on the Scout seat's model.
+    expect(routeMark({ kind: "led" }, stack)).toBe("Lead decides · Lead on Haiku 5.5");
     expect(stackFor({ kind: "change" }, stack)).toBe(stack);
     const once = stackFor({ kind: "review", model: "claude-opus-5-5" }, stack);
     expect(once.review).toEqual({ ...stack.review, model: "claude-opus-5-5" });

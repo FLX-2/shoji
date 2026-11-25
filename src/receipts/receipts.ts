@@ -180,11 +180,12 @@ export interface Receipt {
   baselineName: string;
 }
 
-/** A thread's calls, one line per step and model, in the order they ran. */
+/** A thread's calls, one line per step and model, in the order they ran. A lead's turns come between the seats
+ *  it calls, so they gather on its one line, where it first spoke. */
 export function receipt(thread: LedgerThread): Receipt {
   const lines: ReceiptLine[] = [];
   for (const call of callsOf(thread)) {
-    const last = lines[lines.length - 1];
+    const last = call.step === "lead" ? lines.findLast((l) => l.step === "lead") : lines[lines.length - 1];
     if (last && last.step === call.step && last.model === call.model) last.cost += call.cost;
     else lines.push({ step: call.step, role: call.role, model: call.model, cost: call.cost });
   }

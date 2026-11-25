@@ -38,6 +38,9 @@ export interface ThreadInput {
   planOnly?: boolean;
   /** A small change: skip scout and plan, and build the task as it's written, then check and review it. */
   quick?: boolean;
+  /** A lead on the Scout seat's model decides which seats a new task needs and calls them. A change it builds
+   *  is always checked and reviewed before the thread ends. */
+  lead?: boolean;
   /** What the person writes to the run while it works. */
   steering?: Steering;
   /** A plan the person approved: the thread skips scout and plan and builds it. */
@@ -227,7 +230,26 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     }
   };
 
+  /** What fails before Shoji changes anything, which isn't the thread's to fix. */
+  const lookBefore = () => {
+    const before = runChecks(workspace.root, checks).filter((c) => !c.ok && !c.missing);
+    failingBefore = new Set(before.map((c) => c.command));
+    testsBefore = new Set(before.flatMap((c) => c.failing ?? []));
+    // Told as soon as it's known, so a run that's stopped mid-build still passes it on.
+    emit({ type: "baseline", failingBefore: [...failingBefore], failingTestsBefore: [...testsBefore] });
+  };
+  const checksNote = () =>
+    checks.length
+      ? `\n\nCheck commands you can run: ${checks.join(", ")}${
+          failingBefore.size
+            ? `\n\nThese checks already failed before any change, so leave their failures alone unless the task is about them: ${[...failingBefore].join(", ")}`
+            : ""
+        }`
+      : "";
+
   try {
+    if (input.lead && !input.reviewAgain && !changes && !approved && !replan && !input.quick && !input.planOnly)
+      return await led();
     if (input.reviewAgain) {
       state.plan = input.reviewAgain.plan;
       state.review = await review(true);
@@ -239,20 +261,8 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     if (input.planOnly) return finish("planned");
     // A changes run is told what failed before the thread's first build. When nothing was recorded, as
     // when the first run stopped before it built anything, the project is still as it was, so look now.
-    if (!changes || !(input.checkedBefore || failingBefore.size)) {
-      const before = runChecks(workspace.root, checks).filter((c) => !c.ok && !c.missing);
-      failingBefore = new Set(before.map((c) => c.command));
-      testsBefore = new Set(before.flatMap((c) => c.failing ?? []));
-      // Told as soon as it's known, so a run that's stopped mid-build still passes it on.
-      emit({ type: "baseline", failingBefore: [...failingBefore], failingTestsBefore: [...testsBefore] });
-    }
-    const commandsNote = checks.length
-      ? `\n\nCheck commands you can run: ${checks.join(", ")}${
-          failingBefore.size
-            ? `\n\nThese checks already failed before any change, so leave their failures alone unless the task is about them: ${[...failingBefore].join(", ")}`
-            : ""
-        }`
-      : "";
+    if (!changes || !(input.checkedBefore || failingBefore.size)) lookBefore();
+    const commandsNote = checksNote();
     const buildPrompt = `Task: ${task}${guide}${skills.note}\n\nPlan:\n${state.plan}${commandsNote}${asked}`;
     const buildStep = changes ? "changes" : "build";
     state.report = await agent(buildStep, "build", stack.build, prompts.BUILD, buildPrompt, builderTools);
@@ -350,6 +360,142 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     if (error instanceof BudgetExceeded) return finish("stopped", error.message);
     if (error instanceof RefusedError) return finish("failed", error.message);
     return finish("failed", error instanceof Error ? error.message : String(error));
+  }
+
+  /**
+   * A lead on the Scout seat's model runs the task, calling the seats as tools. Whatever it decides, a change it
+   * leaves unreviewed is checked and reviewed before the thread ends, so the lead can't skip the gates.
+   */
+  async function led(): Promise<ThreadResult> {
+    lookBefore();
+    const seen = { built: false, reviewed: false, builds: 0 };
+    let instructions = "";
+    let answer = "";
+    // Named as the fixed route names its steps, so the conversation reads the same: a second build is a fix.
+    let building = "build";
+    const seatTools: Anthropic.Tool[] = [
+      {
+        name: "scout",
+        description: `Ask the scout (${stack.scout.model}) to find the code something touches, or to answer a question about the project. It reads and changes nothing, and replies with a short brief.`,
+        input_schema: { type: "object", properties: { question: { type: "string" } }, required: ["question"] },
+      },
+      {
+        name: "plan",
+        description: `Ask the planner (${stack.plan.model}) for a concrete plan for the builder. Give it what the scout found.`,
+        input_schema: { type: "object", properties: { brief: { type: "string" } }, required: ["brief"] },
+      },
+      {
+        name: "build",
+        description: `Ask the builder (${stack.build.model}) to change the code: the plan, or exact instructions, or the fixes to make. It replies with a summary of the change.`,
+        input_schema: { type: "object", properties: { instructions: { type: "string" } }, required: ["instructions"] },
+      },
+      {
+        name: "check",
+        description: "Run the project's checks on the work as it stands. Costs nothing.",
+        input_schema: { type: "object", properties: {} },
+      },
+      {
+        name: "review",
+        description: `Ask the reviewer (${stack.review.model}) to judge the change against the task and the latest checks. It replies VERDICT: APPROVE, or VERDICT: FIX with what to fix.`,
+        input_schema: { type: "object", properties: {} },
+      },
+    ];
+    const checkSummary = () =>
+      state.checks.length
+        ? state.checks
+            .map((c) => `${c.command}: ${c.ok ? "passed" : c.failedBefore ? "failed, as it did before any change" : "FAILED"}`)
+            .join("\n")
+        : "There are no checks in this project.";
+    const seats: Mcp = {
+      tools: seatTools,
+      readOnly: seatTools,
+      owns: (tool) => seatTools.some((t) => t.name === tool),
+      isReadOnly: () => true,
+      label: (tool) => tool,
+      close: async () => {},
+      call: async (tool, given) => {
+        const asked = String(given.question ?? given.brief ?? given.instructions ?? "");
+        switch (tool) {
+          case "scout":
+            return agent("scout", "scout", stack.scout, prompts.SCOUT, `Task: ${task}${skills.note}\n\nThe lead asks: ${asked}`, lookingTools);
+          case "plan":
+            state.plan = await step("plan", "plan", stack.plan, async () =>
+              whole(
+                await meter.send("plan", "plan", {
+                  model: stack.plan.model,
+                  effort: stack.plan.effort,
+                  system: prompts.PLAN,
+                  messages: [
+                    {
+                      role: "user",
+                      content: withAttachments(
+                        `Task: ${task}${projectNotes(workspace)}${guide}${toldBefore("plan")}\n\nThe lead's brief:\n${asked}\n\nRelevant files:\n${filesFrom(workspace, asked, mentionedFiles(task))}`,
+                        input.attachments,
+                      ),
+                    },
+                  ],
+                  maxTokens: MAX_TOKENS,
+                }),
+                "plan",
+              ),
+            );
+            return state.plan;
+          case "build": {
+            instructions = asked;
+            seen.built = true;
+            seen.reviewed = false;
+            building = seen.builds++ ? `fix-${seen.builds - 1}` : "build";
+            const plan = state.plan && !asked.includes(state.plan) ? `\n\nPlan:\n${state.plan}` : "";
+            const reply = await agent(
+              building,
+              "build",
+              stack.build,
+              prompts.BUILD,
+              `Task: ${task}${guide}${skills.note}${plan}\n\nThe lead's instructions:\n${asked}${checksNote()}`,
+              builderTools,
+            );
+            if (reply !== OUT_OF_TURNS) state.report = reply;
+            return reply;
+          }
+          case "check":
+            check(building);
+            return checkSummary();
+          case "review":
+            state.review = await review(true);
+            seen.reviewed = true;
+            return `${state.review}\n\nChecks:\n${checkSummary()}`;
+        }
+        return `Error: there is no seat called ${tool}.`;
+      },
+    };
+    await step("lead", "scout", stack.scout, async () => {
+      await runAgent({
+        meter,
+        workspace,
+        allowedCommands: [],
+        role: "scout",
+        step: "lead",
+        seat: stack.scout,
+        system: prompts.LEAD,
+        prompt: withAttachments(`The person asks:\n${task}${guide}`, input.attachments),
+        tools: seatTools,
+        mcp: seats,
+        maxTurns: 20,
+      }).then((said) => (answer = said));
+      // The steps under the lead show what it did; its own reply is the answer when nothing was built.
+      return "";
+    });
+    // Nothing was built: the lead's reply is the answer, shown as one.
+    if (!seen.built) {
+      state.report = await step("answer", "scout", stack.scout, async () => answer);
+      return finish("answered");
+    }
+    // The gates the lead can't skip: work it left unreviewed is checked and reviewed now.
+    if (!seen.reviewed) state.review = await review(true);
+    // A thread carries on from its plan, so work built from instructions alone keeps them as its plan.
+    if (!state.plan) state.plan = instructions;
+    const passing = state.checks.every((c) => c.ok || c.failedBefore);
+    return finish(passing && approves(state.review) ? "ready" : "needs-work");
   }
 
   async function planFor(): Promise<string> {

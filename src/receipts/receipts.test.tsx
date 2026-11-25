@@ -157,6 +157,22 @@ describe("receipts", () => {
     expect(r.tokensOut).toBe(3000);
   });
 
+  it("gathers a lead's turns on one line, where it first spoke", () => {
+    const t = thread(1, "Greet Shoji", [
+      run("task", "ready", [
+        call("lead", "scout", "claude-haiku-5-5"),
+        call("build", "build", "claude-sonnet-5-5"),
+        call("lead", "scout", "claude-haiku-5-5"),
+        call("review", "review", "claude-haiku-5-5"),
+        call("lead", "scout", "claude-haiku-5-5"),
+      ]),
+    ]);
+    const r = receipt(t);
+    expect(r.lines.map((l) => l.step)).toEqual(["lead", "build", "review"]);
+    expect(r.lines[0].cost).toBeCloseTo(3 * r.lines[2].cost);
+    expect(cardOf(t).lines[0][0]).toBe("Lead · Haiku 5.5");
+  });
+
   it("sums each day of the month by when its calls were made, and each project", () => {
     const early = new Date(2026, 9, 3, 23, 50).getTime();
     const threads = [

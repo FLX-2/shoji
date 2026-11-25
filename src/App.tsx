@@ -714,6 +714,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
         const tiered = tierStack(stack.stack, tier);
         start(task, repo, tiered, prefs.cap, prefs.planFirst, attachments, false, from, context, {
           ...(route?.kind === "quick" && { quick: true }),
+          ...(route?.kind === "led" && { lead: true }),
           ...(route?.kind === "answer" && { answer: true }),
           ...(route?.model && { once: stackFor(route, tiered) }),
         });

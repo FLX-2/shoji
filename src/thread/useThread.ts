@@ -57,6 +57,8 @@ export interface Thread {
 export interface StartHow {
   /** Build, checks and Review only. */
   quick?: boolean;
+  /** A lead calls the seats it needs. */
+  lead?: boolean;
   /** Scout answers; nothing changes. */
   answer?: boolean;
   /** The stack for this run alone, as when the person named a model for it. */
@@ -173,6 +175,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
           ask: turn.ask,
           ...(planOnly && { planOnly }),
           ...(how.quick && { quick: true }),
+          ...(how.lead && { lead: true }),
           ...(how.answer && { answer: true }),
           ...(next.attachments?.length && { attachments: next.attachments }),
           ...(!changes && next.from && { from: next.from }),
@@ -246,7 +249,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
           ...(attachments.length && { attached: attachments.map(fileName) }),
         },
         undefined,
-        planFirst && !how.quick && !how.answer,
+        planFirst && !how.quick && !how.answer && !how.lead,
         how,
       );
     },

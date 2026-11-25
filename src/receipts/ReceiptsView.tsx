@@ -32,6 +32,8 @@ const STEPS: Record<string, string> = {
   "fix-2": "Second fix",
   review: "Review",
   notes: "Project notes",
+  lead: "Lead",
+  answer: "Answer",
 };
 
 function counted(threads: number, trials: number, notes: number): string {
