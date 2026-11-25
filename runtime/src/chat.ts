@@ -179,6 +179,10 @@ export interface ChatOptions {
   local?: boolean;
 }
 
+/** Whether a 429 names an allowance of nothing ("limit: 0"), as Google does for a model its free tier leaves out:
+ *  no wait lifts it. */
+const noAllowance = (error: ChatError) => error.status === 429 && /\blimit: 0\b/.test(error.message);
+
 /** Fields a model may not take. One that's turned down is left out once, rather than failing the step. */
 const OPTIONAL = ["reasoning_effort", "max_tokens"];
 
@@ -209,7 +213,7 @@ export class ChatProvider implements ModelProvider {
         // A free tier's per-minute limit lifts within a minute, so it's waited out once rather than stopping. Google
         // says how long: "Please retry in 41.2s".
         const retry = Number(error.message.match(/retry in ([\d.]+)\s*s/i)?.[1]);
-        if (error.status === 429 && !waited && !/per ?day|daily/i.test(error.message) && retry <= 65) {
+        if (error.status === 429 && !waited && !/per ?day|daily/i.test(error.message) && !noAllowance(error) && retry <= 65) {
           waited = true;
           await new Promise((done) => setTimeout(done, perMinuteWait(retry * 1000, this.options.backoff)));
           continue;
@@ -252,7 +256,12 @@ export class ChatProvider implements ModelProvider {
       return new Error(`Shoji couldn't reach ${who} on this computer. Start its server, then try again.`);
     if (error.status === 401 || error.status === 403 || (error.status === 400 && /api key/i.test(error.message)))
       return new KeyRejectedError(`${who} didn't accept your key. Check it in Settings.`);
+    if (error.status === 404 && /no longer available to new users/i.test(error.message))
+      return new Error(`${who} no longer offers ${name} to new keys. Pick another model in Stack.`);
     if (error.status === 404) return new Error(`${who} doesn't offer ${name} to your key. Pick another model in Stack.`);
+    // Google lists models whose free allowance is nothing, and answers them as if a limit had been reached.
+    if (noAllowance(error) && MODELS[model]?.billing === "free")
+      return new Error(`${who}'s free tier doesn't include ${name}. Pick another model in Stack.`);
     if (error.status === 429 && MODELS[model]?.billing === "free") {
       // Google's free-tier daily limits reset at midnight in California.
       const daily = /per ?day|daily/i.test(error.message);

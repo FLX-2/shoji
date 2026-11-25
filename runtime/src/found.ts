@@ -38,28 +38,58 @@ export function planModel(slug: string, label = slug): [ModelId, ModelInfo] {
 }
 
 /** Gemini's paid prices per million tokens, as Google listed them on 12 Nov 2026, and whether a key with no
- *  billing may use the model free. A listed model whose id starts with one of these is priced as it. */
-export const GEMINI_PRICES: Readonly<Record<string, { input: number; output: number; cacheRead: number; free: boolean }>> = {
+ *  billing may use the model free. A listed model whose id starts with one of these is priced as it. `closed` marks
+ *  one Google still lists but no longer serves to new keys ("no longer available to new users", 25 Nov 2026): it
+ *  stays offered for older keys that have it, and no preset seats it. */
+export const GEMINI_PRICES: Readonly<
+  Record<string, { input: number; output: number; cacheRead: number; free: boolean; closed?: true }>
+> = {
   "gemini-3.5-flash": { input: 1.5, output: 9, cacheRead: 0.15, free: true },
   "gemini-3.1-pro": { input: 2, output: 12, cacheRead: 0.2, free: false },
   "gemini-3.1-flash-lite": { input: 0.25, output: 1.5, cacheRead: 0.025, free: true },
   "gemini-3-flash": { input: 0.5, output: 3, cacheRead: 0.05, free: true },
-  "gemini-2.5-pro": { input: 1.25, output: 10, cacheRead: 0.125, free: true },
-  "gemini-2.5-flash-lite": { input: 0.1, output: 0.4, cacheRead: 0.01, free: true },
-  "gemini-2.5-flash": { input: 0.3, output: 2.5, cacheRead: 0.03, free: true },
+  "gemini-2.5-pro": { input: 1.25, output: 10, cacheRead: 0.125, free: true, closed: true },
+  "gemini-2.5-flash-lite": { input: 0.1, output: 0.4, cacheRead: 0.01, free: true, closed: true },
+  "gemini-2.5-flash": { input: 0.3, output: 2.5, cacheRead: 0.03, free: true, closed: true },
 };
 
 /**
- * A Gemini model the person's key can use, or null when Shoji can't offer it: on the free tier, one Google keeps
- * for paid keys; on a paid key, one whose price Shoji doesn't know, since the spending limits rest on prices. A free
- * model Shoji has no price for is listed at nothing.
+ * The Gemini models a new key can run on the free tier, strongest first, as Google answered on 25 Nov 2026. Google
+ * allows each 20 requests a day there, and models in one group draw on the same allowance: a request to 3.5 Flash
+ * is counted against 3.6 Flash. 3.6 Flash and 3.5 Flash-Lite have no price above yet, so they're offered on the
+ * free tier alone.
+ */
+export const GEMINI_FREE: readonly (readonly string[])[] = [
+  ["gemini-3.6-flash", "gemini-3.5-flash"],
+  ["gemini-3-flash"],
+  ["gemini-3.5-flash-lite"],
+  ["gemini-3.1-flash-lite"],
+];
+
+/** The longest of these that the id starts with, so 3.5 Flash-Lite isn't taken for 3.5 Flash. */
+const longest = (prefixes: readonly string[], id: string) =>
+  prefixes.filter((prefix) => id.startsWith(prefix)).sort((a, b) => b.length - a.length)[0];
+
+/** The model in GEMINI_FREE that a listed Gemini model is a version of, such as gemini-3-flash for
+ *  gemini-3-flash-preview, or undefined when Shoji doesn't know it to be free for a new key. */
+export const geminiFreeFamily = (id: string): string | undefined => longest(GEMINI_FREE.flat(), id);
+
+/** Whether Google has stopped offering this Gemini model to new keys. */
+export function geminiClosed(id: string): boolean {
+  const prefix = longest(Object.keys(GEMINI_PRICES), id);
+  return !!prefix && !!GEMINI_PRICES[prefix].closed;
+}
+
+/**
+ * A Gemini model the person's key can use, or null when Shoji can't offer it: on the free tier, one Shoji doesn't
+ * know to be free, since Google lists many models whose free allowance is nothing; on a paid key, one whose price
+ * Shoji doesn't know, since the spending limits rest on prices. A free model Shoji has no price for is listed at
+ * nothing.
  */
 export function geminiModel(id: string, name: string, free: boolean): [ModelId, ModelInfo] | null {
-  const known = Object.keys(GEMINI_PRICES)
-    .filter((prefix) => id.startsWith(prefix))
-    .sort((a, b) => b.length - a.length)[0];
+  const known = longest(Object.keys(GEMINI_PRICES), id);
   const price = known ? GEMINI_PRICES[known] : null;
-  if (free ? price?.free === false : !price) return null;
+  if (free ? !(price?.free || geminiFreeFamily(id)) : !price) return null;
   return [
     `gemini/${id}`,
     {
