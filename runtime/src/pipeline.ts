@@ -110,7 +110,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   };
 
   const step = async (name: string, role: Role, seat: Seat, work: () => Promise<string>) => {
-    emit({ type: "step", step: name, role, model: seat.model, status: "running" });
+    emit({ type: "step", step: name, role, model: seat.model, status: "running", at: Date.now() });
     const output = await work();
     emit({ type: "step", step: name, role, model: seat.model, status: "done", output });
     return output;
@@ -151,6 +151,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
           emit({
             type: "tool",
             step: name,
+            at: Date.now(),
             tool,
             target: mcp.owns(tool)
               ? mcp.label(tool)
@@ -167,6 +168,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   let failingBefore = new Set(input.failingBefore ?? []);
   let testsBefore = new Set(input.failingTestsBefore ?? []);
   const check = (name: string) => {
+    if (checks.length) emit({ type: "doing", step: name, what: "checks", at: Date.now() });
     state.checks = runChecks(workspace.root, checks).map((c) => {
       if (c.ok || !failingBefore.has(c.command)) return c;
       const fresh = testsBefore.size ? (c.failing ?? []).filter((f) => !testsBefore.has(f)) : [];

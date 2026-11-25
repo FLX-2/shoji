@@ -40,7 +40,7 @@ export interface Prefs {
   density: "comfortable" | "compact";
   /** The bar along the bottom of the window. */
   statusBar: boolean;
-  /** Push and open PR fills in the pull request's description with the thread's receipt. */
+  /** Push and open PR ends the pull request's description with a short line on what the thread cost. */
   receiptInPR: boolean;
   /** What threads cost, shown as they run and on the review bar. */
   showCosts: boolean;

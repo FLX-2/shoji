@@ -37,12 +37,14 @@ import { Working } from "../shell/Mark";
 import type { SlashCommand } from "../shell/mention";
 import {
   approves,
+  doingLabel,
   foldRun,
   formatCost,
   modelName,
   lookScore,
   reviewNotes,
   stepLabel,
+  type Doing,
   type RunView,
   type StepView,
   type ToolUse,
@@ -1472,6 +1474,7 @@ function StepRow({
             </span>
           )}
         </div>
+        {now && step.doing && <DoingLine doing={step.doing} />}
         {step.escalation && (
           <p className="esc">
             Moved up to {labelOf(step.escalation.to)}. {step.escalation.reason}
@@ -1488,6 +1491,34 @@ function StepRow({
     </li>
   );
 }
+
+/** Under the working step: what it's doing this moment, such as reading a file or waiting on its model, and
+ *  for how long once that passes a few seconds, so a slow step reads as working rather than stuck. */
+function DoingLine({ doing }: { doing: Doing }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!doing.at) return;
+    setNow(Date.now());
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, [doing.at]);
+  const seconds = doing.at ? Math.max(0, Math.floor((now - doing.at) / 1000)) : 0;
+  const label = doingLabel(doing);
+  return (
+    <p className="doing">
+      <span className="what" title={label}>
+        {label}
+      </span>
+      {seconds >= SHOW_AFTER && <span className="for">{clock(seconds)}</span>}
+    </p>
+  );
+}
+
+/** Seconds before the working step's line shows how long it has been at it. */
+const SHOW_AFTER = 5;
+
+/** 0:42, or 12:05. */
+const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
 const AGAIN: Record<Redo, string> = {
   plan: "Plan again",

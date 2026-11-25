@@ -8,6 +8,15 @@ export interface ToolUse {
   target: string;
 }
 
+/** What a running step is doing right now, and since when, when the runtime said. */
+export interface Doing {
+  what: "thinking" | "checks" | "tool";
+  /** For a tool: which one, and what it was used on. */
+  tool?: string;
+  target?: string;
+  at?: number;
+}
+
 /** One pipeline step as the conversation shows it. */
 export interface StepView {
   name: string;
@@ -24,6 +33,8 @@ export interface StepView {
   escalation?: { from: ModelId; to: ModelId; reason: string };
   /** What the person wrote to the run that this step took in, in order. */
   steers?: string[];
+  /** While it runs: what it's doing now. */
+  doing?: Doing;
   cost: number;
 }
 
@@ -94,6 +105,7 @@ export function foldRun(events: RuntimeEvent[]): RunView {
             running: true,
             tools: [],
             escalation: escalations.get(event.step),
+            doing: { what: "thinking", ...(event.at && { at: event.at }) },
             cost: 0,
           });
         } else {
@@ -103,12 +115,21 @@ export function foldRun(events: RuntimeEvent[]): RunView {
             title ??= titleIn(output);
             output = withoutTitle(output);
           }
-          if (step) Object.assign(step, { running: false, output });
+          if (step) Object.assign(step, { running: false, output, doing: undefined });
         }
         break;
-      case "tool":
-        last(event.step)?.tools.push({ tool: event.tool, target: event.target });
+      case "tool": {
+        const step = last(event.step);
+        if (!step) break;
+        step.tools.push({ tool: event.tool, target: event.target });
+        if (step.running) step.doing = { what: "tool", tool: event.tool, target: event.target, ...(event.at && { at: event.at }) };
         break;
+      }
+      case "doing": {
+        const step = last(event.step);
+        if (step?.running) step.doing = { what: event.what, at: event.at };
+        break;
+      }
       case "checks": {
         const step = last(event.step);
         if (step) step.checks = event.results;
@@ -153,6 +174,7 @@ export function foldRun(events: RuntimeEvent[]): RunView {
           if (!step.running) continue;
           step.running = false;
           step.unfinished = true;
+          step.doing = undefined;
         }
         break;
     }
@@ -195,6 +217,32 @@ export function stepLabel(steps: StepView[], index: number): string {
       return before.at(-1)?.name === "review"
         ? tense("Fixing what the review found", "Fixed what the review found")
         : tense("Fixing the failing checks", "Fixed the failing checks");
+  }
+}
+
+/** What a running step is doing right now, in a few words. */
+export function doingLabel(doing: Doing): string {
+  if (doing.what === "thinking") return "Thinking";
+  if (doing.what === "checks") return "Running the checks";
+  const target = doing.target ?? "";
+  switch (doing.tool) {
+    case "read_file":
+      return `Reading ${target}`;
+    case "list_files":
+      return target && target !== "." ? `Looking through ${target}` : "Looking through the project";
+    case "search":
+      return `Searching for ${target}`;
+    case "write_file":
+    case "replace_in_file":
+      return `Editing ${target}`;
+    case "run_command":
+      return `Running ${target}`;
+    case "look_at_page":
+      return `Looking at ${target}`;
+    case "read_skill":
+      return `Reading the ${target} skill`;
+    default:
+      return target ? `Using ${target}` : "Working";
   }
 }
 

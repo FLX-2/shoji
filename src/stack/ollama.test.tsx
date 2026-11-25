@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { applyFound, MODELS, NAMED } from "../../runtime/src/models";
 import { STACKS } from "../../runtime/src/stack";
@@ -6,6 +6,7 @@ import App from "../App";
 import { fakeBridge } from "../test/fakeBridge";
 import { parseLock } from "./lock";
 import { modelGroups, priceLine } from "./ModelPick";
+import { RETRIES, RETRY_MS } from "./looking";
 import { localStack } from "./ollama";
 import { tierStack } from "./tier";
 
@@ -67,6 +68,46 @@ describe("Ollama", () => {
     fake.ollama.models = [];
     await click("Look again");
     expect(screen.getByText(/none of its models can use tools/)).toBeTruthy();
+  });
+
+  it("finds Ollama when Shoji comes back into focus, as after the person opens it", async () => {
+    const fake = fakeBridge();
+    render(<App bridge={fake.bridge} />);
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Models and keys" }));
+    expect(await screen.findByText(/Install Ollama from ollama.com/)).toBeTruthy();
+
+    fake.ollama.models = ["gemma4:31b"];
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(await screen.findByText("gemma4:31b. Free, and your code stays on this computer.")).toBeTruthy();
+  });
+
+  it("keeps looking for a few seconds while Ollama starts, and says when it still didn't answer", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const fake = fakeBridge();
+      render(<App bridge={fake.bridge} />);
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+      fireEvent.click(screen.getByRole("button", { name: "Models and keys" }));
+      expect(await screen.findByText(/Install Ollama from ollama.com/)).toBeTruthy();
+
+      // Ollama is still starting when the person looks again, and answers a moment later.
+      await click("Look again");
+      expect(screen.getByText("Looking for Ollama on this computer…")).toBeTruthy();
+      fake.ollama.models = ["gemma4:31b"];
+      await act(() => vi.advanceTimersByTimeAsync(RETRY_MS));
+      expect(screen.getByText("gemma4:31b. Free, and your code stays on this computer.")).toBeTruthy();
+
+      // Closed again, a look tries for a while, then says it found nothing rather than looking unchanged.
+      fake.ollama.models = null;
+      await click("Look again");
+      await act(() => vi.advanceTimersByTimeAsync(RETRIES * RETRY_MS));
+      expect(screen.getByText("Ollama didn't answer. Open it, give it a moment, then look again.")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("runs a stack on this computer without an Anthropic key", async () => {

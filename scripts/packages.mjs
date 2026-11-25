@@ -1,6 +1,8 @@
-// Points Homebrew and Scoop at a published release: writes Casks/shoji.rb and bucket/shoji.json, which
-// `brew tap flx-2/shoji https://github.com/FLX-2/shoji` and `scoop bucket add shoji https://github.com/FLX-2/shoji`
-// read from this repository. The Packages workflow runs it when a release is published.
+// Points Homebrew, Scoop, the README and the website at a published release: writes Casks/shoji.rb and
+// bucket/shoji.json, which `brew tap flx-2/shoji https://github.com/FLX-2/shoji` and
+// `scoop bucket add shoji https://github.com/FLX-2/shoji` read from this repository, the README's download table,
+// and the release in site/site.json, so every Download link opens its installer itself. The Packages workflow
+// runs it when a release is published.
 //
 //   node scripts/packages.mjs v0.4.0 <folder with the release's .dmg and .msi files>
 import { createHash } from "node:crypto";
@@ -82,4 +84,24 @@ writeFileSync(
     2,
   )}\n`,
 );
-console.log(`Homebrew and Scoop now point to Shoji ${version}.`);
+// The README's download table, between its downloads comments, links each installer itself.
+const file = (name) => `${releases}/${tag}/${name}`;
+const table = `<!-- downloads: scripts/packages.mjs writes this table when a release is published -->
+| System | Download |
+| --- | --- |
+| macOS 12 or later | [Apple silicon](${file(`Shoji_${version}_aarch64.dmg`)}) (M chips) · [Intel](${file(`Shoji_${version}_x64.dmg`)}) |
+| Windows 10 or 11 | [Installer](${file(`Shoji_${version}_x64-setup.exe`)}) · [.msi](${file(`Shoji_${version}_x64_en-US.msi`)}) |
+| Linux | [AppImage](${file(`Shoji_${version}_amd64.AppImage`)}) · [.deb](${file(`Shoji_${version}_amd64.deb`)}) · [.rpm](${file(`Shoji-${version}-1.x86_64.rpm`)}) |
+
+This is Shoji ${version}. Every version is on the [releases page](https://github.com/FLX-2/shoji/releases).
+<!-- /downloads -->`;
+const readme = readFileSync("README.md", "utf8");
+const downloads = /<!-- downloads:[\s\S]*?<!-- \/downloads -->/;
+if (!downloads.test(readme)) throw new Error("README.md has no downloads table to write.");
+writeFileSync("README.md", readme.replace(downloads, table));
+
+// The website builds its Download links from this, and a change to site/ redeploys it.
+const site = JSON.parse(readFileSync("site/site.json", "utf8"));
+writeFileSync("site/site.json", `${JSON.stringify({ ...site, release: tag }, null, 2)}\n`);
+
+console.log(`Homebrew, Scoop, the README and the website now point to Shoji ${version}.`);

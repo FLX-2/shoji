@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { applyFound, type ModelId } from "../../runtime/src/models";
 import { localModel } from "../../runtime/src/found";
 import type { Bridge } from "../bridge";
+import { useLooking } from "./looking";
 
 /** Every local-server model this Shoji has found, kept so a stack or thread that names one still knows it while
  *  the server is closed. */
@@ -33,30 +34,34 @@ export interface LocalServer {
   name: string | null;
   /** The models it has loaded, as it lists them. */
   models: ModelId[];
+  /** Set when the person asked to look again and still no server answered. */
+  missed?: boolean;
   /** Asks again, as after the person starts the server or loads a model. */
   look: () => void;
 }
 
-/** LM Studio or llama.cpp's server on this computer: asked once at launch and again on request. */
+type Found = Omit<LocalServer, "look" | "missed">;
+
+/** LM Studio or llama.cpp's server on this computer: asked at launch, whenever Shoji comes back into focus, and
+ *  on request. */
 export function useLocalServer(bridge: Bridge): LocalServer {
-  const [state, setState] = useState<Omit<LocalServer, "look">>(() => {
-    known(seenNames());
-    return { status: "looking", name: null, models: [] };
-  });
+  const ask = useCallback(
+    (): Promise<Found> =>
+      bridge.localModels().then(
+        (found) => {
+          const all = [...new Set([...found.models, ...seenNames()])];
+          remember(all);
+          known(all);
+          return { status: "ready", name: found.name, models: found.models.map((name) => localModel(name)[0]) };
+        },
+        () => ({ status: "off", name: null, models: [] }),
+      ),
+    [bridge],
+  );
+  return useLooking<Found>(ask, firstLook);
+}
 
-  const look = useCallback(() => {
-    setState((now) => ({ ...now, status: "looking" }));
-    bridge.localModels().then(
-      (found) => {
-        const all = [...new Set([...found.models, ...seenNames()])];
-        remember(all);
-        known(all);
-        setState({ status: "ready", name: found.name, models: found.models.map((name) => localModel(name)[0]) });
-      },
-      () => setState({ status: "off", name: null, models: [] }),
-    );
-  }, [bridge]);
-
-  useEffect(look, [look]);
-  return { ...state, look };
+function firstLook(): Found {
+  known(seenNames());
+  return { status: "looking", name: null, models: [] };
 }

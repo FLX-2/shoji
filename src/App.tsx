@@ -1115,7 +1115,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                       bridge.pushThread(
                         thread.repo,
                         thread.branch!,
-                        prefs.receiptInPR && shownRecord ? prBody(shownRecord) : null,
+                        prBody(thread, shownRecord ?? null, prefs.receiptInPR),
                       )
                     }
                     onAnswer={(command, allow, always) => {

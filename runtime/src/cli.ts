@@ -170,6 +170,8 @@ function describe(event: RuntimeEvent): string | null {
       return `  ${event.allowed ? "allowed" : "not allowed"}: ${event.command}`;
     case "steered":
       return `  heard: ${event.said}`;
+    case "doing":
+      return null; // The terminal shows each call as it ends.
     case "mcp":
       return "error" in event
         ? `  couldn't reach the ${event.server} MCP server: ${event.error}`

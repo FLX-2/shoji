@@ -7,7 +7,28 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cfg = JSON.parse(readFileSync(join(here, "site.json"), "utf8"));
-const words = { name: cfg.name, word: cfg.word, tagline: cfg.tagline, github: cfg.github, download: cfg.download, youtube: cfg.youtube };
+// Each Download link opens its installer itself, from the release in site.json, which the Packages workflow sets
+// when a release is published. GitHub keeps every release's files, so a link never breaks while that catches up.
+if (!/^v\d+\.\d+\.\d+$/.test(cfg.release ?? "")) throw new Error("site.json needs release, such as v0.5.0");
+const version = cfg.release.slice(1);
+const file = (name) => `${cfg.github}/releases/download/${cfg.release}/${name}`;
+const words = {
+  name: cfg.name,
+  word: cfg.word,
+  tagline: cfg.tagline,
+  github: cfg.github,
+  download: cfg.download,
+  youtube: cfg.youtube,
+  version,
+  notes: `${cfg.github}/releases/tag/${cfg.release}`,
+  macArm: file(`${cfg.name}_${version}_aarch64.dmg`),
+  macIntel: file(`${cfg.name}_${version}_x64.dmg`),
+  winExe: file(`${cfg.name}_${version}_x64-setup.exe`),
+  winMsi: file(`${cfg.name}_${version}_x64_en-US.msi`),
+  linuxAppImage: file(`${cfg.name}_${version}_amd64.AppImage`),
+  linuxDeb: file(`${cfg.name}_${version}_amd64.deb`),
+  linuxRpm: file(`${cfg.name}-${version}-1.x86_64.rpm`),
+};
 
 let src = readFileSync(join(here, "src/index.html"), "utf8");
 src = src.replace(/\{\{(\w+)\}\}/g, (m, k) => {

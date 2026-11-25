@@ -150,6 +150,7 @@ describe("roles using MCP tools", () => {
       step: "scout",
       tool: "mcp__tracker__find_issue",
       target: "tracker: find_issue",
+      at: expect.any(Number),
     });
     expect(created).toEqual([{ title: "Say hello to Shoji" }]);
     expect(result.status).toBe("ready");

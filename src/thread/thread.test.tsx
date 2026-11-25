@@ -209,6 +209,26 @@ describe("a thread in the app", () => {
     expect(steps[1].textContent).toContain("Planning the change");
   });
 
+  it("says under the working step what it's doing this moment, and for how long once that's a while", async () => {
+    const fake = await startThread();
+    const now = Date.now();
+    fake.emit({ type: "step", step: "scout", role: "scout", model: HAIKU, status: "running", at: now - 50_000 });
+    fake.emit({ type: "doing", step: "scout", what: "thinking", at: now - 42_000 });
+    const doing = () => document.querySelector(".st.now .doing")?.textContent;
+    expect(doing()).toBe("Thinking0:42");
+
+    // A file read just now: no time yet, since it's only a moment.
+    fake.emit({ type: "tool", step: "scout", tool: "read_file", target: "src/pricing.tsx", at: Date.now() });
+    expect(doing()).toBe("Reading src/pricing.tsx");
+    fake.emit({ type: "doing", step: "scout", what: "checks", at: now - 65_000 });
+    expect(doing()).toBe("Running the checks1:05");
+
+    // A finished step keeps its summary of the work, without the line.
+    fake.emit(done("scout", "scout", HAIKU));
+    expect(document.querySelector(".doing")).toBeNull();
+    expect(document.querySelector(".st.done")?.textContent).toContain("Read pricing.tsx");
+  });
+
   it("stops the run when asked", async () => {
     const fake = await startThread();
     fake.emit(running("scout", "scout", HAIKU));
@@ -297,9 +317,13 @@ describe("a thread in the app", () => {
     const fake = await startThread();
     fake.project.diff = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b\n";
     fake.emit(running("plan", "plan", OPUS), call("plan", "plan", OPUS, 0.1), done("plan", "plan", OPUS));
-    fake.emit(running("build", "build", SONNET), call("build", "build", SONNET, 0.02), done("build", "build", SONNET));
+    fake.emit(
+      running("build", "build", SONNET),
+      call("build", "build", SONNET, 0.02),
+      done("build", "build", SONNET, "Added a monthly and annual toggle above the pricing cards."),
+    );
     fake.emit(running("review", "review", HAIKU), done("review", "review", HAIKU, "VERDICT: APPROVE"));
-    fake.emit(result("ready", 0.12));
+    fake.emit(result("ready", 0.12, { diff: fake.project.diff }));
     await act(async () => fake.exit(0));
     expect(document.querySelector(".status .branch")?.textContent).toBe("shoji/thread");
 
@@ -337,20 +361,18 @@ describe("a thread in the app", () => {
       { repo: "/work/pricing-page", branch: "shoji/thread" },
       { repo: "/work/pricing-page", branch: "shoji/thread" },
     ]);
-    // The pull request's description is the thread's receipt.
+    // The pull request's description leads with what changed and the files, and ends with one line on the cost.
     expect(fake.calls.pushes[1].body).toBe(
       [
-        "### Receipt",
+        "Added a monthly and annual toggle above the pricing cards.",
         "",
-        "| Step | Model | Cost |",
-        "| :-- | :-- | --: |",
-        "| Plan | Opus 5.5 | $0.100 |",
-        "| Build | Sonnet 5.5 | $0.020 |",
-        "| **Total** | | **$0.120** |",
+        "### Files changed",
         "",
-        "Review passed.",
+        "- `a.ts`",
         "",
-        "<sub>Made with [Shoji](https://shoji-app.vercel.app/), which picks the model for each step.</sub>",
+        "---",
+        "",
+        "<sub>$0.120 on Opus 5.5 and Sonnet 5.5 · Review passed · Made with [Shoji](https://shoji-app.vercel.app/)</sub>",
       ].join("\n"),
     );
     expect(screen.getByText("Pushed shoji/thread to origin")).toBeTruthy();
@@ -475,7 +497,7 @@ describe("a thread in the app", () => {
     expect(screen.getByRole("button", { name: "Build it" }).className).toBe("btn solid");
   });
 
-  it("leaves the receipt out of the pull request when Settings says so", async () => {
+  it("leaves the cost out of the pull request when Settings says so", async () => {
     localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", cap: 0.5, receiptInPR: false }));
     const fake = await startThread();
     fake.project.diff = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b\n";

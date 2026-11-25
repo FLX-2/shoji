@@ -113,7 +113,7 @@ describe("Build looking at its work", () => {
     expect(provider.requests.find((r) => roleOf(r) === "scout")!.tools?.map((t) => t.name)).not.toContain(
       "look_at_page",
     );
-    expect(events).toContainEqual({ type: "tool", step: "build", tool: "look_at_page", target: "/ at 360px" });
+    expect(events).toContainEqual({ type: "tool", step: "build", tool: "look_at_page", target: "/ at 360px", at: expect.any(Number) });
     const sawImage = provider.requests.some((r) => JSON.stringify(r.messages).includes('"media_type":"image/png"'));
     expect(sawImage).toBe(true);
   });
