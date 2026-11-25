@@ -12,8 +12,11 @@ export function ollamaNote(ollama: Ollama): string {
       return `${listed}. Free, and your code stays on this computer.`;
     }
     case "none":
+      if (ollama.missed)
+        return "Ollama answered, but still none of its models can use tools. Pull one that can, then look again.";
       return "Ollama is running, but none of its models can use tools, which every step needs. Pull one that can, then look again.";
     case "off":
+      if (ollama.missed) return "Ollama didn't answer. Open it, give it a moment, then look again.";
       return "Models on this computer, for free. Install Ollama from ollama.com and pull a model that can use tools, then look again.";
   }
 }

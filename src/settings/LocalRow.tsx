@@ -12,6 +12,8 @@ export function localNote(local: LocalServer): string {
       return `${listed} on ${local.name}. Free, and your code stays on this computer. Load models with a context of 32K or more.`;
     }
     case "off":
+      if (local.missed)
+        return "Neither LM Studio nor llama.cpp's server answered. Start its server with a model loaded, then look again.";
       return "Models on this computer through LM Studio or llama.cpp's server. Start its server with a model loaded, then look again.";
   }
 }

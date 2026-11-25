@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import { applyFound, type ModelId } from "../../runtime/src/models";
 import { ollamaModel } from "../../runtime/src/found";
 import type { Stack } from "../../runtime/src/stack";
 import type { Bridge } from "../bridge";
+import { useLooking } from "./looking";
 
 /** Every Ollama model this Shoji has found, kept so a stack or thread that names one still knows it while
  *  Ollama is closed. */
@@ -32,33 +33,38 @@ export interface Ollama {
   status: "looking" | "ready" | "none" | "off";
   /** The models on this computer now that can use tools, largest first. */
   models: ModelId[];
+  /** Set when the person asked to look again and it still found no model to use. */
+  missed?: boolean;
   /** Asks Ollama again, as after the person pulls a model. */
   look: () => void;
 }
 
-/** Ollama on this computer: asked once at launch and again on request. Models found once stay known. */
+type Found = Omit<Ollama, "look" | "missed">;
+
+/** Ollama on this computer: asked at launch, whenever Shoji comes back into focus, and on request. Models found
+ *  once stay known. */
 export function useOllama(bridge: Bridge): Ollama {
-  const [state, setState] = useState<Omit<Ollama, "look">>(() => {
-    known(seenNames());
-    return { status: "looking", models: [] };
-  });
+  const ask = useCallback(
+    (): Promise<Found> =>
+      bridge.ollamaModels().then(
+        (pulled) => {
+          const names = pulled.map((m) => m.name);
+          const all = [...new Set([...names, ...seenNames()])];
+          remember(all);
+          known(all);
+          return { status: names.length ? "ready" : "none", models: names.map((name) => ollamaModel(name)[0]) };
+        },
+        () => ({ status: "off", models: [] }),
+      ),
+    [bridge],
+  );
+  return useLooking<Found>(ask, firstLook);
+}
 
-  const look = useCallback(() => {
-    setState((now) => ({ ...now, status: "looking" }));
-    bridge.ollamaModels().then(
-      (pulled) => {
-        const names = pulled.map((m) => m.name);
-        const all = [...new Set([...names, ...seenNames()])];
-        remember(all);
-        known(all);
-        setState({ status: names.length ? "ready" : "none", models: names.map((name) => ollamaModel(name)[0]) });
-      },
-      () => setState({ status: "off", models: [] }),
-    );
-  }, [bridge]);
-
-  useEffect(look, [look]);
-  return { ...state, look };
+/** What Shoji knows before Ollama answers: the models it found before, and that it's looking. */
+function firstLook(): Found {
+  known(seenNames());
+  return { status: "looking", models: [] };
 }
 
 /** A stack on this computer alone: the largest model plans and builds, the smallest scouts and reviews. */
