@@ -40,6 +40,8 @@ A change is a series of steps. Shoji gives each step the model that suits it. Th
 
 In a test on six real tasks in October 2026, routing each step this way cost 55% less per accepted change than running every step on Opus 5.5, and all six were accepted, the same as Opus alone.
 
+Not every message needs every step. A small edit takes a Quick change that skips the plan, and a question gets an answer that changes nothing. Pick Lead decides, and a lead on your Scout model calls only the steps a task needs. It can't skip the checks or the review.
+
 ## Every step in view
 
 The conversation shows each step as it runs, with its model, its work and what it has cost so far. The code opens beside it the moment a file changes.
@@ -50,7 +52,13 @@ The conversation shows each step as it runs, with its model, its work and what i
 - **Preview:** your dev server at 360, 768 or 1280 px, showing this thread's work.
 - **Terminal:** your own shell, in the thread's copy of the project.
 
-Ask a question at any point. Scout reads the code and answers in the thread, and nothing in the project changes.
+The message box stays open the whole time, and Shoji sends each message where it fits. The route shows on a chip in the box before you send, and you can pick another.
+
+- **Write while it works.** Enter tells the working step at its next turn, without stopping the run. Alt+Enter keeps the message until the run ends.
+- **Ask a question.** Scout reads the code and answers in the thread, and nothing in the project changes.
+- **Call a seat by name.** Start with `@scout`, `@plan`, `@build` or `@review`, and add `on opus` to run that seat on another model for that one message.
+- **Note a plan's lines.** While a plan waits for you, write a note on any line, then have it planned again or build it as it is.
+- **Say the next step.** "build it", "fix it" and "looks good, commit it" do what their buttons do.
 
 ## Nothing is committed until you accept it
 
@@ -176,7 +184,7 @@ The agent runtime in `runtime/` also runs on its own, on any git project. See [t
 
 ## Status
 
-Shoji 0.4 runs on what you have: when a free tier or your ChatGPT plan runs out partway, a thread carries on with another provider you've connected; Ollama models get room for a coding step; LM Studio and llama.cpp join Ollama; Intel Macs get their own build; and Homebrew and Scoop can install it. 0.3 started at $0: Gemini's free tier, OpenRouter's free models and a Claude checks stack that builds on your computer and pays only for the review. Receipts says what free work would have cost on Claude, copies a receipt as an image, and puts it in the pull request. 0.2 added OpenAI, ChatGPT plans, OpenRouter and Ollama. Mac comes first, and Windows and Linux build from the same code on every change.
+Shoji 0.5 gives every thread one open box: write while a run works, let Shoji pick each message's route, call a seat by name, note the lines of a plan, or let a lead decide which steps a task needs. 0.4 runs on what you have: when a free tier or your ChatGPT plan runs out partway, a thread carries on with another provider you've connected; Ollama models get room for a coding step; LM Studio and llama.cpp join Ollama; Intel Macs get their own build; and Homebrew and Scoop can install it. 0.3 started at $0: Gemini's free tier, OpenRouter's free models and a Claude checks stack that builds on your computer and pays only for the review. Receipts says what free work would have cost on Claude, copies a receipt as an image, and puts it in the pull request. 0.2 added OpenAI, ChatGPT plans, OpenRouter and Ollama. Mac comes first, and Windows and Linux build from the same code on every change.
 
 Found a bug or want something? [Open an issue](https://github.com/FLX-2/shoji/issues/new/choose). To work on Shoji itself, read [CONTRIBUTING](CONTRIBUTING.md).
 

@@ -30,14 +30,31 @@ A new install starts with a daily limit of $1. Change it in Settings, under Spen
 
 **Home.** Describe a task. Type @ to point at one of the project's files, and Plan reads it in full. Attach screenshots, PDFs or text files with the clip, or paste an image. Pick how much the task is worth: Draft moves Build and Review down one model, Max puts Build on the Plan model, and Balanced follows your stack. Once you've finished a few tasks, Home shows what a task usually costs at that setting.
 
-**Threads.** Scout reads the code, Plan writes the steps, Build makes the change and Review judges it. Plan, Build and Review follow the project's own `AGENTS.md` and `CLAUDE.md` when it has them, and Plan also reads the `SHOJI.md` notes that setup can write. With Check the plan first on, the thread pauses after the plan so you can build it or ask for another. Every thread you start is listed beside the one on show, with where it got to and what it cost. Open any of them to read it again, or carry it on. Each thread has three views:
+Shoji reads what you write and picks its route, shown on a chip in the box before you send. A task takes the Full task: Scout, Plan, Build, the checks and Review. A small edit said plainly, such as a rename or a typo, takes a Quick change, which skips Scout and Plan. A question takes an Answer: Scout reads the code and replies, and nothing changes. Click the chip to pick another route. Reading a message calls no model, so it costs nothing.
+
+Lead decides is a fourth route, which Shoji never picks for you. A lead on your Scout model runs the task and calls only the seats it needs, so a small change can skip Scout and Plan. Whatever it builds is still checked and reviewed before the thread ends, and the receipt shows the lead on a line of its own.
+
+**Threads.** Scout reads the code, Plan writes the steps, Build makes the change and Review judges it. Plan, Build and Review follow the project's own `AGENTS.md` and `CLAUDE.md` when it has them, and Plan also reads the `SHOJI.md` notes that setup can write. With Check the plan first on, the thread pauses after the plan so you can build it or ask for another. While the plan waits, the mark beside any of its lines takes a note. With notes, the next steps become Plan again with your notes and Build it as it is, and the notes go to Plan with whatever you write in the box. Every thread you start is listed beside the one on show, with where it got to and what it cost. Open any of them to read it again, or carry it on. Each thread has three views:
 
 - **Conversation:** each step with its model, its work and what it cost.
 - **Code:** every file the thread changed, with its diff. Click a line's number to comment on it, then send your comments to Build as one request for changes. Edit opens a changed file to fix something small by hand; Ctrl+S (Cmd+S) saves and Escape cancels.
 - **Preview:** your project's dev server at 360, 768 or 1280 px. Start dev server runs the project's dev command (guessed from its package manager, such as `pnpm dev`, and remembered per project) in the thread's own copy, so the preview shows that thread's work, and Preview uses the address the server prints. Each server gets a free `PORT`, so several threads can preview at once. Stop server, or quitting Shoji, stops it and everything it started. You can also point Preview at a server you run yourself; that address is remembered per project and starts at `http://localhost:5173`.
 - **Terminal:** your own shell (your login shell on macOS and Linux, PowerShell on Windows) in the thread's copy of the project. It keeps running while you look at the other views, and ends when the thread is committed or Shoji quits.
 
-Ask a question about a thread's work at any point. The Scout model reads the code and answers in the conversation, and nothing in the project changes.
+**The message box.** A thread's box is open at every stage, and each message takes the route its words suggest, shown on the chip before you send:
+
+- **Change:** Build, the checks and Review, on top of the thread's work.
+- **Answer:** the Scout model reads the code and answers in the conversation, and nothing in the project changes.
+- **Rethink the plan:** Plan writes the plan again from what you write, and waits for you.
+- **Review again:** the checks and Review look at the work again.
+
+While a run works, Enter hands what you write to the step that's working, which reads it at its next turn without stopping. Alt+Enter keeps the message until the run ends, then sends it. A tray over the box shows what is waiting, with × to take a message back.
+
+Start a message with `@scout`, `@plan`, `@build` or `@review` to hand it to that seat, whatever its words suggest. Add `on opus`, or the name of any model you've connected, to run the seat on that model for that one message, as in `@review on opus: is the migration safe?`. Typing @ lists the seats with their models, after the project's files.
+
+The next steps, such as Build it, Fix it, Accept and commit, and Push and open PR, sit in the box as chips. A short message such as "build it", "keep going", "fix it", "looks good, commit it" or "push it" does what its chip does.
+
+Three switches in Settings, under How threads run, change this. Pick the route for me, turned off, leaves the route to you. Enter steers a running step, turned off, swaps the two keys, so Enter keeps a message for after the run. Next steps in the box, turned off, puts the next steps back as buttons under the conversation.
 
 A role can run the project's checks at any time. Any other command, such as installing a package, waits for you to allow it once, always for that project, or not at all.
 
@@ -65,7 +82,7 @@ Each thread gets its own branch and its own copy of the project, so several thre
 
 Code lists every file the thread changed, with its diff. Accept keeps a file's changes and stages it in git. Revert puts the file back as it was at the last commit, or deletes it if the thread created it. Shoji asks before it reverts. Both buttons are unavailable while a run is going.
 
-Revert anything you don't want. Accept and commit then commits the rest as one commit on the thread's branch, using your own git name and email, so `user.name` and `user.email` must be set. The message is the task, followed by `Shoji-Models:` and `Shoji-Cost:` lines. The thread's copy is then put away, so you can check the branch out in your project.
+Revert anything you don't want. Accept and commit then commits the rest as one commit on the thread's branch, using your own git name and email, so `user.name` and `user.email` must be set. The message is the task, followed by `Shoji-Models:` and `Shoji-Cost:` lines. The thread's copy is then put away, so you can check the branch out in your project. The thread stays open: ask for another change and it carries on on the same branch, and that work waits to be committed again.
 
 Shoji never pushes on its own. Once a thread is committed, Push and open PR pushes its branch to the project's `origin` (or its only remote) with your own git sign-in, then opens the page for a pull request on GitHub, GitLab or Bitbucket. On GitHub and GitLab the description starts as the thread's receipt: each step's model and cost, the total and Review's verdict, with no code, task or file names. Change it before you open the pull request, or turn it off in Settings, under Data, with Receipt in pull requests. If git would need to ask for a password, the push stops and says so; sign in to your git host in a terminal once, then press it again. Merging is up to you.
 
