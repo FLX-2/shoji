@@ -33,11 +33,14 @@ export interface CheckResult {
 }
 
 export type RuntimeEvent =
-  | { type: "step"; step: string; role: Role; model: ModelId; status: "running" }
+  /** `at` is when it started, in milliseconds, missing from runs before 0.5.1. */
+  | { type: "step"; step: string; role: Role; model: ModelId; status: "running"; at?: number }
   /** `output` is what the step wrote: the scout's brief, the plan, the builder's summary or the review. */
   | { type: "step"; step: string; role: Role; model: ModelId; status: "done"; output: string }
-  /** A tool call. `target` is the file, folder, pattern or command it was used on. */
-  | { type: "tool"; step: string; tool: string; target: string }
+  /** A tool call. `target` is the file, folder, pattern or command it was used on, and `at` when it started. */
+  | { type: "tool"; step: string; tool: string; target: string; at?: number }
+  /** What the step is doing from `at` until its next event: waiting on its model's answer, or running the checks. */
+  | { type: "doing"; step: string; what: "thinking" | "checks"; at: number }
   | { type: "call"; call: CallRecord }
   | { type: "checks"; step: string; results: CheckResult[] }
   /** What failed before the thread's first build, as soon as Shoji has looked, for later runs to leave alone. */

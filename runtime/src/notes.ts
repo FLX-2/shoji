@@ -53,7 +53,7 @@ export async function writeNotes(input: NotesInput): Promise<NotesResult> {
   const meter = new Meter(input.provider, emit, input.cap);
   const step = "notes";
   try {
-    emit({ type: "step", step, role: "scout", model: seat.model, status: "running" });
+    emit({ type: "step", step, role: "scout", model: seat.model, status: "running", at: Date.now() });
     const notes = await runAgent({
       meter,
       workspace: new Workspace(root, input.privateFiles),
@@ -65,7 +65,7 @@ export async function writeNotes(input: NotesInput): Promise<NotesResult> {
       prompt: "Write the notes for this project.",
       tools: READ_TOOLS,
       maxTurns: 8,
-      onTool: (tool, input) => emit({ type: "tool", step, tool, target: input.path ?? input.pattern ?? "" }),
+      onTool: (tool, input) => emit({ type: "tool", step, at: Date.now(), tool, target: input.path ?? input.pattern ?? "" }),
     });
     emit({ type: "step", step, role: "scout", model: seat.model, status: "done", output: notes });
     if (!notes || notes === OUT_OF_TURNS) {

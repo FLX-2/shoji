@@ -936,6 +936,30 @@
   outline-offset: 2px;
 }
 
+/* The working step's line: what it's doing this moment, and for how long once that's a while. */
+.st .doing {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  margin: 4px 0 0;
+  font-size: var(--t-sm);
+  line-height: 18px;
+  color: var(--z6);
+}
+
+.st .doing .what {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st .doing .for {
+  flex: none;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
 .esc {
   margin: 6px 0 0;
   font-size: var(--t-md);

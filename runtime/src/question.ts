@@ -70,7 +70,7 @@ export async function answerQuestion(input: QuestionInput): Promise<ThreadResult
   };
 
   try {
-    emit({ type: "step", step, role: "scout", model: seat.model, status: "running" });
+    emit({ type: "step", step, role: "scout", model: seat.model, status: "running", at: Date.now() });
     const diff = diffOf(workspace.root, (file) => workspace.isPrivate(file));
     const shown =
       diff.length > MOST_DIFF_CHARS ? `${diff.slice(0, MOST_DIFF_CHARS)}\n(The rest of the diff was cut.)` : diff;
@@ -95,6 +95,7 @@ export async function answerQuestion(input: QuestionInput): Promise<ThreadResult
         emit({
           type: "tool",
           step,
+          at: Date.now(),
           tool,
           target: mcp.owns(tool)
             ? mcp.label(tool)

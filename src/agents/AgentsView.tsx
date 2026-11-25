@@ -2,7 +2,7 @@ import type { LedgerThread } from "../bridge";
 import { folderName } from "../home/HomeView";
 import { labelOf } from "../../runtime/src/models";
 import { SECTIONS } from "../shell/sections";
-import { foldRun, formatCost, stepLabel } from "../thread/fold";
+import { doingLabel, foldRun, formatCost, stepLabel } from "../thread/fold";
 import { threadCost, type Thread } from "../thread/useThread";
 import { threadTitle } from "../thread/title";
 
@@ -27,7 +27,8 @@ interface AgentsViewProps {
   onBuild?: (record: LedgerThread) => void;
 }
 
-/** What a live thread is doing now, and the last file or command it touched. */
+/** What a live thread is doing now: its step, and what that step is doing this moment, or the last file or
+ *  command it touched for a run from before Shoji said. */
 function doing(thread: Thread): { stage: string; target?: string } {
   const run = foldRun(thread.turns.at(-1)?.events ?? []);
   if (run.asking) return { stage: "Waiting for you to allow a command", target: run.asking };
@@ -35,7 +36,7 @@ function doing(thread: Thread): { stage: string; target?: string } {
   if (!now) return { stage: "Starting" };
   return {
     stage: `${stepLabel(run.steps, run.steps.indexOf(now))} · ${labelOf(now.model)}`,
-    target: now.tools.at(-1)?.target,
+    target: now.doing ? doingLabel(now.doing) : now.tools.at(-1)?.target,
   };
 }
 

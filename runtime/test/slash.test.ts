@@ -141,7 +141,7 @@ describe("a thread started with a command and given skills", () => {
     expect(prompt(first("scout"))).toContain("- greetings: How greetings are written");
     expect(prompt(first("planner"))).toContain("Task: Make the greeting say hello to Shoji.");
     expect(first("builder").tools?.map((t) => t.name)).toContain("read_skill");
-    expect(events).toContainEqual({ type: "tool", step: "build", tool: "read_skill", target: "greetings" });
+    expect(events).toContainEqual({ type: "tool", step: "build", tool: "read_skill", target: "greetings", at: expect.any(Number) });
     const skillResult = provider.requests
       .filter((r) => roleOf(r) === "builder")
       .flatMap((r) => r.messages)

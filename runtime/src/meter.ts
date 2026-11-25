@@ -79,6 +79,8 @@ export class Meter {
       shortened = true;
     }
     const started = Date.now();
+    // The step now waits on its model, which can take minutes on a computer's own models, so the thread says so.
+    this.emit({ type: "doing", step, what: "thinking", at: started });
     const response = await this.provider.send(request);
     this.record(role, step, request.model, request, response, started);
     if (response.stop_reason === "refusal") {

@@ -209,6 +209,26 @@ describe("a thread in the app", () => {
     expect(steps[1].textContent).toContain("Planning the change");
   });
 
+  it("says under the working step what it's doing this moment, and for how long once that's a while", async () => {
+    const fake = await startThread();
+    const now = Date.now();
+    fake.emit({ type: "step", step: "scout", role: "scout", model: HAIKU, status: "running", at: now - 50_000 });
+    fake.emit({ type: "doing", step: "scout", what: "thinking", at: now - 42_000 });
+    const doing = () => document.querySelector(".st.now .doing")?.textContent;
+    expect(doing()).toBe("Thinking0:42");
+
+    // A file read just now: no time yet, since it's only a moment.
+    fake.emit({ type: "tool", step: "scout", tool: "read_file", target: "src/pricing.tsx", at: Date.now() });
+    expect(doing()).toBe("Reading src/pricing.tsx");
+    fake.emit({ type: "doing", step: "scout", what: "checks", at: now - 65_000 });
+    expect(doing()).toBe("Running the checks1:05");
+
+    // A finished step keeps its summary of the work, without the line.
+    fake.emit(done("scout", "scout", HAIKU));
+    expect(document.querySelector(".doing")).toBeNull();
+    expect(document.querySelector(".st.done")?.textContent).toContain("Read pricing.tsx");
+  });
+
   it("stops the run when asked", async () => {
     const fake = await startThread();
     fake.emit(running("scout", "scout", HAIKU));
