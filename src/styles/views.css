@@ -1290,12 +1290,12 @@
 }
 
 /* While a run works: which key steers the working step and which keeps a message for after. */
-.composer .keys {
+.composer .runkeys {
   font-size: var(--t-xs);
   color: var(--z6);
 }
 
-.composer .keys kbd {
+.composer .runkeys kbd {
   font-family: var(--mono);
   font-size: var(--t-micro);
   border: 1px solid var(--hair);

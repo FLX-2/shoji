@@ -263,7 +263,7 @@ describe("a thread in the app", () => {
     const box = screen.getByRole("textbox", { name: "Message" });
     const stop = screen.getByRole("button", { name: "Stop" });
     expect(stop.closest(".composer")).toBe(box.closest(".composer"));
-    expect(document.querySelector(".composer .keys")?.textContent).toBe("Enter steers Build · Alt Enter queues for after");
+    expect(document.querySelector(".composer .runkeys")?.textContent).toBe("Enter steers Build · Alt Enter queues for after");
 
     // Enter tells the working step at its next turn, without stopping the run.
     fireEvent.change(box, { target: { value: "Keep the badge lowercase" } });
@@ -439,7 +439,7 @@ describe("a thread in the app", () => {
     localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", cap: 0.5, queueFirst: true }));
     const fake = await startThread();
     fake.emit(running("build", "build", SONNET));
-    expect(document.querySelector(".composer .keys")?.textContent).toBe("Enter queues for after · Alt Enter steers Build");
+    expect(document.querySelector(".composer .runkeys")?.textContent).toBe("Enter queues for after · Alt Enter steers Build");
     const box = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(box, { target: { value: "Then add a FAQ" } });
     await act(async () => {

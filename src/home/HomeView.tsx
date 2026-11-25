@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { labelOf, PROVIDER_NAMES, type ProviderId } from "../../runtime/src/models";
 import type { Stack } from "../../runtime/src/stack";
-import { ROLE_NAMES } from "../stack/lock";
 import { useReaches } from "../stack/reach";
 import { modelName } from "../thread/fold";
 import {
@@ -160,7 +159,7 @@ export function HomeView({
   const reading = readMessage(typed, { place: "home", can: () => false, reaches, noGuess: !routeForMe }, picked ?? undefined);
   const route: Route = "route" in reading ? reading.route : { kind: "task" };
   const seats = stack
-    ? SEAT_NAMES.map((name) => ({ name, detail: `${ROLE_NAMES[name].label} · ${labelOf(stack[name].model)}` }))
+    ? SEAT_NAMES.map((name) => ({ name, detail: `on ${labelOf(stack[name].model)}` }))
     : undefined;
   // Set while the task is to repeat rather than run once.
   const [repeat, setRepeat] = useState<Repeat | "next" | null>(null);
@@ -445,7 +444,12 @@ export function HomeView({
             <p>{SECTIONS.home.body}</p>
             <ul>
               <li>
-                <kbd>@</kbd> mentions a file, so the plan reads it in full.
+                <kbd>@</kbd> mentions a file, so the plan reads it in full, or hands the task to one seat, as in{" "}
+                <code>@plan on sonnet</code>.
+              </li>
+              <li>
+                The chip under the box says which route Shoji will take: the full task, a quick change that skips the
+                plan, or an answer that changes nothing. Pick another if it reads you wrong.
               </li>
               <li>
                 <kbd>/</kbd> starts with one of the project's commands from <code>.claude/commands</code>.

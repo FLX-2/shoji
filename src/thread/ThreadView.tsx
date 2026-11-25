@@ -488,7 +488,7 @@ export function ThreadView({
     }
   };
   // The seats, as typing @ first in the box offers them, with the model each runs on in this thread.
-  const seats = SEAT_NAMES.map((name) => ({ name, detail: `${ROLE_NAMES[name].label} · ${labelOf(thread.stack[name].model)}` }));
+  const seats = SEAT_NAMES.map((name) => ({ name, detail: `on ${labelOf(thread.stack[name].model)}` }));
 
   // The ways the work moves on from here, as chips in the box or buttons under the conversation.
   const nextStep = (label: string, run: () => void, also: { key?: string; disabled?: boolean; lead?: boolean } = {}) =>
@@ -807,7 +807,7 @@ export function ThreadView({
             rests={!running}
           >
             {running ? (
-              <span className="keys">
+              <span className="runkeys">
                 <kbd>Enter</kbd> {queueFirst ? "queues for after" : now ? `steers ${ROLE_NAMES[now.role].label}` : "steers"}
                 {" · "}
                 <kbd>{MAC ? "⌥" : "Alt"} Enter</kbd>{" "}
@@ -843,8 +843,9 @@ export function ThreadView({
                 )}
                 {!thread.committed &&
                   onTier &&
-                  "route" in reading &&
-                  reading.route.kind !== "answer" && (
+                  ("move" in reading
+                    ? reading.move !== "commit" && reading.move !== "push"
+                    : reading.route.kind !== "answer") && (
                     <div className="seg tier" role="radiogroup" aria-label="Quality">
                       {(Object.keys(TIERS) as Tier[]).map((id) => (
                         <button
