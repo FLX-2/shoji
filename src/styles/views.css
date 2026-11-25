@@ -4897,3 +4897,117 @@ input.rename {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* Notes on the lines of a plan that waits: a quiet mark beside a line on hover, and the notes under it. */
+.noteable {
+  border-radius: 3px;
+  transition: background var(--d-quick) var(--e-out);
+}
+
+.noteable:hover,
+.noteable.marked {
+  background: rgba(var(--ink-rgb), 0.05);
+}
+
+.note-add {
+  all: unset;
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  vertical-align: -3px;
+  border-radius: 3px;
+  color: var(--z6);
+  opacity: 0;
+  transition: opacity var(--d-quick) var(--e-out);
+}
+
+.noteable:hover .note-add,
+.noteable.marked .note-add,
+.note-add:focus-visible {
+  opacity: 1;
+}
+
+.note-add:hover {
+  color: var(--z10);
+  background: rgba(var(--ink-rgb), 0.08);
+}
+
+.note-add svg,
+.note-x svg {
+  width: 11px;
+  height: 11px;
+  display: block;
+  margin: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.md .notes {
+  margin: 4px 0 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.md .note {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  border-left: 2px solid rgba(var(--ink-rgb), 0.3);
+  padding: 3px 0 3px 10px;
+  font-size: var(--t-sm);
+  color: var(--z9);
+}
+
+.note-x {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  color: var(--z6);
+  align-self: center;
+}
+
+.note-x:hover {
+  background: rgba(var(--ink-rgb), 0.08);
+}
+
+.note-x:hover {
+  color: var(--z10);
+}
+
+.note-box {
+  border: 1px solid var(--hair);
+  border-radius: 5px;
+  background: rgba(var(--ink-rgb), 0.03);
+  padding: 6px 8px;
+}
+
+.note-box textarea {
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--z10);
+  font: inherit;
+  font-size: var(--t-sm);
+}
+
+.note-box textarea::placeholder {
+  color: var(--z6);
+}
+
+.note-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}

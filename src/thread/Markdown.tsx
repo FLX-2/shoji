@@ -1,5 +1,15 @@
 import { Fragment, type ReactNode } from "react";
 
+/** Lines a person can leave a note on, as on a plan that waits for them. `quote` is the line's own words. */
+export interface Noting {
+  /** Opens a note on the line. */
+  onNote: (quote: string) => void;
+  /** What shows under the line: its notes, or the box a note is being written in. */
+  under: (quote: string) => ReactNode;
+  /** Whether the line has a note, or one being written. */
+  marked: (quote: string) => boolean;
+}
+
 /** One block of a model's markdown, as Shoji draws it. */
 export type Block =
   | { type: "heading"; level: number; text: string }
@@ -36,14 +46,19 @@ export function parseBlocks(source: string): Block[] {
       const fence = line.trim().slice(0, 3);
       const body: string[] = [];
       i++;
-      while (i < lines.length && !lines[i].trim().startsWith(fence)) body.push(lines[i++]);
+      while (i < lines.length && !lines[i].trim().startsWith(fence))
+        body.push(lines[i++]);
       i++;
       blocks.push({ type: "code", text: body.join("\n") });
       continue;
     }
     const heading = line.match(HEADING);
     if (heading) {
-      blocks.push({ type: "heading", level: heading[1].length, text: heading[2] });
+      blocks.push({
+        type: "heading",
+        level: heading[1].length,
+        text: heading[2],
+      });
       i++;
       continue;
     }
@@ -66,7 +81,8 @@ export function parseBlocks(source: string): Block[] {
       continue;
     }
     const para: string[] = [];
-    while (i < lines.length && lines[i].trim() && !startsBlock(lines[i])) para.push(lines[i++].trim());
+    while (i < lines.length && lines[i].trim() && !startsBlock(lines[i]))
+      para.push(lines[i++].trim());
     blocks.push({ type: "paragraph", lines: para });
   }
   return blocks;
@@ -74,12 +90,19 @@ export function parseBlocks(source: string): Block[] {
 
 function startsBlock(line: string): boolean {
   return (
-    FENCE.test(line) || HEADING.test(line) || BULLET.test(line) || RULE.test(line) || line.trimStart().startsWith(">")
+    FENCE.test(line) ||
+    HEADING.test(line) ||
+    BULLET.test(line) ||
+    RULE.test(line) ||
+    line.trimStart().startsWith(">")
   );
 }
 
 /** A list from line `from`, with any deeper-indented list folded under the item above it. */
-function readList(lines: string[], from: number): [Extract<Block, { type: "list" }>, number] {
+function readList(
+  lines: string[],
+  from: number,
+): [Extract<Block, { type: "list" }>, number] {
   const first = lines[from].match(BULLET)!;
   const indent = first[1].length;
   const list: Extract<Block, { type: "list" }> = {
@@ -95,7 +118,8 @@ function readList(lines: string[], from: number): [Extract<Block, { type: "list"
     if (!line.trim()) {
       // A blank line ends the list unless the next line carries it on.
       const next = lines[i + 1];
-      const carries = next !== undefined && (next.match(BULLET)?.[1].length ?? -1) >= indent;
+      const carries =
+        next !== undefined && (next.match(BULLET)?.[1].length ?? -1) >= indent;
       if (!carries) break;
       i++;
       continue;
@@ -112,7 +136,8 @@ function readList(lines: string[], from: number): [Extract<Block, { type: "list"
       i++;
       continue;
     }
-    if (bullet || startsBlock(line) || !/^\s/.test(line) || !list.items.length) break;
+    if (bullet || startsBlock(line) || !/^\s/.test(line) || !list.items.length)
+      break;
     // An indented line with no marker carries the item above it on.
     list.items[list.items.length - 1].lines.push(line.trim());
     i++;
@@ -120,7 +145,8 @@ function readList(lines: string[], from: number): [Extract<Block, { type: "list"
   return [list, i];
 }
 
-const INLINE = /(`[^`]+`)|(\*\*[^*]+\*\*|__[^_]+__)|(\*[^*\s][^*]*\*|\b_[^_\s][^_]*_\b)|\[([^\]]+)\]\([^)]*\)/g;
+const INLINE =
+  /(`[^`]+`)|(\*\*[^*]+\*\*|__[^_]+__)|(\*[^*\s][^*]*\*|\b_[^_\s][^_]*_\b)|\[([^\]]+)\]\([^)]*\)/g;
 
 /** Code, bold and italic inside a line. A link keeps its words; Shoji doesn't open pages. */
 export function inline(text: string): ReactNode[] {
@@ -131,7 +157,8 @@ export function inline(text: string): ReactNode[] {
     const [whole, code, bold, em, link] = m;
     const key = out.length;
     if (code) out.push(<code key={key}>{code.slice(1, -1)}</code>);
-    else if (bold) out.push(<strong key={key}>{inline(bold.slice(2, -2))}</strong>);
+    else if (bold)
+      out.push(<strong key={key}>{inline(bold.slice(2, -2))}</strong>);
     else if (em) out.push(<em key={key}>{inline(em.slice(1, -1))}</em>);
     else out.push(link ?? whole);
     at = m.index + whole.length;
@@ -149,34 +176,110 @@ function Lines({ lines }: { lines: string[] }) {
   ));
 }
 
-function List({ list }: { list: Extract<Block, { type: "list" }> }) {
-  const items = list.items.map((item, i) => (
-    <li key={i}>
-      <Lines lines={item.lines} />
-      {item.sub && <List list={item.sub} />}
-    </li>
-  ));
-  return list.ordered ? <ol start={list.start === 1 ? undefined : list.start}>{items}</ol> : <ul>{items}</ul>;
+/** The words of a line, as a note quotes them: no markdown marks. */
+export const plainOf = (lines: string[]) =>
+  lines
+    .join(" ")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\*\*([^*]+)\*\*|__([^_]+)__/g, "$1$2")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .trim();
+
+/** A line that takes a note: a quiet button to start one. Its notes go under the line's block. */
+function Noteable({
+  quote,
+  noting,
+  children,
+}: {
+  quote: string;
+  noting?: Noting;
+  children: ReactNode;
+}) {
+  if (!noting) return <>{children}</>;
+  const short = quote.length > 48 ? `${quote.slice(0, 47)}…` : quote;
+  return (
+    <>
+      <span className={noting.marked(quote) ? "noteable marked" : "noteable"}>
+        {children}
+        <button
+          type="button"
+          className="note-add"
+          aria-label={`Note on “${short}”`}
+          onClick={() => noting.onNote(quote)}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M3 3.5h10v7H7l-3 2.5v-2.5H3z" />
+          </svg>
+        </button>
+      </span>
+    </>
+  );
 }
 
-/** A model's markdown, drawn as text: plans, briefs, reviews and the builder's summary. */
-export function Markdown({ text, className }: { text: string; className?: string }) {
+function List({
+  list,
+  noting,
+}: {
+  list: Extract<Block, { type: "list" }>;
+  noting?: Noting;
+}) {
+  const items = list.items.map((item, i) => (
+    <li key={i}>
+      <Noteable quote={plainOf(item.lines)} noting={noting}>
+        <Lines lines={item.lines} />
+      </Noteable>
+      {noting?.under(plainOf(item.lines))}
+      {item.sub && <List list={item.sub} noting={noting} />}
+    </li>
+  ));
+  return list.ordered ? (
+    <ol start={list.start === 1 ? undefined : list.start}>{items}</ol>
+  ) : (
+    <ul>{items}</ul>
+  );
+}
+
+/** A model's markdown, drawn as text: plans, briefs, reviews and the builder's summary. With `noting`, each
+ *  heading, paragraph and list item takes a note. */
+export function Markdown({
+  text,
+  className,
+  noting,
+}: {
+  text: string;
+  className?: string;
+  noting?: Noting;
+}) {
   return (
     <div className={className ? `md ${className}` : "md"}>
       {parseBlocks(text).map((block, i) => {
         switch (block.type) {
           case "heading": {
             const Tag = block.level <= 2 ? "h3" : "h4";
-            return <Tag key={i}>{inline(block.text)}</Tag>;
+            return (
+              <Fragment key={i}>
+                <Tag>
+                  <Noteable quote={plainOf([block.text])} noting={noting}>
+                    {inline(block.text)}
+                  </Noteable>
+                </Tag>
+                {noting?.under(plainOf([block.text]))}
+              </Fragment>
+            );
           }
           case "paragraph":
             return (
-              <p key={i}>
-                <Lines lines={block.lines} />
-              </p>
+              <Fragment key={i}>
+                <p>
+                  <Noteable quote={plainOf(block.lines)} noting={noting}>
+                    <Lines lines={block.lines} />
+                  </Noteable>
+                </p>
+                {noting?.under(plainOf(block.lines))}
+              </Fragment>
             );
           case "list":
-            return <List key={i} list={block} />;
+            return <List key={i} list={block} noting={noting} />;
           case "code":
             return <pre key={i}>{block.text}</pre>;
           case "quote":

@@ -542,6 +542,57 @@ describe("a thread in the app", () => {
     expect(screen.getByText("Build it").className).toBe("umsg");
   });
 
+  it("takes notes on lines of the plan, and plans again from them", async () => {
+    const fake = await startThread();
+    const plan = "1. Add a billing toggle to `Pricing.tsx`.\n2. Show yearly prices.";
+    fake.emit(running("plan", "plan", OPUS), done("plan", "plan", OPUS, plan));
+    fake.emit(call("plan", "plan", OPUS, 0.04), result("planned", 0.04, { plan }));
+    fake.exit(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Note on “Add a billing toggle to Pricing.tsx.”" }));
+    const box = screen.getByRole("textbox", { name: "Note on this line" });
+    fireEvent.change(box, { target: { value: "Put it above the cards" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(screen.getByText("Put it above the cards")).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Note on this line" })).toBeNull();
+    // A second note, then one taken back.
+    fireEvent.click(screen.getByRole("button", { name: "Note on “Show yearly prices.”" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Note on this line" }), { target: { value: "Monthly too" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove the note “Monthly too”" }));
+    expect(screen.queryByText("Monthly too")).toBeNull();
+
+    // The notes move the work on: plan again with them, or build the plan as it is.
+    expect(screen.getByRole("button", { name: "Build it as it is" })).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Plan again with 1 note" }));
+    });
+    expect(fake.calls.starts[1]).toMatchObject({
+      planOnly: true,
+      changes: { kind: "replan", notes: "Notes on lines of the plan:\n- On “Add a billing toggle to Pricing.tsx.”: Put it above the cards" },
+    });
+  });
+
+  it("sends the notes on the plan with what the person writes", async () => {
+    const fake = await startThread();
+    const plan = "1. Add a billing toggle.";
+    fake.emit(running("plan", "plan", OPUS), done("plan", "plan", OPUS, plan));
+    fake.emit(call("plan", "plan", OPUS, 0.04), result("planned", 0.04, { plan }));
+    fake.exit(0);
+    fireEvent.click(screen.getByRole("button", { name: "Note on “Add a billing toggle.”" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Note on this line" }), { target: { value: "As a switch" } });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Note on this line" }), { key: "Enter" });
+    const message = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(message, { target: { value: "Keep the monthly price visible" } });
+    await act(async () => {
+      fireEvent.keyDown(message, { key: "Enter" });
+    });
+    expect(fake.calls.starts[1].changes).toMatchObject({
+      kind: "replan",
+      notes: "Notes on lines of the plan:\n- On “Add a billing toggle.”: As a switch\n\nKeep the monthly price visible",
+    });
+  });
+
   it("builds straight away when the plan check is off on Home", async () => {
     const fake = fakeBridge();
     render(<App bridge={fake.bridge} />);
