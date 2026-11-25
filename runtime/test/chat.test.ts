@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { ChatProvider, GEMINI_API, toMessage, toMessages, toRequest } from "../src/chat";
 import { connect } from "../src/connect";
-import { geminiModel } from "../src/found";
+import { geminiClosed, geminiFreeFamily, geminiModel } from "../src/found";
 import { applyFound, costOf } from "../src/models";
 import { KeyRejectedError, nextPacificMidnight, RouteLimitError } from "../src/provider";
 
@@ -166,6 +166,39 @@ describe("Chat Completions, as Gemini takes it", () => {
     expect(error.resetsAt).toBeUndefined();
   });
 
+  it("says plainly when Google no longer serves a model to new keys, or its free tier leaves a model out", async () => {
+    applyFound("gemini", Object.fromEntries([geminiModel("gemini-3.5-flash", "Gemini 3.5 Flash", true)!]));
+    const closed = new ChatProvider({
+      service: "Gemini",
+      baseURL: GEMINI_API,
+      key: "AIza-test",
+      fetch: service({
+        status: 404,
+        body: [{ error: { message: "This model models/gemini-3.5-flash is no longer available to new users. Please update your code." } }],
+      }).fetch,
+      backoff: 0,
+    });
+    await expect(closed.send(request)).rejects.toThrow("Gemini no longer offers Gemini 3.5 Flash to new keys. Pick another model in Stack.");
+
+    const nothing = {
+      status: 429,
+      body: [
+        {
+          error: {
+            message:
+              "* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-4-argon, description: Generate content requests per day limit exceeded on Free Tier.\nPlease retry in 41s.",
+          },
+        },
+      ],
+    };
+    const left = service(nothing, { body: reply("Done.") });
+    const leftOut = new ChatProvider({ service: "Gemini", baseURL: GEMINI_API, key: "AIza-test", fetch: left.fetch, backoff: 0 });
+    const error = await leftOut.send(request).catch((e) => e);
+    expect(error).not.toBeInstanceOf(RouteLimitError);
+    expect(left.sent).toHaveLength(1);
+    expect(error.message).toBe("Gemini's free tier doesn't include Gemini 3.5 Flash. Pick another model in Stack.");
+  });
+
   it("waits out a free tier's per-minute limit once, and says when a daily one lifts", async () => {
     applyFound("gemini", Object.fromEntries([geminiModel("gemini-3.5-flash", "Gemini 3.5 Flash", true)!]));
     const minute = { status: 429, body: [{ error: { message: "Quota exceeded for metric: requests per minute. Please retry in 12.5s." } }] };
@@ -217,6 +250,24 @@ describe("Gemini's models", () => {
     expect(geminiModel("gemini-3.1-pro-preview", "Gemini 3.1 Pro", true)).toBeNull();
     expect(geminiModel("gemini-3.1-pro-preview", "Gemini 3.1 Pro", false)).not.toBeNull();
     expect(geminiModel("gemini-4-flash", "Gemini 4 Flash", false)).toBeNull();
-    expect(geminiModel("gemini-4-flash", "Gemini 4 Flash", true)![1]).toMatchObject({ input: 0, output: 0, billing: "free" });
+    // Google lists models whose free allowance is nothing, so an unknown one isn't offered free.
+    expect(geminiModel("gemini-4-flash", "Gemini 4 Flash", true)).toBeNull();
+    expect(geminiModel("gemini-pro-latest", "Gemini Pro Latest", true)).toBeNull();
+  });
+
+  it("offers the free models a new key can run, at nothing when Shoji has no price for them", () => {
+    expect(geminiModel("gemini-3.6-flash", "Gemini 3.6 Flash", true)![1]).toMatchObject({ output: 0, billing: "free" });
+    expect(geminiModel("gemini-3.5-flash-lite", "Gemini 3.5 Flash Lite", true)![1]).toMatchObject({ billing: "free" });
+    expect(geminiModel("gemini-3-flash-preview", "Gemini 3 Flash Preview", true)![1]).toMatchObject({ output: 3, billing: "free" });
+    expect(geminiFreeFamily("gemini-3.5-flash-lite")).toBe("gemini-3.5-flash-lite");
+    expect(geminiFreeFamily("gemini-3.5-flash")).toBe("gemini-3.5-flash");
+    expect(geminiFreeFamily("gemini-3.1-flash-lite-preview")).toBe("gemini-3.1-flash-lite");
+  });
+
+  it("knows the 2.5 models Google no longer serves to new keys, and still offers them to keys that have them", () => {
+    expect(geminiClosed("gemini-2.5-pro")).toBe(true);
+    expect(geminiClosed("gemini-2.5-flash-lite")).toBe(true);
+    expect(geminiClosed("gemini-3.5-flash")).toBe(false);
+    expect(geminiModel("gemini-2.5-pro", "Gemini 2.5 Pro", true)).not.toBeNull();
   });
 });

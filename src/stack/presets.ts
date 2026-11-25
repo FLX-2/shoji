@@ -4,7 +4,7 @@ import { planStack, type ChatGPT } from "./chatgpt";
 import { localStack, type Ollama } from "./ollama";
 import type { LocalServer } from "./local";
 import { freeStack } from "./openrouter";
-import { geminiStack } from "./gemini";
+import { geminiFreeStack, geminiStack } from "./gemini";
 
 /** A one-tap stack on a provider other than Anthropic, offered once that provider is connected. */
 export interface ProviderPreset {
@@ -53,7 +53,7 @@ export function providerPresets(connected: {
   if (connected.openrouterFree.length)
     presets.push({ name: "Free on OpenRouter", stack: freeStack(connected.openrouterFree) });
   if ("free" in connected.gemini && connected.gemini.free.length)
-    presets.push({ name: "Gemini free tier", stack: geminiStack(connected.gemini.free) });
+    presets.push({ name: "Gemini free tier", stack: geminiFreeStack(connected.gemini.free) });
   if ("paid" in connected.gemini && connected.gemini.paid.length)
     presets.push({ name: "Gemini", stack: geminiStack(connected.gemini.paid) });
   return presets;

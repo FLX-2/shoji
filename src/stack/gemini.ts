@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { geminiModel } from "../../runtime/src/found";
-import { applyFound, MODELS, type ModelId, type ModelInfo } from "../../runtime/src/models";
+import { GEMINI_FREE, geminiClosed, geminiFreeFamily, geminiModel } from "../../runtime/src/found";
+import { apiName, applyFound, MODELS, type ModelId, type ModelInfo } from "../../runtime/src/models";
 import type { Stack } from "../../runtime/src/stack";
 import type { Bridge, KeyStatus } from "../bridge";
 
@@ -110,14 +110,43 @@ export function useGemini(bridge: Bridge, tier: GeminiTier): Gemini {
   return { status, fromShell: !!key && !key.saved && key.fromEnv, saved: !!key?.saved, models, error, save, forget };
 }
 
-/** A stack on Gemini: the dearest model plans and builds, and the cheapest scouts and reviews. */
+/** A stack on a paid Gemini key: the dearest model plans and builds, and the cheapest scouts and reviews, leaving
+ *  out models Google no longer serves to new keys. */
 export function geminiStack(models: ModelId[]): Stack {
-  const large = models[0];
-  const small = models[models.length - 1];
+  const open = models.filter((m) => !geminiClosed(apiName(m)));
+  const offered = open.length ? open : models;
+  const large = offered[0];
+  const small = offered[offered.length - 1];
   return {
     scout: { model: small, effort: "low" },
     plan: { model: large, effort: "medium" },
     build: { model: large, effort: "medium" },
     review: { model: small, effort: "low" },
+  };
+}
+
+/**
+ * A stack on Gemini's free tier. Google allows each free model only 20 requests a day, so the steps are spread over
+ * models with their own allowances where the key has them: the strongest builds, the next plans, and the smaller
+ * ones review and scout. With two, the stronger plans and builds. A key with none Shoji knows to be free for new
+ * keys falls back to the paid stack's choice.
+ */
+export function geminiFreeStack(models: ModelId[]): Stack {
+  // One model for each allowance, strongest first: the group's first-named model the key lists, its stable id
+  // before a preview.
+  const ranked = GEMINI_FREE.flatMap((group) => {
+    for (const name of group) {
+      const family = models.filter((m) => geminiFreeFamily(apiName(m)) === name);
+      if (family.length) return [family.find((m) => apiName(m) === name) ?? family[0]];
+    }
+    return [];
+  });
+  if (!ranked.length) return geminiStack(models);
+  const last = ranked.length - 1;
+  return {
+    scout: { model: ranked[Math.min(3, last)], effort: "low" },
+    plan: { model: ranked[ranked.length > 2 ? 1 : 0], effort: "medium" },
+    build: { model: ranked[0], effort: "medium" },
+    review: { model: ranked[Math.min(2, last)], effort: "low" },
   };
 }

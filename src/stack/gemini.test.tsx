@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { geminiModel } from "../../runtime/src/found";
 import { applyFound } from "../../runtime/src/models";
+import { describeStack } from "./lock";
+import { geminiFreeStack, geminiStack } from "./gemini";
 import App from "../App";
 import { fakeBridge } from "../test/fakeBridge";
 
@@ -83,5 +86,57 @@ describe("Gemini", () => {
       fireEvent.keyDown(task, { key: "Enter" });
     });
     expect(fake.calls.starts[0].models?.models["gemini/gemini-3.5-flash"]).toMatchObject({ billing: "free" });
+  });
+});
+
+/** The conversation models Google listed for a new free key on 25 Nov 2026, in its order. */
+const LISTED_FOR_A_NEW_KEY = [
+  "gemini-2.5-flash",
+  "gemini-2.5-pro",
+  "gemini-flash-latest",
+  "gemini-flash-lite-latest",
+  "gemini-pro-latest",
+  "gemini-2.5-flash-lite",
+  "gemini-3-flash-preview",
+  "gemini-3.1-pro-preview",
+  "gemini-3.1-flash-lite-preview",
+  "gemini-3.1-flash-lite",
+  "gemini-3.5-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-omni-flash-preview",
+  "gemini-3.6-flash",
+  "gemini-4-argon",
+];
+
+describe("Gemini's free tier preset", () => {
+  afterEach(() => applyFound("gemini", {}));
+
+  /** What the app does with Google's list: the models offered free, dearest first. */
+  const offered = (ids: string[]) => {
+    const found = ids.map((id) => geminiModel(id, id, true)).filter((m) => m !== null);
+    applyFound("gemini", Object.fromEntries(found));
+    return found.sort(([, a], [, b]) => b.output - a.output).map(([id]) => id);
+  };
+
+  it("seats only models a new key can run, each step on its own daily allowance", () => {
+    const stack = geminiFreeStack(offered(LISTED_FOR_A_NEW_KEY));
+    expect(stack).toEqual({
+      build: { model: "gemini/gemini-3.6-flash", effort: "medium" },
+      plan: { model: "gemini/gemini-3-flash-preview", effort: "medium" },
+      review: { model: "gemini/gemini-3.5-flash-lite", effort: "low" },
+      scout: { model: "gemini/gemini-3.1-flash-lite", effort: "low" },
+    });
+  });
+
+  it("keeps plan with build when the key has two free models", () => {
+    const stack = geminiFreeStack(offered(["gemini-2.5-pro", "gemini-3.5-flash", "gemini-3.1-flash-lite-preview"]));
+    expect(describeStack(stack)).toBe("gemini-3.5-flash plans and builds and gemini-3.1-flash-lite-preview scouts and reviews.");
+  });
+
+  it("never seats a model Google no longer serves to new keys on a paid key", () => {
+    const paid = ["gemini/gemini-3.1-pro-preview", "gemini/gemini-2.5-pro", "gemini/gemini-3.5-flash", "gemini/gemini-2.5-flash-lite"];
+    const stack = geminiStack(paid);
+    expect(stack.build.model).toBe("gemini/gemini-3.1-pro-preview");
+    expect(stack.review.model).toBe("gemini/gemini-3.5-flash");
   });
 });
