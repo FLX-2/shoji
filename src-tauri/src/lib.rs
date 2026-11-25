@@ -537,7 +537,8 @@ fn start_run(
         match changes.kind() {
             "build" => args.push("--build".into()),
             "rebuild" => args.extend(["--build".into(), "--fresh".into()]),
-            "review" => args.push("--review".into()),
+            "review" if changes.notes.is_empty() => args.push("--review".into()),
+            "review" => args.extend(["--review".into(), "--review-notes".into(), changes.notes]),
             kind => args.extend([format!("--{kind}"), changes.notes]),
         }
     }

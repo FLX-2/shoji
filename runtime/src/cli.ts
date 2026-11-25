@@ -51,6 +51,8 @@ Options:
                       is built again from the start
   --review            Run the checks and review the work in the project again, against
                       the plan in --plan-file
+  --review-notes <notes>
+                      With --review, what the person asked the review to look at
   --replan <notes>    Scout and plan again from the plan in --plan-file and the person's
                       notes on it
   --failing-before <command>
@@ -239,6 +241,7 @@ async function main() {
       build: { type: "boolean", default: false },
       fresh: { type: "boolean", default: false },
       review: { type: "boolean", default: false },
+      "review-notes": { type: "string" },
       replan: { type: "string" },
       question: { type: "string" },
       "plan-file": { type: "string" },
@@ -414,7 +417,9 @@ async function main() {
       steering,
       approved: values.build ? plan : undefined,
       ...(values.fresh && { fresh: true }),
-      ...(values.review && { reviewAgain: { plan } }),
+      ...(values.review && {
+        reviewAgain: { plan, ...(values["review-notes"] && { notes: values["review-notes"] }) },
+      }),
       replan,
       failingBefore: values["failing-before"],
       failingTestsBefore: values["failing-test-before"],

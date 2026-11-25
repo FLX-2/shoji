@@ -205,8 +205,7 @@ describe("the thread list", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /^Fix the footer/ }));
     });
-    fireEvent.click(screen.getByRole("radio", { name: "Request changes" }));
-    const notes = screen.getByRole("textbox", { name: "Changes" });
+    const notes = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(notes, { target: { value: "Move it below the fold" } });
     await act(async () => {
       fireEvent.keyDown(notes, { key: "Enter" });
@@ -256,7 +255,7 @@ describe("the thread list", () => {
     },
   ];
   const write = async (text: string) => {
-    const notes = screen.getByRole("textbox", { name: "Changes" });
+    const notes = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(notes, { target: { value: text } });
     await act(async () => {
       fireEvent.keyDown(notes, { key: "Enter" });
@@ -289,8 +288,7 @@ describe("the thread list", () => {
 
   it("asks before a spent thread's next run could take the day past its limit, and keeps what was written", async () => {
     const fake = await openGivenMore(given([]), { dailyLimit: 0.4 });
-    fireEvent.click(screen.getByRole("radio", { name: "Ask a question" }));
-    const box = screen.getByRole("textbox", { name: "Question" }) as HTMLTextAreaElement;
+    const box = screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement;
     fireEvent.change(box, { target: { value: "Why did the footer move?" } });
     await act(async () => {
       fireEvent.keyDown(box, { key: "Enter" });

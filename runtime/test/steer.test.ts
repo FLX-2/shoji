@@ -114,7 +114,7 @@ describe("steering a run", () => {
   it("lets a question take in what the person adds", async () => {
     const root = tempRepo({ "src/hello.js": "export default 'hello';\n" });
     const box = new SteerBox();
-    const provider = new ScriptedProvider((request, i) => {
+    const provider = new ScriptedProvider((_request, i) => {
       if (i === 0) {
         box.add("and in which file?");
         return reply([{ tool: "read_file", input: { path: "src/hello.js" } }]);

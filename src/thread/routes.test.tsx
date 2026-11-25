@@ -98,8 +98,8 @@ describe("a thread whose plan ran out", () => {
     // A plan running out is no reason to offer more money.
     expect(screen.queryByRole("button", { name: /^Keep going/ })).toBeNull();
     const carry = screen.getByRole("button", { name: "Carry on with Ollama" });
-    expect(carry.className).toBe("btn solid");
-    expect(screen.getByRole("button", { name: "Pick up where it stopped" }).className).toBe("btn");
+    expect(carry.className).toBe("chip next lead");
+    expect(screen.getByRole("button", { name: "Pick up where it stopped" }).className).toBe("chip next");
     await act(async () => {
       fireEvent.click(carry);
     });
@@ -120,6 +120,6 @@ describe("a thread whose plan ran out", () => {
   it("offers only picking up later when nothing else is connected", async () => {
     await stopOnPlan(null);
     expect(screen.queryByRole("button", { name: /^Carry on with/ })).toBeNull();
-    expect(screen.getByRole("button", { name: "Pick up where it stopped" }).className).toBe("btn solid");
+    expect(screen.getByRole("button", { name: "Pick up where it stopped" }).className).toBe("chip next lead");
   });
 });

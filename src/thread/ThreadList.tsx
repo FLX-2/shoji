@@ -19,10 +19,23 @@ const STATUS: Record<Exclude<LedgerThread["runs"][number]["status"], "answered" 
 /** Where a thread got to: committed, or how its latest run ended. A question leaves the work as it was. */
 export function threadStatus(thread: LedgerThread): string {
   if (thread.discardedAt) return "Discarded";
-  if (thread.committed) return "Committed";
+  if (committedNow(thread)) return "Committed";
   if (thread.runs.at(-1)?.status === null) return "Running";
+  // A thread that has only been asked questions so far stands where its last answer left it.
+  const asked = thread.runs.at(-1)?.status;
+  if (asked && thread.runs.every((run) => run.kind === "question")) return asked === "answered" ? "Answered" : STATUS[asked];
   const last = thread.runs.findLast((run) => run.kind !== "question")?.status;
   return last && last !== "answered" ? STATUS[last] : "Running";
+}
+
+/** Runs that change the work. */
+const CHANGING = new Set(["changes", "build", "rebuild"]);
+
+/** The thread's commit still holds all its work: no run has changed the work on its branch since. */
+export function committedNow(thread: LedgerThread): boolean {
+  if (!thread.committed) return false;
+  const at = thread.committedAt ?? 0;
+  return !thread.runs.some((run) => CHANGING.has(run.kind) && run.startedAt > at);
 }
 
 /** When something happened, briefly, in the person's locale: the time today, the weekday this week, else the date. */

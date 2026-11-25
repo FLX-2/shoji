@@ -1,5 +1,19 @@
-import { useState } from "react";
-import { PROVIDER_NAMES, type ProviderId } from "../../runtime/src/models";
+import { useEffect, useState } from "react";
+import { labelOf, PROVIDER_NAMES, type ProviderId } from "../../runtime/src/models";
+import type { Stack } from "../../runtime/src/stack";
+import { ROLE_NAMES } from "../stack/lock";
+import { useReaches } from "../stack/reach";
+import { modelName } from "../thread/fold";
+import {
+  LEADS,
+  readMessage,
+  ROUTE_NAMES,
+  routeMark,
+  ROUTES,
+  SEAT_NAMES,
+  type Route,
+  type RouteKind,
+} from "../thread/route";
 import type { LedgerThread } from "../bridge";
 import { REPEATS, type Repeat, type Schedule } from "../schedule/schedule";
 import { ClipIcon } from "../shell/ClipIcon";
@@ -44,9 +58,19 @@ interface HomeViewProps {
   onPickAttachments: () => Promise<string[]>;
   /** Keeps a pasted image as a file, and resolves to its path. */
   onSavePasted: (image: File) => Promise<string>;
-  /** Resolves to false when the task didn't start, so the composer keeps it and its files. With `from`, the new
-   *  thread starts from that branch. */
-  onStart: (task: string, attachments: string[], from?: string) => void | boolean | Promise<void | boolean>;
+  /** Starts a thread. Resolves to false when the task didn't start, so the composer keeps it and its files. With
+   *  `from`, the new thread starts from that branch. `route` is how its first run goes: the full route, a quick
+   *  change, or an answer, with a model the person named for it. */
+  onStart: (
+    task: string,
+    attachments: string[],
+    from?: string,
+    route?: Route,
+  ) => void | boolean | Promise<void | boolean>;
+  /** Shoji picks the route from the words. Off, a task takes the full route unless the person picks another. */
+  routeForMe?: boolean;
+  /** The stack a new thread runs on at this tier, which the route names its lead seat's model from. */
+  stack?: Stack;
   /** What the box starts with, when a task was brought back to it. */
   draft?: HomeDraft | null;
   /** Saves the task to run by itself on a schedule. */
@@ -89,6 +113,8 @@ export function HomeView({
   onPickAttachments,
   onSavePasted,
   onStart,
+  routeForMe = true,
+  stack,
   onSchedule,
   onQueue,
   files,
@@ -123,6 +149,19 @@ export function HomeView({
     }
   };
   const shown = problem ?? attachProblem;
+  // What's in the box, and the route the person picked for it, which lasts until it's sent or the box is emptied.
+  const reaches = useReaches();
+  const [typed, setTyped] = useState("");
+  const [picked, setPicked] = useState<RouteKind | null>(null);
+  const [routeAt, setRouteAt] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (typed === "") setPicked(null);
+  }, [typed]);
+  const reading = readMessage(typed, { place: "home", can: () => false, reaches, noGuess: !routeForMe }, picked ?? undefined);
+  const route: Route = "route" in reading ? reading.route : { kind: "task" };
+  const seats = stack
+    ? SEAT_NAMES.map((name) => ({ name, detail: `${ROLE_NAMES[name].label} · ${labelOf(stack[name].model)}` }))
+    : undefined;
   // Set while the task is to repeat rather than run once.
   const [repeat, setRepeat] = useState<Repeat | "next" | null>(null);
   const [time, setTime] = useState("09:00");
@@ -143,6 +182,8 @@ export function HomeView({
           autoFocus={!!draft || !!seed}
           blocked={!repo || !hasKey}
           files={files}
+          onText={setTyped}
+          {...(seats && { seats })}
           commands={commands}
           {...(threads && { threads })}
           onSend={async (task) => {
@@ -156,7 +197,11 @@ export function HomeView({
               setRepeat(null);
               return;
             }
-            const started = await onStart(task, attached, from?.branch);
+            const said = readMessage(task, { place: "home", can: () => false, reaches, noGuess: !routeForMe }, picked ?? undefined);
+            const route = "route" in said ? said.route : { kind: "task" as const };
+            const text = "route" in said ? said.text : task;
+            setPicked(null);
+            const started = await onStart(text, attached, from?.branch, route);
             if (started !== false) {
               setAttached([]);
               setFrom(undefined);
@@ -294,7 +339,36 @@ export function HomeView({
             </svg>
             {repo ? folderName(repo) : "Choose a project"}
           </button>
-          {!repeat && (
+          {!repeat && stack && (
+            <>
+              <button
+                type="button"
+                className={picked ? "chip route" : "chip route guessed"}
+                aria-haspopup="menu"
+                aria-expanded={!!routeAt}
+                title={`${ROUTE_NAMES[route.kind].does}. Pick another route`}
+                onClick={(e) => setRouteAt(routeAt ? null : under(e.currentTarget))}
+              >
+                {routeMark(route, stack)}
+                <svg viewBox="0 0 12 12" aria-hidden="true">
+                  <path d="m3 4.5 3 3 3-3" />
+                </svg>
+              </button>
+              {routeAt && (
+                <Menu
+                  at={routeAt}
+                  label="Route this task"
+                  items={ROUTES.home.map((kind) => ({
+                    label: ROUTE_NAMES[kind].label,
+                    hint: kind === route.kind ? "✓" : modelName(stack[LEADS[kind]].model),
+                    run: () => setPicked(kind),
+                  }))}
+                  onClose={() => setRouteAt(null)}
+                />
+              )}
+            </>
+          )}
+          {!repeat && route.kind === "task" && (
             <button
               type="button"
               className="chip"

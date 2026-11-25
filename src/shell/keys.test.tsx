@@ -83,7 +83,7 @@ describe("the keyboard", () => {
     await act(async () => {
       fake.emit({ type: "step", step: "scout", role: "scout", model: HAIKU, status: "running" });
     });
-    const next = screen.getByRole("textbox", { name: "What's next" });
+    const next = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(next, { target: { value: "and a footer" } });
     await press("Escape", {}, next);
     expect(fake.calls.stops).toBe(0);

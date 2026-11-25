@@ -35,6 +35,7 @@ import { useOllama } from "./stack/ollama";
 import { useLocalServer } from "./stack/local";
 import { StackView } from "./stack/StackView";
 import { estimateCost, tierOf, tierStack, TIERS, type Tier } from "./stack/tier";
+import { stackFor } from "./thread/route";
 import { keyLabel } from "./settings/shortcuts";
 import { SEPARATOR, type MenuEntry } from "./shell/Menu";
 import { useStack } from "./stack/useStack";
@@ -121,6 +122,10 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
     threads,
     start,
     requestChanges,
+    reviewAgain,
+    steer,
+    queue,
+    unqueue,
     keepGoing,
     carryOnWith,
     fix,
@@ -294,12 +299,12 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
   // until the person answers.
   const spentOut = !!thread && threadCost(thread) >= thread.cap;
   const sending =
-    (send: (text: string, extra?: number) => void) =>
-    (text: string): void | Promise<boolean> => {
-      if (!spentOut) return send(text);
+    (send: (text: string, extra?: number, once?: Stack) => void) =>
+    (text: string, once?: Stack): void | Promise<boolean> => {
+      if (!spentOut) return send(text, 0, once);
       return new Promise((sent) => {
         withinDay("Carrying this thread on", prefs.cap, () => {
-          send(text, prefs.cap);
+          send(text, prefs.cap, once);
           sent(true);
         });
       });
@@ -695,7 +700,7 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       setPrefs({ schedules: [...prefs.schedules, schedule] });
       setSection("threads");
     },
-    onStart: async (task, attachments, from) => {
+    onStart: async (task, attachments, from, route) => {
       const repo = prefs.repo;
       if (!repo) return false;
       // Checked here so the task stays in the composer while the person sorts the folder out.
@@ -706,9 +711,16 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
       return withinDay("This thread", prefs.cap, () => {
         setSection("threads");
         setHomeDraft(null);
-        start(task, repo, tierStack(stack.stack, tier), prefs.cap, prefs.planFirst, attachments, false, from, context);
+        const tiered = tierStack(stack.stack, tier);
+        start(task, repo, tiered, prefs.cap, prefs.planFirst, attachments, false, from, context, {
+          ...(route?.kind === "quick" && { quick: true }),
+          ...(route?.kind === "answer" && { answer: true }),
+          ...(route?.model && { once: stackFor(route, tiered) }),
+        });
       });
     },
+    routeForMe: prefs.routeForMe,
+    stack: tierStack(stack.stack, tier),
   };
 
   useEffect(() => {
@@ -1034,6 +1046,13 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                     thread={thread}
                     onStop={stop}
                     onRequestChanges={sending(requestChanges)}
+                    onReviewAgain={sending(reviewAgain)}
+                    onSteer={steer}
+                    onQueue={queue}
+                    onUnqueue={unqueue}
+                    queueFirst={prefs.queueFirst}
+                    routeForMe={prefs.routeForMe}
+                    nextStepsInBox={prefs.nextStepsInBox}
                     onKeepGoing={() => withinDay("Keeping this thread going", prefs.cap, () => keepGoing(prefs.cap))}
                     onFix={() => withinDay("Fixing what the review found", prefs.cap, () => fix(prefs.cap))}
                     more={prefs.cap}

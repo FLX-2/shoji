@@ -47,7 +47,7 @@ export interface ThreadInput {
   /** With `approved`: throw the work in the project away first, so the plan is built again from the start. */
   fresh?: boolean;
   /** Only run the checks and review the work already in the project again, against this plan. */
-  reviewAgain?: { plan: string };
+  reviewAgain?: { plan: string; notes?: string };
   /** Checks that failed before the thread's first build. A changes run can't see the project as it
    *  was, so it's told. */
   failingBefore?: string[];
@@ -184,7 +184,9 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
 
   const asked = changes
     ? `\n\nThe work so far is already in the project. The person asked for these changes:\n${changes.notes}`
-    : "";
+    : input.reviewAgain?.notes
+      ? `\n\nThe work is already in the project. The person asked for this review:\n${input.reviewAgain.notes}`
+      : "";
   // With `recheck`, the checks run again inside the review step, as a review on its own does.
   const review = (recheck = false) =>
     step("review", "review", stack.review, async () => {

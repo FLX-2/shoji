@@ -12,6 +12,7 @@ import {
 import type { ComparedPage } from "../../runtime/src/compare";
 import type { CheckResult } from "../../runtime/src/events";
 import { labelOf, type ModelId, MODELS, type ProviderId } from "../../runtime/src/models";
+import type { Stack } from "../../runtime/src/stack";
 import type { Bridge, Pushed } from "../bridge";
 import { CodeView } from "../code/CodeView";
 import { commentsNote, type LineComment } from "../code/comments";
@@ -39,7 +40,18 @@ import {
   type StepView,
   type ToolUse,
 } from "./fold";
-import { readsAsQuestion } from "./asks";
+import {
+  LEADS,
+  readMessage,
+  ROUTE_NAMES,
+  routeMark,
+  ROUTES,
+  SEAT_NAMES,
+  stackFor,
+  type Move,
+  type Place,
+  type RouteKind,
+} from "./route";
 import { PanelResizer, panelColumns, usePanelWidth } from "./PanelResizer";
 import { Markdown } from "./Markdown";
 import { PreviewView } from "./PreviewView";
@@ -58,8 +70,24 @@ interface ThreadViewProps {
   bridge: Bridge;
   thread: Thread;
   onStop: () => void;
-  /** Sending returns, or resolves to, false when it was held back, which keeps what was written. */
-  onRequestChanges: (notes: string) => void | boolean | Promise<void | boolean>;
+  /** Sending returns, or resolves to, false when it was held back, which keeps what was written. `once` is a stack
+   *  for that run alone, as when the person named a model for it. */
+  onRequestChanges: (notes: string, once?: Stack) => void | boolean | Promise<void | boolean>;
+  /** Runs the checks and Review on the work again. */
+  onReviewAgain: (ask: string, once?: Stack) => void | boolean | Promise<void | boolean>;
+  /** Hands what the person wrote to the step that's working. */
+  onSteer: (text: string) => void;
+  /** Keeps a message to send once the run ends. */
+  onQueue: (text: string) => void;
+  /** Takes a queued message out of line, by its place, or all of them. */
+  onUnqueue: (index?: number) => void;
+  /** While a run works, Enter queues and Alt+Enter steers. */
+  queueFirst: boolean;
+  /** Shoji picks each message's route from its words. Off, a message takes the place's first route unless the
+   *  person picks another. */
+  routeForMe: boolean;
+  /** The ways the work moves on sit in the box as chips, rather than as buttons under the conversation. */
+  nextStepsInBox: boolean;
   /** Gives a thread that stopped at its limit more to spend, and carries on. */
   onKeepGoing: () => void;
   /** Gives a thread the review sent back more to spend, and works through the review's notes. */
@@ -91,11 +119,11 @@ interface ThreadViewProps {
   /** Opens the thread's receipt. */
   onViewReceipt?: () => void;
   /** Plans again from the person's notes on the plan. */
-  onReplan: (notes: string) => void | boolean | Promise<void | boolean>;
+  onReplan: (notes: string, once?: Stack) => void | boolean | Promise<void | boolean>;
   /** Does a finished step of the latest work again on another model. */
   onRedo?: (role: Redo, model: ModelId) => void;
   /** Asks about the work; the answer changes nothing. */
-  onQuestion: (question: string) => void | boolean | Promise<void | boolean>;
+  onQuestion: (question: string, once?: Stack) => void | boolean | Promise<void | boolean>;
   onCommit: () => Promise<void>;
   /** Pushes the committed branch and opens the page for a pull request. Only the person's button does. */
   onPush: () => Promise<Pushed>;
@@ -144,6 +172,17 @@ const PANES: { id: Pane; label: string; key: string }[] = [
 const MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 const SHORTCUT = MAC ? "⌘" : "Ctrl+";
 
+/** A next step said in words, as the box names it before it's sent. */
+const MOVE_NAMES: Record<Move, string> = {
+  commit: "Accept and commit",
+  push: "Push and open PR",
+  build: "Build it",
+  retry: "Try again",
+  resume: "Pick up where it stopped",
+  "keep-going": "Keep going",
+  fix: "Fix it",
+};
+
 const STATUS = {
   ready: "Ready to accept",
   "needs-work": "Needs work",
@@ -160,6 +199,13 @@ export function ThreadView({
   thread,
   onStop,
   onRequestChanges,
+  onReviewAgain,
+  onSteer,
+  onQueue,
+  onUnqueue,
+  queueFirst,
+  routeForMe,
+  nextStepsInBox,
   onKeepGoing,
   onFix,
   more,
@@ -230,13 +276,11 @@ export function ThreadView({
   const { history: historyIn, follow: followIn } = terminals;
   const termHistory = useCallback(() => historyIn(here), [historyIn, here]);
   const termFollow = useCallback((listen: (data: string) => void) => followIn(here, listen), [followIn, here]);
-  // The composer stays under the conversation: it takes changes to the work or a question about it, and
-  // while a run works it holds what's next and Stop.
-  const [say, setSay] = useState<"changes" | "question">("changes");
+  // The composer stays under the conversation in every state: each message goes where its words send it, and
+  // while a run works it reaches the step that's working, or waits for the run's end.
   const hasPlan = runs.some((run) => run.result?.plan);
-  // Committed work still takes questions; changes go to a new thread that carries it on.
-  const talkable = !thread.discarded && hasPlan;
-  const talking = running || talkable;
+  // The box is open in every state of a thread, until its work is thrown away.
+  const talking = !thread.discarded;
   // The project's files and commands, for @ and / in the composer.
   const [files, setFiles] = useState<string[]>([]);
   const [commands, setCommands] = useState<SlashCommand[]>([]);
@@ -353,7 +397,8 @@ export function ThreadView({
         : "failed";
 
   // Ended before there was a plan, so there's nothing to carry on: the task can only start again.
-  const retryable = !running && !thread.committed && !thread.discarded && !hasPlan && !stopped;
+  const retryable =
+    !running && !thread.committed && !thread.discarded && !hasPlan && !stopped && outcome !== "answered";
   // Broke off or was stopped after the plan: the work so far can be picked up.
   const resumable =
     !running &&
@@ -382,6 +427,174 @@ export function ThreadView({
   };
 
   const now = lastRun.steps.findLast((s) => s.running);
+
+  // Where the thread stands decides the routes a message can take.
+  const where: Place = planned ? "planned" : hasPlan ? "work" : "fresh";
+  const reaches = useReaches();
+  // What the person has written, and the route they picked for it, if they did. The pick lasts until it's sent.
+  const [typed, setTyped] = useState("");
+  const [picked, setPicked] = useState<RouteKind | null>(null);
+  const [routeAt, setRouteAt] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (typed === "") setPicked(null);
+  }, [typed]);
+  const can = (move: Move): boolean => {
+    switch (move) {
+      case "commit":
+        return !running && !thread.committed && !!thread.branch && fileCount > 0;
+      case "push":
+        return !running && !!thread.committed && !!thread.branch;
+      case "build":
+        return !running && planned;
+      case "retry":
+        return retryable;
+      case "resume":
+        return resumable;
+      case "keep-going":
+        return !running && stopped;
+      case "fix":
+        return !running && fixable;
+    }
+  };
+  const readingOf = (text: string, pick?: RouteKind) =>
+    readMessage(text, { place: where, can, reaches, noGuess: !routeForMe }, pick);
+  const reading = readingOf(typed, picked ?? undefined);
+  const moves: Record<Move, () => void> = {
+    commit: () => commit(),
+    push: () => pushBranch(),
+    build: onBuild,
+    retry: onRetry,
+    resume: onResume,
+    "keep-going": onKeepGoing,
+    fix: onFix,
+  };
+  /** Sends a message where it goes: to a route, or as a next step said in words. */
+  const say = (text: string, pick?: RouteKind) => {
+    const said = readingOf(text, pick);
+    if ("move" in said) {
+      moves[said.move]();
+      return;
+    }
+    const once = said.route.model ? stackFor(said.route, thread.stack) : undefined;
+    switch (said.route.kind) {
+      case "answer":
+        return onQuestion(said.text, once);
+      case "replan":
+        return onReplan(said.text, once);
+      case "review":
+        return onReviewAgain(said.text, once);
+      default:
+        return onRequestChanges(said.text, once);
+    }
+  };
+  // The seats, as typing @ first in the box offers them, with the model each runs on in this thread.
+  const seats = SEAT_NAMES.map((name) => ({ name, detail: `${ROLE_NAMES[name].label} · ${labelOf(thread.stack[name].model)}` }));
+
+  // The ways the work moves on from here, as chips in the box or buttons under the conversation.
+  const nextStep = (label: string, run: () => void, also: { key?: string; disabled?: boolean; lead?: boolean } = {}) =>
+    nextStepsInBox ? (
+      <button
+        key={also.key ?? label}
+        type="button"
+        className={also.lead ? "chip next lead" : "chip next"}
+        onClick={run}
+        disabled={also.disabled}
+      >
+        {label}
+      </button>
+    ) : (
+      <button
+        key={also.key ?? label}
+        type="button"
+        className={also.lead ? "btn solid" : "btn"}
+        onClick={run}
+        disabled={also.disabled}
+      >
+        {label}
+      </button>
+    );
+  const nextSteps: ReactNode[] =
+    running || thread.discarded
+      ? []
+      : thread.committed
+        ? [
+            ...(thread.branch
+              ? [
+                  nextStep(push && "pushing" in push ? "Pushing…" : "Push and open PR", pushBranch, {
+                    disabled: !!push && "pushing" in push,
+                    lead: !(push && "done" in push),
+                  }),
+                ]
+              : []),
+            nextStep("Carry on in a new thread", onContinue),
+          ]
+        : planned
+          ? [nextStep("Build it", onBuild, { lead: true })]
+          : [
+              ...(limited && onCarryOnWith
+                ? routes.map((route, i) =>
+                    nextStep(`Carry on with ${route.name}`, () => onCarryOnWith(route, !hasPlan), {
+                      key: route.name,
+                      lead: i === 0,
+                    }),
+                  )
+                : []),
+              ...(retryable
+                ? [
+                    nextStep("Try again", onRetry, { lead: !(limited && routes.length) }),
+                    nextStep("Edit the task", onEditTask),
+                  ]
+                : []),
+              ...(resumable
+                ? [
+                    nextStep(`Pick up where it stopped${spentOut ? `, up to ${formatCost(more)} more` : ""}`, onResume, {
+                      lead: !(limited && routes.length),
+                    }),
+                  ]
+                : []),
+              ...(stopped ? [nextStep(`Keep going, up to ${formatCost(more)} more`, onKeepGoing, { lead: true })] : []),
+              ...(fixable ? [nextStep(`Fix it, up to ${formatCost(more)} more`, onFix, { lead: true })] : []),
+              ...(thread.branch && fileCount > 0
+                ? [
+                    nextStep("Accept and commit", commit, {
+                      disabled: committing,
+                      lead: !(stopped || fixable || limited),
+                    }),
+                  ]
+                : []),
+            ];
+
+  // What the person wrote to the running step that no step has read yet, and what waits for the run to end.
+  const steers = last?.steers ?? [];
+  const waiting = running ? steers.slice(lastRun.heard) : [];
+  const queued = thread.queued ?? [];
+  /** Sends what waited for the run as one message, by the route its words take. */
+  const sendQueued = () => {
+    const text = queued.join("\n\n");
+    onUnqueue();
+    if (text) say(text);
+  };
+  // Once a run the person watched ends by itself, what they queued, and what they wrote too late for any step to
+  // read, goes on as their next message. A run they stopped, or one that broke, keeps it in line for them to send.
+  const watched = useRef<number | null>(null);
+  if (running) watched.current = turnCount;
+  const unheard = !running ? (lastRun.result?.unheard ?? []) : [];
+  useEffect(() => {
+    if (running || watched.current !== turnCount) return;
+    watched.current = null;
+    const ended = lastRun.result?.status;
+    if (last?.stoppedByYou || !ended || ended === "failed" || ended === "stopped") {
+      unheard.forEach(onQueue);
+      return;
+    }
+    if (!queued.length && !unheard.length) return;
+    const text = [...unheard, ...queued].join("\n\n");
+    onUnqueue();
+    say(text);
+    // Only the run's end sends; the rest is read as it stands then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, turnCount]);
+
   const stage = running ? (
     lastRun.asking ? (
       "Waiting for you"
@@ -483,28 +696,13 @@ export function ThreadView({
           />
         )}
 
-        {!running &&
-          (thread.discarded ? (
-            <div className="review">
-              <span className="done">This thread's work was discarded. What it cost stays in Receipts.</span>
-            </div>
-          ) : planned ? (
-            <div className="review">
-              <button type="button" className="btn solid" onClick={onBuild}>
-                Build it
-              </button>
-              <span className="sum">
-                {dotted([
-                  showCosts && (
-                    <>
-                      <b>{formatCost(spent)}</b> so far
-                    </>
-                  ),
-                ])}
-              </span>
-            </div>
-          ) : (
-            <>
+        {!running && thread.discarded && (
+          <div className="review">
+            <span className="done">This thread's work was discarded. What it cost stays in Receipts.</span>
+          </div>
+        )}
+        {!running && !thread.discarded && (
+          <>
             {showCosts && routing?.line && (thread.committed || (thread.branch && fileCount > 0)) && (
               <p className="routed">
                 {dotted([
@@ -520,173 +718,151 @@ export function ThreadView({
               </p>
             )}
             <div className="review">
-              {thread.committed ? (
-                <>
-                  {thread.branch && (
-                    <button
-                      type="button"
-                      className={push && "done" in push ? "btn" : "btn solid"}
-                      onClick={pushBranch}
-                      disabled={!!push && "pushing" in push}
-                    >
-                      {push && "pushing" in push ? "Pushing…" : "Push and open PR"}
-                    </button>
-                  )}
-                  <span className="done">
-                    {push && "done" in push ? (
-                      <>
-                        Pushed {thread.branch} to {push.done.remote}
-                        {!push.done.url && ". Open a pull request for it on your git host"}
-                      </>
-                    ) : (
-                      <>
-                        Committed{" "}
-                        <Copy text={thread.committed} what="the commit id">
-                          <b>{thread.committed}</b>
-                        </Copy>{" "}
-                        on{" "}
-                        {thread.branch && (
-                          <Copy text={thread.branch} what="the branch name">
-                            {thread.branch}
-                          </Copy>
-                        )}
-                      </>
-                    )}
-                  </span>
-                  {push && "error" in push && <span className="err">{push.error}</span>}
-                  <button type="button" className="btn carry" onClick={onContinue}>
-                    Carry on in a new thread
-                  </button>
-                </>
-              ) : (
-                <>
-                  {limited &&
-                    onCarryOnWith &&
-                    routes.map((route, i) => (
-                      <button
-                        key={route.name}
-                        type="button"
-                        className={i === 0 ? "btn solid" : "btn"}
-                        onClick={() => onCarryOnWith(route, !hasPlan)}
-                      >
-                        Carry on with {route.name}
-                      </button>
-                    ))}
-                  {retryable && (
+              {!nextStepsInBox && nextSteps}
+              {thread.committed && (
+                <span className="done">
+                  {push && "done" in push ? (
                     <>
-                      <button type="button" className={limited && routes.length ? "btn" : "btn solid"} onClick={onRetry}>
-                        Try again
-                      </button>
-                      <button type="button" className="btn" onClick={onEditTask}>
-                        Edit the task
-                      </button>
+                      Pushed {thread.branch} to {push.done.remote}
+                      {!push.done.url && ". Open a pull request for it on your git host"}
+                    </>
+                  ) : (
+                    <>
+                      Committed{" "}
+                      <Copy text={thread.committed} what="the commit id">
+                        <b>{thread.committed}</b>
+                      </Copy>{" "}
+                      on{" "}
+                      {thread.branch && (
+                        <Copy text={thread.branch} what="the branch name">
+                          {thread.branch}
+                        </Copy>
+                      )}
                     </>
                   )}
-                  {resumable && (
-                    <button type="button" className={limited && routes.length ? "btn" : "btn solid"} onClick={onResume}>
-                      Pick up where it stopped{spentOut && `, up to ${formatCost(more)} more`}
-                    </button>
-                  )}
-                  {stopped && (
-                    <button type="button" className="btn solid" onClick={onKeepGoing}>
-                      Keep going, up to {formatCost(more)} more
-                    </button>
-                  )}
-                  {fixable && (
-                    <button type="button" className="btn solid" onClick={onFix}>
-                      Fix it, up to {formatCost(more)} more
-                    </button>
-                  )}
-                  {thread.branch && fileCount > 0 && (
-                    <button
-                      type="button"
-                      className={stopped || fixable || limited ? "btn" : "btn solid"}
-                      onClick={commit}
-                      disabled={committing}
-                    >
-                      Accept and commit
-                    </button>
-                  )}
-                  {commitError && <span className="err">{commitError}</span>}
-                </>
+                </span>
               )}
+              {push && "error" in push && <span className="err">{push.error}</span>}
+              {commitError && <span className="err">{commitError}</span>}
               <span className="sum">
                 {dotted([
                   !thread.committed && checksSummary(lastWork.result?.checks),
                   showCosts && (
                     <>
-                      <b>{formatCost(spent)}</b> in all
+                      <b>{formatCost(spent)}</b> {planned ? "so far" : "in all"}
                     </>
                   ),
                   !thread.committed && spentOut && `the ${formatCost(thread.cap)} limit is spent`,
                 ])}
               </span>
             </div>
-            </>
-          ))}
+          </>
+        )}
+
+        {talking && (waiting.length > 0 || queued.length > 0) && (
+          <div className="tray" aria-label="Your messages to this run">
+            {waiting.map((text, i) => (
+              <span key={`w${i}`} className="msg on" title={text}>
+                {now ? `For ${ROLE_NAMES[now.role].label}` : "Waiting"}: “{text}”
+              </span>
+            ))}
+            {queued.map((text, i) => (
+              <span key={`q${i}`} className="msg" title={text}>
+                Next: “{text}”
+                <button type="button" className="x" aria-label={`Take “${text}” out of line`} onClick={() => onUnqueue(i)}>
+                  ×
+                </button>
+              </span>
+            ))}
+            {!running && queued.length > 0 && (
+              <button type="button" className="chip" onClick={sendQueued}>
+                Send {queued.length === 1 ? "it" : "them"} now
+              </button>
+            )}
+          </div>
+        )}
 
         {talking && (
           <Composer
             key={thread.id ?? "new"}
-            label={
-              running
-                ? "What's next"
-                : say === "question" || thread.committed
-                  ? "Question"
-                  : planned
-                    ? "Plan changes"
-                    : "Changes"
-            }
+            label="Message"
             placeholder={
               running
-                ? "Shoji is working. Write what's next, and send it when this run ends."
-                : say === "question" || thread.committed
-                  ? "Ask about this work. Nothing will change."
-                  : planned
-                    ? "What should the plan do differently?"
-                    : "Describe the changes you want…"
+                ? now
+                  ? `Write to ${ROLE_NAMES[now.role].label} while it works, or queue what's next.`
+                  : "Write what's next. It's sent when this step can read it."
+                : planned
+                  ? "Change the plan, ask about it, or say build it…"
+                  : "Ask, change something, or say what's next…"
             }
             {...(spentOut && !running && { sendLabel: `Send, up to ${formatCost(more)} more` })}
-            onSend={(notes) =>
-              (say === "question" || thread.committed || readsAsQuestion(notes)
-                ? onQuestion
-                : planned
-                  ? onReplan
-                  : onRequestChanges)(notes)
-            }
+            onSend={(text) => say(text, picked ?? undefined)}
+            onText={setTyped}
             files={files}
             commands={commands}
+            seats={seats}
             {...(thread.id !== undefined && { draft: `thread:${thread.id}` })}
-            {...(running && { onStop, stopping: last.stoppedByYou })}
+            {...(running && { onStop, stopping: last.stoppedByYou, onSteer, onQueue, queueFirst })}
+            above={nextStepsInBox && !running && nextSteps.length > 0 ? <div className="next">{nextSteps}</div> : undefined}
             rests={!running}
           >
-            {!running && !thread.committed && (
-              <div className="seg" role="radiogroup" aria-label="What to send">
-                <button type="button" role="radio" aria-checked={say === "changes"} onClick={() => setSay("changes")}>
-                  {planned ? "Change the plan" : "Request changes"}
+            {running ? (
+              <span className="keys">
+                <kbd>Enter</kbd> {queueFirst ? "queues for after" : now ? `steers ${ROLE_NAMES[now.role].label}` : "steers"}
+                {" · "}
+                <kbd>{MAC ? "⌥" : "Alt"} Enter</kbd>{" "}
+                {queueFirst ? (now ? `steers ${ROLE_NAMES[now.role].label}` : "steers") : "queues for after"}
+              </span>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className={picked ? "chip route" : "chip route guessed"}
+                  aria-haspopup="menu"
+                  aria-expanded={!!routeAt}
+                  title={"move" in reading ? "A next step, said in words" : `${ROUTE_NAMES[reading.route.kind].does}. Pick another route`}
+                  onClick={(e) => setRouteAt(routeAt ? null : under(e.currentTarget))}
+                >
+                  {"move" in reading ? MOVE_NAMES[reading.move] : routeMark(reading.route, thread.stack)}
+                  <svg viewBox="0 0 12 12" aria-hidden="true">
+                    <path d="m3 4.5 3 3 3-3" />
+                  </svg>
                 </button>
-                <button type="button" role="radio" aria-checked={say === "question"} onClick={() => setSay("question")}>
-                  Ask a question
-                </button>
-              </div>
+                {routeAt && (
+                  <Menu
+                    at={routeAt}
+                    label="Route this message"
+                    items={ROUTES[where].map((kind) => ({
+                      label: ROUTE_NAMES[kind].label,
+                      hint: modelName(thread.stack[LEADS[kind]].model),
+                      ...(("route" in reading && reading.route.kind === kind) && { hint: "✓" }),
+                      run: () => setPicked(kind),
+                    }))}
+                    onClose={() => setRouteAt(null)}
+                  />
+                )}
+                {!thread.committed &&
+                  onTier &&
+                  "route" in reading &&
+                  reading.route.kind !== "answer" && (
+                    <div className="seg tier" role="radiogroup" aria-label="Quality">
+                      {(Object.keys(TIERS) as Tier[]).map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          role="radio"
+                          aria-checked={tier === id}
+                          title={`${TIERS[id].does}, from the next run`}
+                          onClick={() => onTier(id)}
+                        >
+                          {TIERS[id].label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                {spentOut && <span className="est">Up to {formatCost(more)} more</span>}
+              </>
             )}
-            {!running && !thread.committed && onTier && say !== "question" && (
-              <div className="seg tier" role="radiogroup" aria-label="Quality">
-                {(Object.keys(TIERS) as Tier[]).map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={tier === id}
-                    title={`${TIERS[id].does}, from the next run`}
-                    onClick={() => onTier(id)}
-                  >
-                    {TIERS[id].label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {spentOut && !running && <span className="est">Up to {formatCost(more)} more</span>}
           </Composer>
         )}
       </div>
@@ -984,6 +1160,12 @@ function StepRow({
             Moved up to {labelOf(step.escalation.to)}. {step.escalation.reason}
           </p>
         )}
+        {step.steers?.map((said, i) => (
+          <p key={i} className="steered">
+            <span className="k">You, while it worked</span>
+            {said}
+          </p>
+        ))}
         <Work step={step} showPlan={showPlan} onOpenFile={onOpenFile} />
       </div>
     </li>

@@ -89,10 +89,10 @@ describe("moving around", () => {
 
     await go("Threads");
     await openRow(/^Fix the footer/);
-    fireEvent.change(screen.getByRole("textbox", { name: "Changes" }), { target: { value: "Make it blue" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "Make it blue" } });
     await go("Agents");
     await go("Threads");
-    expect((screen.getByRole("textbox", { name: "Changes" }) as HTMLTextAreaElement).value).toBe("Make it blue");
+    expect((screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement).value).toBe("Make it blue");
   });
 
   it("opens where the person left it", async () => {
