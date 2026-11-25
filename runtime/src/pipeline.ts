@@ -15,6 +15,7 @@ import { RouteLimitError, type ModelProvider } from "./provider";
 import { findSkills } from "./skills";
 import { expandCommand } from "./slash";
 import { ROLES, type Role, type Seat, type Stack } from "./stack";
+import { NO_STEERING, type Steering } from "./steer";
 import { COMMAND_TOOLS, READ_TOOLS, WRITE_TOOLS } from "./tools";
 import type { Workspace } from "./workspace";
 
@@ -35,6 +36,13 @@ export interface ThreadInput {
   changes?: { plan: string; notes: string };
   /** Stop once the plan is written, so the person can build it or ask for a different one. */
   planOnly?: boolean;
+  /** A small change: skip scout and plan, and build the task as it's written, then check and review it. */
+  quick?: boolean;
+  /** A lead on the Scout seat's model decides which seats a new task needs and calls them. A change it builds
+   *  is always checked and reviewed before the thread ends. */
+  lead?: boolean;
+  /** What the person writes to the run while it works. */
+  steering?: Steering;
   /** A plan the person approved: the thread skips scout and plan and builds it. */
   approved?: string;
   /** The person's notes on an earlier plan, which the planner writes a new one from. */
@@ -42,7 +50,7 @@ export interface ThreadInput {
   /** With `approved`: throw the work in the project away first, so the plan is built again from the start. */
   fresh?: boolean;
   /** Only run the checks and review the work already in the project again, against this plan. */
-  reviewAgain?: { plan: string };
+  reviewAgain?: { plan: string; notes?: string };
   /** Checks that failed before the thread's first build. A changes run can't see the project as it
    *  was, so it's told. */
   failingBefore?: string[];
@@ -88,6 +96,18 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
   const mcp = input.mcp ?? NO_MCP;
   const skills = findSkills(workspace);
   const preview = input.preview ?? NO_PREVIEW;
+  const steering = input.steering ?? NO_STEERING;
+  /** Tells the app a step took in what the person wrote. */
+  const steered = (name: string) => (said: string[]) => {
+    for (const text of said) emit({ type: "steered", step: name, said: text });
+  };
+  /** For a step that is one answer: what the person wrote before it started, told to it in its prompt. */
+  const toldBefore = (name: string) => {
+    const said = steering.take();
+    if (!said.length) return "";
+    steered(name)(said);
+    return `\n\nThe person also said, while the work ran:\n${said.join("\n")}`;
+  };
 
   const step = async (name: string, role: Role, seat: Seat, work: () => Promise<string>) => {
     emit({ type: "step", step: name, role, model: seat.model, status: "running" });
@@ -125,6 +145,8 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
         mcp: input.mcp,
         skills,
         preview,
+        steering,
+        onSteer: steered(name),
         onTool: (tool, input) =>
           emit({
             type: "tool",
@@ -165,13 +187,18 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
 
   const asked = changes
     ? `\n\nThe work so far is already in the project. The person asked for these changes:\n${changes.notes}`
-    : "";
+    : input.reviewAgain?.notes
+      ? `\n\nThe work is already in the project. The person asked for this review:\n${input.reviewAgain.notes}`
+      : "";
   // With `recheck`, the checks run again inside the review step, as a review on its own does.
   const review = (recheck = false) =>
     step("review", "review", stack.review, async () => {
       if (recheck) check("review");
       const diff = diffOf(workspace.root, (file) => workspace.isPrivate(file));
-      const prompt = withAttachments(reviewPrompt(task + asked + guide, diff, state.checks, state.report), input.attachments);
+      const prompt = withAttachments(
+        reviewPrompt(task + asked + toldBefore("review") + guide, diff, state.checks, state.report),
+        input.attachments,
+      );
       const shots = await pagesToJudge(diff);
       const content: string | Anthropic.ContentBlockParam[] = shots.length
         ? [
@@ -203,7 +230,26 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     }
   };
 
+  /** What fails before Shoji changes anything, which isn't the thread's to fix. */
+  const lookBefore = () => {
+    const before = runChecks(workspace.root, checks).filter((c) => !c.ok && !c.missing);
+    failingBefore = new Set(before.map((c) => c.command));
+    testsBefore = new Set(before.flatMap((c) => c.failing ?? []));
+    // Told as soon as it's known, so a run that's stopped mid-build still passes it on.
+    emit({ type: "baseline", failingBefore: [...failingBefore], failingTestsBefore: [...testsBefore] });
+  };
+  const checksNote = () =>
+    checks.length
+      ? `\n\nCheck commands you can run: ${checks.join(", ")}${
+          failingBefore.size
+            ? `\n\nThese checks already failed before any change, so leave their failures alone unless the task is about them: ${[...failingBefore].join(", ")}`
+            : ""
+        }`
+      : "";
+
   try {
+    if (input.lead && !input.reviewAgain && !changes && !approved && !replan && !input.quick && !input.planOnly)
+      return await led();
     if (input.reviewAgain) {
       state.plan = input.reviewAgain.plan;
       state.review = await review(true);
@@ -211,24 +257,12 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
       return finish(passing && approves(state.review) ? "ready" : "needs-work");
     }
     if (approved && input.fresh) discardWork(workspace.root);
-    state.plan = changes ? changes.plan : (approved ?? (await planFor()));
+    state.plan = changes ? changes.plan : input.quick ? QUICK_PLAN : (approved ?? (await planFor()));
     if (input.planOnly) return finish("planned");
     // A changes run is told what failed before the thread's first build. When nothing was recorded, as
     // when the first run stopped before it built anything, the project is still as it was, so look now.
-    if (!changes || !(input.checkedBefore || failingBefore.size)) {
-      const before = runChecks(workspace.root, checks).filter((c) => !c.ok && !c.missing);
-      failingBefore = new Set(before.map((c) => c.command));
-      testsBefore = new Set(before.flatMap((c) => c.failing ?? []));
-      // Told as soon as it's known, so a run that's stopped mid-build still passes it on.
-      emit({ type: "baseline", failingBefore: [...failingBefore], failingTestsBefore: [...testsBefore] });
-    }
-    const commandsNote = checks.length
-      ? `\n\nCheck commands you can run: ${checks.join(", ")}${
-          failingBefore.size
-            ? `\n\nThese checks already failed before any change, so leave their failures alone unless the task is about them: ${[...failingBefore].join(", ")}`
-            : ""
-        }`
-      : "";
+    if (!changes || !(input.checkedBefore || failingBefore.size)) lookBefore();
+    const commandsNote = checksNote();
     const buildPrompt = `Task: ${task}${guide}${skills.note}\n\nPlan:\n${state.plan}${commandsNote}${asked}`;
     const buildStep = changes ? "changes" : "build";
     state.report = await agent(buildStep, "build", stack.build, prompts.BUILD, buildPrompt, builderTools);
@@ -328,6 +362,142 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
     return finish("failed", error instanceof Error ? error.message : String(error));
   }
 
+  /**
+   * A lead on the Scout seat's model runs the task, calling the seats as tools. Whatever it decides, a change it
+   * leaves unreviewed is checked and reviewed before the thread ends, so the lead can't skip the gates.
+   */
+  async function led(): Promise<ThreadResult> {
+    lookBefore();
+    const seen = { built: false, reviewed: false, builds: 0 };
+    let instructions = "";
+    let answer = "";
+    // Named as the fixed route names its steps, so the conversation reads the same: a second build is a fix.
+    let building = "build";
+    const seatTools: Anthropic.Tool[] = [
+      {
+        name: "scout",
+        description: `Ask the scout (${stack.scout.model}) to find the code something touches, or to answer a question about the project. It reads and changes nothing, and replies with a short brief.`,
+        input_schema: { type: "object", properties: { question: { type: "string" } }, required: ["question"] },
+      },
+      {
+        name: "plan",
+        description: `Ask the planner (${stack.plan.model}) for a concrete plan for the builder. Give it what the scout found.`,
+        input_schema: { type: "object", properties: { brief: { type: "string" } }, required: ["brief"] },
+      },
+      {
+        name: "build",
+        description: `Ask the builder (${stack.build.model}) to change the code: the plan, or exact instructions, or the fixes to make. It replies with a summary of the change.`,
+        input_schema: { type: "object", properties: { instructions: { type: "string" } }, required: ["instructions"] },
+      },
+      {
+        name: "check",
+        description: "Run the project's checks on the work as it stands. Costs nothing.",
+        input_schema: { type: "object", properties: {} },
+      },
+      {
+        name: "review",
+        description: `Ask the reviewer (${stack.review.model}) to judge the change against the task and the latest checks. It replies VERDICT: APPROVE, or VERDICT: FIX with what to fix.`,
+        input_schema: { type: "object", properties: {} },
+      },
+    ];
+    const checkSummary = () =>
+      state.checks.length
+        ? state.checks
+            .map((c) => `${c.command}: ${c.ok ? "passed" : c.failedBefore ? "failed, as it did before any change" : "FAILED"}`)
+            .join("\n")
+        : "There are no checks in this project.";
+    const seats: Mcp = {
+      tools: seatTools,
+      readOnly: seatTools,
+      owns: (tool) => seatTools.some((t) => t.name === tool),
+      isReadOnly: () => true,
+      label: (tool) => tool,
+      close: async () => {},
+      call: async (tool, given) => {
+        const asked = String(given.question ?? given.brief ?? given.instructions ?? "");
+        switch (tool) {
+          case "scout":
+            return agent("scout", "scout", stack.scout, prompts.SCOUT, `Task: ${task}${skills.note}\n\nThe lead asks: ${asked}`, lookingTools);
+          case "plan":
+            state.plan = await step("plan", "plan", stack.plan, async () =>
+              whole(
+                await meter.send("plan", "plan", {
+                  model: stack.plan.model,
+                  effort: stack.plan.effort,
+                  system: prompts.PLAN,
+                  messages: [
+                    {
+                      role: "user",
+                      content: withAttachments(
+                        `Task: ${task}${projectNotes(workspace)}${guide}${toldBefore("plan")}\n\nThe lead's brief:\n${asked}\n\nRelevant files:\n${filesFrom(workspace, asked, mentionedFiles(task))}`,
+                        input.attachments,
+                      ),
+                    },
+                  ],
+                  maxTokens: MAX_TOKENS,
+                }),
+                "plan",
+              ),
+            );
+            return state.plan;
+          case "build": {
+            instructions = asked;
+            seen.built = true;
+            seen.reviewed = false;
+            building = seen.builds++ ? `fix-${seen.builds - 1}` : "build";
+            const plan = state.plan && !asked.includes(state.plan) ? `\n\nPlan:\n${state.plan}` : "";
+            const reply = await agent(
+              building,
+              "build",
+              stack.build,
+              prompts.BUILD,
+              `Task: ${task}${guide}${skills.note}${plan}\n\nThe lead's instructions:\n${asked}${checksNote()}`,
+              builderTools,
+            );
+            if (reply !== OUT_OF_TURNS) state.report = reply;
+            return reply;
+          }
+          case "check":
+            check(building);
+            return checkSummary();
+          case "review":
+            state.review = await review(true);
+            seen.reviewed = true;
+            return `${state.review}\n\nChecks:\n${checkSummary()}`;
+        }
+        return `Error: there is no seat called ${tool}.`;
+      },
+    };
+    await step("lead", "scout", stack.scout, async () => {
+      await runAgent({
+        meter,
+        workspace,
+        allowedCommands: [],
+        role: "scout",
+        step: "lead",
+        seat: stack.scout,
+        system: prompts.LEAD,
+        prompt: withAttachments(`The person asks:\n${task}${guide}`, input.attachments),
+        tools: seatTools,
+        mcp: seats,
+        maxTurns: 20,
+      }).then((said) => (answer = said));
+      // The steps under the lead show what it did; its own reply is the answer when nothing was built.
+      return "";
+    });
+    // Nothing was built: the lead's reply is the answer, shown as one.
+    if (!seen.built) {
+      state.report = await step("answer", "scout", stack.scout, async () => answer);
+      return finish("answered");
+    }
+    // The gates the lead can't skip: work it left unreviewed is checked and reviewed now.
+    if (!seen.reviewed) state.review = await review(true);
+    // A thread carries on from its plan, so work built from instructions alone keeps them as its plan.
+    if (!state.plan) state.plan = instructions;
+    const passing = state.checks.every((c) => c.ok || c.failedBefore);
+    return finish(passing && approves(state.review) ? "ready" : "needs-work");
+  }
+
   async function planFor(): Promise<string> {
     const asked = replan ? `\n\nThe person also asked: ${replan.notes}` : "";
     const brief = await agent(
@@ -348,7 +518,7 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
             {
               role: "user",
               content: withAttachments(
-                `Task: ${task}${projectNotes(workspace)}${guide}${replanNotes()}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief, mentionedFiles(`${task}${replan ? ` ${replan.notes}` : ""}`))}`,
+                `Task: ${task}${projectNotes(workspace)}${guide}${replanNotes()}${toldBefore("plan")}\n\nScout's brief:\n${brief}\n\nRelevant files:\n${filesFrom(workspace, brief, mentionedFiles(`${task}${replan ? ` ${replan.notes}` : ""}`))}`,
                 input.attachments,
               ),
             },
@@ -385,10 +555,17 @@ export async function runThread(input: ThreadInput): Promise<ThreadResult> {
       cost: meter.spent,
       costByRole,
     };
+    // Written after the last step read: the app sends it on as the person's next message.
+    const unheard = steering.take();
+    if (unheard.length) result.unheard = unheard;
     emit({ type: "result", result });
     return result;
   }
 }
+
+/** The plan a quick change builds from, since it skips Scout and Plan. */
+export const QUICK_PLAN =
+  "No plan was written: the person asked for a quick change. Do what the task says, keeping the change as small as it can be. Read what you need first.";
 
 export function approves(review: string): boolean {
   return /^\s*VERDICT:\s*APPROVE/i.test(review);

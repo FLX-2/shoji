@@ -190,6 +190,24 @@ export function SettingsView({
                       on={prefs.planFirst}
                       onToggle={() => onChange({ planFirst: !prefs.planFirst })}
                     />
+                    <SwitchRow
+                      label="Pick the route for me"
+                      description="Shoji reads each message and sends it where it fits: a question to Scout, a change to Build, a new approach to Plan. The route shows in the box before you send, and you can pick another. Off, you pick it."
+                      on={prefs.routeForMe}
+                      onToggle={() => onChange({ routeForMe: !prefs.routeForMe })}
+                    />
+                    <SwitchRow
+                      label="Enter steers a running step"
+                      description="While a thread works, Enter hands what you write to the step that's working, and Alt+Enter keeps it for after the run. Off, the other way round."
+                      on={!prefs.queueFirst}
+                      onToggle={() => onChange({ queueFirst: !prefs.queueFirst })}
+                    />
+                    <SwitchRow
+                      label="Next steps in the box"
+                      description="Accept, Fix it, Push and the other ways on sit in the message box as chips. Off, they're buttons under the conversation."
+                      on={prefs.nextStepsInBox}
+                      onToggle={() => onChange({ nextStepsInBox: !prefs.nextStepsInBox })}
+                    />
                   </div>
                 </section>
               </>

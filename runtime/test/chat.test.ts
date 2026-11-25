@@ -142,6 +142,29 @@ describe("Chat Completions, as Gemini takes it", () => {
     expect("reasoning_effort" in sent[1].body).toBe(false);
   });
 
+  it("leaves the effort out when Gemini says the model takes no thinking level, as it does for Gemma", async () => {
+    const { sent, fetch } = service(
+      { status: 400, body: [{ error: { message: "Thinking level is not supported for this model." } }] },
+      { body: reply("Done.") },
+    );
+    const provider = new ChatProvider({ service: "Gemini", baseURL: GEMINI_API, key: "AIza-test", fetch, backoff: 0 });
+    await provider.send({ ...request, model: "gemini/gemma-4-26b-a4b-it" });
+    expect(sent[0].body.reasoning_effort).toBe("high");
+    expect("reasoning_effort" in sent[1].body).toBe(false);
+  });
+
+  it("keeps the thinking a model writes into its answer out of the answer", () => {
+    const said = (content: string) => toMessage(reply(content), FLASH).content;
+    expect(said("<thought>\n* Goal: reset scroll.</thought>1. Use an effect.")).toEqual([
+      { type: "text", text: "1. Use an effect.", citations: null },
+    ]);
+    // Cut off while it thought: there's no answer yet.
+    expect(said("<thought>Still thinking")).toEqual([]);
+    expect(said("  Plain words stay as they are. ")).toEqual([
+      { type: "text", text: "  Plain words stay as they are. ", citations: null },
+    ]);
+  });
+
   it("says plainly when the key is turned down, and when the free tier's limit is reached", async () => {
     const turnedDown = new ChatProvider({
       service: "Gemini",

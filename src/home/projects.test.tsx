@@ -104,7 +104,7 @@ describe("projects", () => {
     const quality = screen.getByRole("radiogroup", { name: "Quality" });
     expect(within(quality).getByRole("radio", { name: "Balanced" }).getAttribute("aria-checked")).toBe("true");
     await click(within(quality).getByRole("radio", { name: "Max" }));
-    const box = screen.getByRole("textbox", { name: "Changes" });
+    const box = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(box, { target: { value: "Make it blue" } });
     await act(async () => {
       fireEvent.keyDown(box, { key: "Enter" });

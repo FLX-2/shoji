@@ -61,6 +61,12 @@ export interface RunRequest {
   changes?: ChangesRequest;
   /** Stop once the plan is written, for the person to build or change it. */
   planOnly?: boolean;
+  /** A small change in a new thread: Build, checks and Review, skipping Scout and Plan. */
+  quick?: boolean;
+  /** A new thread a lead runs, calling the seats it needs. Check and Review still run on what it changes. */
+  lead?: boolean;
+  /** A new thread that starts with a question, which Scout answers without changing anything. */
+  answer?: boolean;
   /** Screenshots and files attached to the thread's task, as paths. */
   attachments?: string[];
   /** Commands beyond the checks that may run without asking. */
@@ -320,6 +326,8 @@ export const bridge = {
   stopRun: (run: number) => invoke<void>("stop_run", { id: run }),
   /** Answers the running thread's question about a command. */
   answerAsk: (run: number, allow: boolean) => invoke<void>("answer_ask", { id: run, allow }),
+  /** Hands what the person wrote to a running thread to the step that's working. */
+  steerRun: (run: number, text: string) => invoke<void>("steer_run", { id: run, text }),
   changes: (repo: string) => invoke<ProjectChanges>("changes", { repo }),
   /** The project's files, as git sees them, for mentioning with @ in the task. */
   projectFiles: (repo: string) => invoke<string[]>("project_files", { repo }),

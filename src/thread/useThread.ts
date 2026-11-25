@@ -19,6 +19,8 @@ export interface Turn {
   stoppedByYou?: boolean;
   /** A past run whose steps were cleared with old data: its calls and how it ended are read from the ledger. */
   cleared?: boolean;
+  /** What the person wrote to the run while it worked, in order. The run's steered events say which it took in. */
+  steers?: string[];
 }
 
 export interface Thread {
@@ -46,8 +48,25 @@ export interface Thread {
   from?: string;
   /** What earlier threads the task mentions planned and found, sent to the runtime with the task. */
   context?: string;
+  /** Messages the person wrote while a run worked, to send once it ends. */
+  queued?: string[];
   turns: Turn[];
 }
+
+/** How a new thread's first run goes, other than the full route. */
+export interface StartHow {
+  /** Build, checks and Review only. */
+  quick?: boolean;
+  /** A lead calls the seats it needs. */
+  lead?: boolean;
+  /** Scout answers; nothing changes. */
+  answer?: boolean;
+  /** The stack for this run alone, as when the person named a model for it. */
+  once?: Stack;
+}
+
+/** Runs that change the work. One of these after a commit puts the thread back to work on its branch. */
+const CHANGING: CarryOn[] = ["changes", "build", "rebuild"];
 
 /** The steps that can be done again on another model. */
 export type Redo = "plan" | "build" | "review";
@@ -141,19 +160,23 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
   }, [bridge, updateLast]);
 
   const run = useCallback(
-    async (key: number, next: Thread, turn: Turn, changes?: ChangesRequest, planOnly?: boolean) => {
+    async (key: number, next: Thread, turn: Turn, changes?: ChangesRequest, planOnly?: boolean, how: StartHow = {}) => {
       const spent = threadCost(next);
-      update(key, () => ({ ...next, turns: [...next.turns, turn] }));
+      // What waits in line is read as it stands now, not as the caller saw the thread.
+      update(key, (t) => ({ ...next, queued: t.queued, turns: [...next.turns, turn] }));
       starting.current++;
       try {
         const started = await bridge.startRun({
           repo: next.repo,
           task: next.context ? `${next.task}\n\n${next.context}` : next.task,
-          stack: next.stack,
+          stack: how.once ?? next.stack,
           cap: next.cap - spent,
           changes,
           ask: turn.ask,
           ...(planOnly && { planOnly }),
+          ...(how.quick && { quick: true }),
+          ...(how.lead && { lead: true }),
+          ...(how.answer && { answer: true }),
           ...(next.attachments?.length && { attachments: next.attachments }),
           ...(!changes && next.from && { from: next.from }),
           ...(allowedIn(next.repo).length && { allowedCommands: allowedIn(next.repo) }),
@@ -199,6 +222,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
       background = false,
       from?: string,
       context?: string,
+      how: StartHow = {},
     ) => {
       const key = ++keys.current;
       const thread: Thread = {
@@ -218,9 +242,15 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
       return run(
         key,
         thread,
-        { ask: task, kind: "task", events: [], ...(attachments.length && { attached: attachments.map(fileName) }) },
+        {
+          ask: task,
+          kind: how.answer ? "question" : "task",
+          events: [],
+          ...(attachments.length && { attached: attachments.map(fileName) }),
+        },
         undefined,
-        planFirst,
+        planFirst && !how.quick && !how.answer && !how.lead,
+        how,
       );
     },
     [run, show],
@@ -239,7 +269,7 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
 
   /** Carries a held thread on from its latest plan: changes to the work, building the plan, or a new plan. */
   const carryOnHeld = useCallback(
-    (held: Held | undefined, ask: string, notes: string, kind: CarryOn, extra = 0) => {
+    (held: Held | undefined, ask: string, notes: string, kind: CarryOn, extra = 0, once?: Stack) => {
       if (!held || held.thread.id === undefined) return;
       const { key, thread } = held;
       const results = thread.turns.map((t) => foldRun(t.events).result);
@@ -255,9 +285,11 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
           ...results.flatMap((r) => r?.failingTestsBefore ?? []),
         ]),
       ];
+      // Work after a commit carries on on the same branch, and waits to be committed again.
+      const after = CHANGING.includes(kind) ? { committed: undefined } : {};
       run(
         key,
-        { ...thread, cap: thread.cap + extra },
+        { ...thread, ...after, cap: thread.cap + extra },
         { ask, kind, events: [] },
         {
           thread: thread.id!,
@@ -270,20 +302,28 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
           ...(baselines.length && { checkedBefore: true }),
         },
         kind === "replan",
+        once ? { once } : {},
       );
     },
     [run],
   );
   /** Carries the thread on show on. */
   const carryOn = useCallback(
-    (ask: string, notes: string, kind: CarryOn, extra = 0) =>
-      carryOnHeld(shown, ask, notes, kind, extra),
+    (ask: string, notes: string, kind: CarryOn, extra = 0, once?: Stack) =>
+      carryOnHeld(shown, ask, notes, kind, extra, once),
     [shown, carryOnHeld],
   );
 
-  /** Asks for changes to the work. `extra` raises the thread's limit first, for a thread that has spent it. */
+  /** Asks for changes to the work. `extra` raises the thread's limit first, for a thread that has spent it. `once`
+   *  is a stack for this run alone. */
   const requestChanges = useCallback(
-    (notes: string, extra = 0) => carryOn(notes, notes, "changes", extra),
+    (notes: string, extra = 0, once?: Stack) => carryOn(notes, notes, "changes", extra, once),
+    [carryOn],
+  );
+
+  /** Runs the checks and Review on the work again, as the person asked in `ask`. */
+  const reviewAgain = useCallback(
+    (ask: string, extra = 0, once?: Stack) => carryOn(ask, ask, "review", extra, once),
     [carryOn],
   );
 
@@ -325,7 +365,10 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
   const build = useCallback(() => carryOn("Build it", "", "build"), [carryOn]);
 
   /** Plans again from the person's notes on the plan, and pauses again. */
-  const replan = useCallback((notes: string, extra = 0) => carryOn(notes, notes, "replan", extra), [carryOn]);
+  const replan = useCallback(
+    (notes: string, extra = 0, once?: Stack) => carryOn(notes, notes, "replan", extra, once),
+    [carryOn],
+  );
 
   /** Does one step again on another model: plans again, builds the plan again from the start, or reviews the
    *  work again, with `extra` more to spend. The thread's stack keeps the new model for that role. */
@@ -343,7 +386,41 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
   );
 
   /** Asks about the work. The answer changes nothing, so the thread stays where it was. */
-  const question = useCallback((text: string, extra = 0) => carryOn(text, text, "question", extra), [carryOn]);
+  const question = useCallback(
+    (text: string, extra = 0, once?: Stack) => carryOn(text, text, "question", extra, once),
+    [carryOn],
+  );
+
+  /** Hands what the person wrote to the step that's working in the shown thread's run. */
+  const steer = useCallback(
+    async (text: string) => {
+      const live = liveRun();
+      if (shownKey === null || live === undefined) return;
+      updateLast(shownKey, (turn) => ({ ...turn, steers: [...(turn.steers ?? []), text] }));
+      await bridge.steerRun(live, text);
+    },
+    [bridge, liveRun, shownKey, updateLast],
+  );
+
+  /** Keeps a message for the shown thread to send once its run ends. */
+  const queue = useCallback(
+    (text: string) => {
+      if (shownKey !== null) update(shownKey, (t) => ({ ...t, queued: [...(t.queued ?? []), text] }));
+    },
+    [shownKey, update],
+  );
+
+  /** Takes the shown thread's queued messages out of line: one by its place, or all of them. */
+  const unqueue = useCallback(
+    (index?: number) => {
+      if (shownKey === null) return;
+      update(shownKey, (t) => ({
+        ...t,
+        queued: index === undefined ? [] : (t.queued ?? []).filter((_, i) => i !== index),
+      }));
+    },
+    [shownKey, update],
+  );
 
   const stop = useCallback(async () => {
     const live = liveRun();
@@ -427,6 +504,10 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
     threads,
     start,
     requestChanges,
+    reviewAgain,
+    steer,
+    queue,
+    unqueue,
     keepGoing,
     carryOnWith,
     fix,

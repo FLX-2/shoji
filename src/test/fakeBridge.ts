@@ -52,6 +52,7 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     pasted: [] as { name: string; bytes: number[] }[],
     answers: [] as boolean[],
     answeredRuns: [] as number[],
+    steers: [] as { run: number; text: string }[],
     stoppedRuns: [] as number[],
     servers: [] as { dir: string; command: string }[],
     writes: [] as { path: string; contents: string }[],
@@ -192,6 +193,9 @@ export function fakeBridge(key: KeyStatus = { saved: true, fromEnv: false }) {
     answerAsk: async (run, allow) => {
       calls.answers.push(allow);
       calls.answeredRuns.push(run);
+    },
+    steerRun: async (run, text) => {
+      calls.steers.push({ run, text });
     },
     stopRun: async (run) => {
       calls.stops++;

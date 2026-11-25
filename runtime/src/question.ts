@@ -10,6 +10,7 @@ import { findSkills } from "./skills";
 import { expandCommand } from "./slash";
 import { MODELS } from "./models";
 import { ROLES, type Role, type Seat, type Stack } from "./stack";
+import type { Steering } from "./steer";
 import { READ_TOOLS } from "./tools";
 import type { Workspace } from "./workspace";
 
@@ -32,6 +33,8 @@ export interface QuestionInput {
   emit: Emit;
   /** The person's MCP servers; the answer uses only the tools that look. */
   mcp?: Mcp;
+  /** What the person writes while the answer is worked out. */
+  steering?: Steering;
 }
 
 /**
@@ -79,11 +82,15 @@ export async function answerQuestion(input: QuestionInput): Promise<ThreadResult
       step,
       seat,
       system: prompts.QUESTION,
-      prompt: `Task: ${task}${projectInstructions(workspace)}${stackNote(input.stack)}\n\nPlan:\n${plan}\n\nThe work so far:\n${shown || "(no changes yet)"}\n\nThe person asks: ${question}${skills.note}`,
+      prompt: `${asked(task, question)}${projectInstructions(workspace)}${stackNote(input.stack)}${plan ? `\n\nPlan:\n${plan}` : ""}\n\nThe work so far:\n${shown || "(no changes yet)"}\n\nThe person asks: ${question}${skills.note}`,
       tools: [...READ_TOOLS, ...skills.tools, ...mcp.readOnly],
       mcp,
       skills,
       maxTurns: 8,
+      ...(input.steering && {
+        steering: input.steering,
+        onSteer: (said: string[]) => said.forEach((text) => emit({ type: "steered", step, said: text })),
+      }),
       onTool: (tool, input) =>
         emit({
           type: "tool",
@@ -104,6 +111,11 @@ export async function answerQuestion(input: QuestionInput): Promise<ThreadResult
     if (error instanceof RefusedError) return finish("failed", error.message);
     return finish("failed", error instanceof Error ? error.message : String(error));
   }
+}
+
+/** The thread's task, unless the question is the whole of it, as when a thread starts with a question. */
+function asked(task: string, question: string): string {
+  return task.trim() === question.trim() ? "A question about the project, before any work." : `Task: ${task}`;
 }
 
 /** Which model takes each step of this thread, as the person picked them in Stack. */

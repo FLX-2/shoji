@@ -299,6 +299,11 @@ describe("thread pipeline", () => {
     expect(reviewed.review).toContain("Say why it's Shoji.");
     expect(events.find((e) => e.type === "checks")).toMatchObject({ step: "review", results: [{ ok: true }] });
     expect(fs.readFileSync(path.join(root, "src/hello.js"), "utf8")).toBe("export default 'hello, shoji';\n");
+
+    // What the person asked the review to look at reaches it.
+    const asking = team(() => true);
+    await go(asking, { reviewAgain: { plan: "Say hello to Shoji.", notes: "Is the comma right?" } });
+    expect(JSON.stringify(asking.requests[0].messages)).toContain("The person asked for this review:\\nIs the comma right?");
   });
 
   it("says when a check can't run at all, and spends nothing trying to fix it", async () => {

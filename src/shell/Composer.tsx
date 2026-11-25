@@ -25,8 +25,19 @@ interface ComposerProps {
   commands?: SlashCommand[];
   /** Earlier threads, which typing @ offers after the files. A picked one goes into the text as @“its title”. */
   threads?: { id: number; title: string }[];
-  /** Set while a run works: Stop takes Send's place, and what's written waits until the run ends. */
+  /** Set while a run works: Stop sits beside Send. Without `onSteer` or `onQueue`, what's written waits until
+   *  the run ends. */
   onStop?: () => void;
+  /** While a run works: hands what's written to the step that's working. */
+  onSteer?: (text: string) => void;
+  /** While a run works: keeps what's written to send once the run ends. */
+  onQueue?: (text: string) => void;
+  /** While a run works, Enter queues and Alt+Enter steers, instead of the other way round. */
+  queueFirst?: boolean;
+  /** Seats a message can be handed to, which typing @ at the start of the box offers before the files. */
+  seats?: { name: string; detail: string }[];
+  /** Told what's in the box as it changes, so what's around it can follow, as the route does. */
+  onText?: (text: string) => void;
   /** The run was asked to stop and hasn't yet. */
   stopping?: boolean;
   /** Text to start with, such as a task brought back to edit. */
@@ -76,6 +87,11 @@ export function Composer({
   sendLabel = "Send",
   suggestion,
   rests,
+  onSteer,
+  onQueue,
+  queueFirst,
+  seats,
+  onText,
 }: ComposerProps) {
   const [text, setText] = useState(() => initial || (draft ? draftFor(draft) : ""));
   const form = useRef<HTMLFormElement>(null);
@@ -100,7 +116,10 @@ export function Composer({
   useEffect(() => {
     if (draft) keepDraft(draft, text);
   }, [draft, text]);
-  const ready = text.trim() !== "" && !blocked && !onStop;
+  useEffect(() => onText?.(text), [onText, text]);
+  // While a run works, what's written can go to the step that's working, or wait for the run's end.
+  const whileRunning = !!onStop && !!(onSteer || onQueue);
+  const ready = text.trim() !== "" && !blocked && (!onStop || whileRunning);
   const box = useRef<HTMLTextAreaElement>(null);
   const listId = useId();
   const [caret, setCaret] = useState(0);
@@ -108,7 +127,7 @@ export function Composer({
   // Escape closes the list for the @ or / it was open on; typing another opens it again.
   const [dismissed, setDismissed] = useState<number | null>(null);
   const command = commands?.length ? commandAt(text, caret) : null;
-  const mention = !command && (files?.length || threads?.length) ? mentionAt(text, caret) : null;
+  const mention = !command && (files?.length || threads?.length || seats?.length) ? mentionAt(text, caret) : null;
   const typed = command ? { start: 0, query: command.query } : mention;
   const matches: Offer[] =
     !typed || typed.start === dismissed
@@ -121,6 +140,10 @@ export function Composer({
             insert: `/${c.name} `,
           }))
         : [
+            // A seat is named first in the message, so it's offered only there.
+            ...(mention!.start === 0 ? (seats ?? []) : [])
+              .filter((seat) => seat.name.startsWith(mention!.query.toLowerCase()))
+              .map((seat) => ({ key: `seat-${seat.name}`, name: `@${seat.name}`, detail: seat.detail, insert: `@${seat.name} ` })),
             ...matchFiles(files ?? [], mention!.query).map((file) => {
               const cut = file.lastIndexOf("/") + 1;
               return {
@@ -154,9 +177,18 @@ export function Composer({
     moveTo.current = typed.start + offer.insert.length;
     setText(text.slice(0, typed.start) + offer.insert + text.slice(caret));
   };
-  const send = async () => {
+  const send = async (other = false) => {
     if (!ready) return;
     const sent = text.trim();
+    if (whileRunning) {
+      // Enter does one, Alt+Enter the other; with only one of them, both keys do it.
+      const steer = onSteer && (!onQueue || other === !!queueFirst);
+      (steer ? onSteer : onQueue)!(sent);
+      if (draft) keepDraft(draft, "");
+      setText("");
+      setDismissed(null);
+      return;
+    }
     if ((await onSend(sent)) !== false) {
       // Cleared here too, since sending can take the composer off screen before its text empties.
       if (draft) {
@@ -239,7 +271,7 @@ export function Composer({
             setText(draftFor(`last:${draft}`));
           } else if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
-            send();
+            send(e.altKey);
           } else if (e.key === "Escape" && onCancel && !e.nativeEvent.isComposing) {
             e.preventDefault();
             onCancel();
@@ -276,18 +308,27 @@ export function Composer({
       <div className="row">
         {children}
         {onStop ? (
-          <button
-            type="button"
-            className="send stop"
-            aria-label="Stop"
-            title="Stop this run"
-            onClick={onStop}
-            disabled={stopping}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="7" y="7" width="10" height="10" rx="1.5" />
-            </svg>
-          </button>
+          <div className="sends">
+            <button
+              type="button"
+              className="send stop"
+              aria-label="Stop"
+              title="Stop this run"
+              onClick={onStop}
+              disabled={stopping}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="7" y="7" width="10" height="10" rx="1.5" />
+              </svg>
+            </button>
+            {whileRunning && text.trim() !== "" && (
+              <button type="submit" className="send" aria-label={sendLabel} title={sendLabel} disabled={!ready}>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 19V5M5 12l7-7 7 7" />
+                </svg>
+              </button>
+            )}
+          </div>
         ) : (
           <div className="sends">
             {sendAlso}

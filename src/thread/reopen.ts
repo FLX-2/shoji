@@ -1,3 +1,4 @@
+import { committedNow } from "./ThreadList";
 import type { CallRecord, RuntimeEvent, ThreadResult } from "../../runtime/src/events";
 import { parseStack, type Stack, STACKS, type StackName } from "../../runtime/src/stack";
 import type { Bridge, LedgerThread } from "../bridge";
@@ -133,7 +134,8 @@ export async function reopen(bridge: Bridge, record: LedgerThread, cap: number):
     ...(record.workdir && !record.discardedAt && { workdir: record.workdir }),
     ...(record.title && { title: record.title }),
     ...(record.discardedAt && { discarded: true }),
-    ...(record.committed && { committed: record.committed }),
+    // Work after the commit waits to be committed again on the same branch.
+    ...(record.committed && committedNow(record) && { committed: record.committed }),
     turns,
   };
 }

@@ -15,6 +15,7 @@ import { comparer } from "./compare";
 import { defaultChecks } from "./project";
 import { connect, unreachable } from "./connect";
 import { inbox } from "./inbox";
+import type { Steering } from "./steer";
 import { answerQuestion } from "./question";
 import { describeStacks, parseStack, ROLES, type Stack, STACKS, type StackName } from "./stack";
 import { describeBriefing, finished, runTrial, type TrialEvent, type TrialTask } from "./trial";
@@ -40,7 +41,11 @@ Options:
                       skipping scout and plan; needs --plan-file
   --plan-file <file>  The plan of the work being changed, built or planned again
   --question <text>   Answer the person's question about the work in the project, changing
-                      nothing; needs --plan-file. The stack's scout answers
+                      nothing. The stack's scout answers; with --plan-file it reads the plan too
+  --quick             A small change: skip scout and plan, build the task as written, then
+                      check and review it
+  --lead              A lead on the scout's model runs the task, calling the seats it needs;
+                      a change it makes is still checked and reviewed before the thread ends
   --plan-only         Stop once the plan is written, for the person to build or change
   --build             Build the plan in --plan-file, which the person approved, skipping
                       scout and plan
@@ -48,6 +53,8 @@ Options:
                       is built again from the start
   --review            Run the checks and review the work in the project again, against
                       the plan in --plan-file
+  --review-notes <notes>
+                      With --review, what the person asked the review to look at
   --replan <notes>    Scout and plan again from the plan in --plan-file and the person's
                       notes on it
   --failing-before <command>
@@ -92,6 +99,8 @@ Options:
   --log <file>        Append every event to a JSON lines file
   --json              Print events as JSON lines, for the app
   --allow-dirty       Run even if the project has uncommitted changes
+                      With --json, a line {"steer":"…"} on stdin reaches the step that's
+                      working at its next turn
   --base-url <url>    Anthropic API address (default: https://api.anthropic.com)
 
 Stacks (model and effort for each role):
@@ -159,6 +168,8 @@ function describe(event: RuntimeEvent): string | null {
       return null; // The question itself is asked on stderr.
     case "answer":
       return `  ${event.allowed ? "allowed" : "not allowed"}: ${event.command}`;
+    case "steered":
+      return `  heard: ${event.said}`;
     case "mcp":
       return "error" in event
         ? `  couldn't reach the ${event.server} MCP server: ${event.error}`
@@ -228,9 +239,12 @@ async function main() {
       check: { type: "string", multiple: true },
       changes: { type: "string" },
       "plan-only": { type: "boolean", default: false },
+      quick: { type: "boolean", default: false },
+      lead: { type: "boolean", default: false },
       build: { type: "boolean", default: false },
       fresh: { type: "boolean", default: false },
       review: { type: "boolean", default: false },
+      "review-notes": { type: "string" },
       replan: { type: "string" },
       question: { type: "string" },
       "plan-file": { type: "string" },
@@ -298,8 +312,10 @@ async function main() {
     values.question !== undefined,
   ].filter(Boolean).length;
   if (continuing > 1) fail("Use one of --changes, --build, --review, --replan and --question.");
-  if (continuing && !values["plan-file"])
-    fail("--changes, --build, --review, --replan and --question need --plan-file.");
+  if (continuing && values.question === undefined && !values["plan-file"])
+    fail("--changes, --build, --review and --replan need --plan-file.");
+  if (values.quick && (continuing || values["plan-only"])) fail("--quick starts a thread; use it alone.");
+  if (values.lead && (continuing || values["plan-only"] || values.quick)) fail("--lead starts a thread; use it alone.");
   if (values.fresh && !values.build) fail("--fresh goes with --build.");
   const plan = values["plan-file"] ? fs.readFileSync(values["plan-file"], "utf8") : "";
   const changes = values.changes !== undefined ? { notes: values.changes, plan } : undefined;
@@ -356,6 +372,8 @@ async function main() {
 
   // Connected only for a task or a question, after every check that could stop the run first.
   const emit = (event: RuntimeEvent) => write(event, describe(event));
+  // In the app, what the person writes while the run works arrives on stdin.
+  const steering: Steering | undefined = values.json ? { take: () => inbox().takeSteers() } : undefined;
   const mcp: Mcp = await connectMcp(servers, emit, (server) => transportFor(server, root));
   // Started only when Build first looks at a page.
   const browser = values["dev-command"] ? findBrowser() : null;
@@ -384,6 +402,7 @@ async function main() {
         cap,
         emit,
         mcp,
+        steering,
       });
       process.exitCode = result.status === "answered" ? 0 : 1;
       return;
@@ -398,9 +417,14 @@ async function main() {
       cap,
       changes,
       planOnly: values["plan-only"],
+      ...(values.quick && { quick: true }),
+      ...(values.lead && { lead: true }),
+      steering,
       approved: values.build ? plan : undefined,
       ...(values.fresh && { fresh: true }),
-      ...(values.review && { reviewAgain: { plan } }),
+      ...(values.review && {
+        reviewAgain: { plan, ...(values["review-notes"] && { notes: values["review-notes"] }) },
+      }),
       replan,
       failingBefore: values["failing-before"],
       failingTestsBefore: values["failing-test-before"],

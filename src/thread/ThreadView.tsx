@@ -1,8 +1,10 @@
 import {
+  createContext,
   Fragment,
   lazy,
   Suspense,
   useCallback,
+  useContext,
   useEffect,
   useRef,
   useState,
@@ -11,7 +13,13 @@ import {
 } from "react";
 import type { ComparedPage } from "../../runtime/src/compare";
 import type { CheckResult } from "../../runtime/src/events";
-import { labelOf, type ModelId, MODELS, type ProviderId } from "../../runtime/src/models";
+import {
+  labelOf,
+  type ModelId,
+  MODELS,
+  type ProviderId,
+} from "../../runtime/src/models";
+import type { Stack } from "../../runtime/src/stack";
 import type { Bridge, Pushed } from "../bridge";
 import { CodeView } from "../code/CodeView";
 import { commentsNote, type LineComment } from "../code/comments";
@@ -39,27 +47,70 @@ import {
   type StepView,
   type ToolUse,
 } from "./fold";
-import { readsAsQuestion } from "./asks";
+import {
+  LEADS,
+  readMessage,
+  ROUTE_NAMES,
+  routeMark,
+  ROUTES,
+  SEAT_NAMES,
+  stackFor,
+  type Move,
+  type Place,
+  type RouteKind,
+} from "./route";
 import { PanelResizer, panelColumns, usePanelWidth } from "./PanelResizer";
-import { Markdown } from "./Markdown";
+import { Markdown, type Noting } from "./Markdown";
+import { withNotes, type PlanNote } from "./planNotes";
 import { PreviewView } from "./PreviewView";
 import type { useTerminals } from "./useTerminals";
 import { serverRunning, type Server } from "./useServers";
 import { RenameField } from "./ThreadList";
 import { liveTitle } from "./title";
-import { fileName, isRunning, threadCost, type Redo, type Thread, type Turn } from "./useThread";
+import {
+  fileName,
+  isRunning,
+  threadCost,
+  type Redo,
+  type Thread,
+  type Turn,
+} from "./useThread";
 
 type Terminals = ReturnType<typeof useTerminals>;
 
 // The terminal brings xterm with it, so it loads the first time a terminal opens.
-const TerminalView = lazy(() => import("./TerminalView").then((m) => ({ default: m.TerminalView })));
+const TerminalView = lazy(() =>
+  import("./TerminalView").then((m) => ({ default: m.TerminalView })),
+);
 
 interface ThreadViewProps {
   bridge: Bridge;
   thread: Thread;
   onStop: () => void;
-  /** Sending returns, or resolves to, false when it was held back, which keeps what was written. */
-  onRequestChanges: (notes: string) => void | boolean | Promise<void | boolean>;
+  /** Sending returns, or resolves to, false when it was held back, which keeps what was written. `once` is a stack
+   *  for that run alone, as when the person named a model for it. */
+  onRequestChanges: (
+    notes: string,
+    once?: Stack,
+  ) => void | boolean | Promise<void | boolean>;
+  /** Runs the checks and Review on the work again. */
+  onReviewAgain: (
+    ask: string,
+    once?: Stack,
+  ) => void | boolean | Promise<void | boolean>;
+  /** Hands what the person wrote to the step that's working. */
+  onSteer: (text: string) => void;
+  /** Keeps a message to send once the run ends. */
+  onQueue: (text: string) => void;
+  /** Takes a queued message out of line, by its place, or all of them. */
+  onUnqueue: (index?: number) => void;
+  /** While a run works, Enter queues and Alt+Enter steers. */
+  queueFirst: boolean;
+  /** Shoji picks each message's route from its words. Off, a message takes the place's first route unless the
+   *  person picks another. */
+  routeForMe: boolean;
+  /** The ways the work moves on sit in the box as chips, rather than as buttons under the conversation. */
+  nextStepsInBox: boolean;
   /** Gives a thread that stopped at its limit more to spend, and carries on. */
   onKeepGoing: () => void;
   /** Gives a thread the review sent back more to spend, and works through the review's notes. */
@@ -91,11 +142,17 @@ interface ThreadViewProps {
   /** Opens the thread's receipt. */
   onViewReceipt?: () => void;
   /** Plans again from the person's notes on the plan. */
-  onReplan: (notes: string) => void | boolean | Promise<void | boolean>;
+  onReplan: (
+    notes: string,
+    once?: Stack,
+  ) => void | boolean | Promise<void | boolean>;
   /** Does a finished step of the latest work again on another model. */
   onRedo?: (role: Redo, model: ModelId) => void;
   /** Asks about the work; the answer changes nothing. */
-  onQuestion: (question: string) => void | boolean | Promise<void | boolean>;
+  onQuestion: (
+    question: string,
+    once?: Stack,
+  ) => void | boolean | Promise<void | boolean>;
   onCommit: () => Promise<void>;
   /** Pushes the committed branch and opens the page for a pull request. Only the person's button does. */
   onPush: () => Promise<Pushed>;
@@ -144,6 +201,17 @@ const PANES: { id: Pane; label: string; key: string }[] = [
 const MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 const SHORTCUT = MAC ? "⌘" : "Ctrl+";
 
+/** A next step said in words, as the box names it before it's sent. */
+const MOVE_NAMES: Record<Move, string> = {
+  commit: "Accept and commit",
+  push: "Push and open PR",
+  build: "Build it",
+  retry: "Try again",
+  resume: "Pick up where it stopped",
+  "keep-going": "Keep going",
+  fix: "Fix it",
+};
+
 const STATUS = {
   ready: "Ready to accept",
   "needs-work": "Needs work",
@@ -160,6 +228,13 @@ export function ThreadView({
   thread,
   onStop,
   onRequestChanges,
+  onReviewAgain,
+  onSteer,
+  onQueue,
+  onUnqueue,
+  queueFirst,
+  routeForMe,
+  nextStepsInBox,
   onKeepGoing,
   onFix,
   more,
@@ -206,7 +281,12 @@ export function ThreadView({
   const lastWork = workAt < 0 ? lastRun : runs[workAt];
   const workTurn = workAt < 0 ? last : thread.turns[workAt];
   // A finished step of the latest work can be done again on another model, until the work is accepted or thrown away.
-  const redoable = !!onRedo && !running && thread.id !== undefined && !thread.committed && !thread.discarded;
+  const redoable =
+    !!onRedo &&
+    !running &&
+    thread.id !== undefined &&
+    !thread.committed &&
+    !thread.discarded;
   const status = lastWork.result?.status;
   const redoFor = (steps: StepView[], index: number): Redo | undefined => {
     const step = steps[index];
@@ -215,28 +295,36 @@ export function ThreadView({
     if (step.name === "plan") return status === "planned" ? "plan" : undefined;
     if (status !== "ready" && status !== "needs-work") return undefined;
     // Building again starts from nothing, so only a run that built the whole plan, not changes on top of it.
-    if (step.name === "build") return ["task", "build", "rebuild"].includes(workTurn.kind) ? "build" : undefined;
-    if (step.name === "review") return steps.findLastIndex((s) => s.name === "review") === index ? "review" : undefined;
+    if (step.name === "build")
+      return ["task", "build", "rebuild"].includes(workTurn.kind)
+        ? "build"
+        : undefined;
+    if (step.name === "review")
+      return steps.findLastIndex((s) => s.name === "review") === index
+        ? "review"
+        : undefined;
     return undefined;
   };
   const spent = threadCost(thread);
   // Where the thread's work is: its own copy of the project, or the project itself for an older thread. Once
   // the work is committed the copy is put away, and its branch holds the work.
   const place = thread.workdir ?? thread.repo;
-  const putAway = (!!thread.workdir && !!thread.committed) || !!thread.discarded;
+  const putAway =
+    (!!thread.workdir && !!thread.committed) || !!thread.discarded;
   // Where Preview's dev server and the terminal run: the thread's copy, or the project once the copy is put away.
   const here = putAway ? thread.repo : place;
   // Kept the same between draws, since the terminal is made again when they change.
   const { history: historyIn, follow: followIn } = terminals;
   const termHistory = useCallback(() => historyIn(here), [historyIn, here]);
-  const termFollow = useCallback((listen: (data: string) => void) => followIn(here, listen), [followIn, here]);
-  // The composer stays under the conversation: it takes changes to the work or a question about it, and
-  // while a run works it holds what's next and Stop.
-  const [say, setSay] = useState<"changes" | "question">("changes");
+  const termFollow = useCallback(
+    (listen: (data: string) => void) => followIn(here, listen),
+    [followIn, here],
+  );
+  // The composer stays under the conversation in every state: each message goes where its words send it, and
+  // while a run works it reaches the step that's working, or waits for the run's end.
   const hasPlan = runs.some((run) => run.result?.plan);
-  // Committed work still takes questions; changes go to a new thread that carries it on.
-  const talkable = !thread.discarded && hasPlan;
-  const talking = running || talkable;
+  // The box is open in every state of a thread, until its work is thrown away.
+  const talking = !thread.discarded;
   // The project's files and commands, for @ and / in the composer.
   const [files, setFiles] = useState<string[]>([]);
   const [commands, setCommands] = useState<SlashCommand[]>([]);
@@ -280,7 +368,9 @@ export function ThreadView({
   };
   // What the run working now has edited and looked at, for the panel to follow.
   const liveTools = running ? lastRun.steps.flatMap((s) => s.tools) : [];
-  const liveEdits = liveTools.filter((t) => EDITS.has(t.tool)).map((t) => t.target);
+  const liveEdits = liveTools
+    .filter((t) => EDITS.has(t.tool))
+    .map((t) => t.target);
   const liveLooks = liveTools.filter((t) => t.tool === "look_at_page").length;
   // Opens by itself only while closed, so a tab the person is looking at is never pulled away, and not again
   // in a turn where they closed it.
@@ -289,15 +379,23 @@ export function ThreadView({
     if (file) setChosenFile(file);
     setPanel({ open: true, tab });
   };
-  useOnRise(liveEdits.length, () => follow("code", liveEdits[liveEdits.length - 1]));
+  useOnRise(liveEdits.length, () =>
+    follow("code", liveEdits[liveEdits.length - 1]),
+  );
   useOnRise(liveLooks, () => follow("preview"));
   // The before and after a run made of the pages it changed: the last work's, unless the person opened an
   // earlier turn's. A new turn starts from the last work again.
-  const [compareAsk, setCompareAsk] = useState<{ turn: number; page: number; at: number } | null>(null);
+  const [compareAsk, setCompareAsk] = useState<{
+    turn: number;
+    page: number;
+    at: number;
+  } | null>(null);
   useEffect(() => setCompareAsk(null), [turnCount]);
   const compareRun = runs[compareAsk?.turn ?? workAt];
   const compare =
-    compareRun?.compare && !compareRun.compare.running && compareRun.compare.pages.length
+    compareRun?.compare &&
+    !compareRun.compare.running &&
+    compareRun.compare.pages.length
       ? compareRun.compare
       : undefined;
   const openCompare = (turn: number, page: number) => {
@@ -306,14 +404,25 @@ export function ThreadView({
   };
   // A comparison that just arrived shows by itself, on Preview: opening the panel when it's closed, or in it
   // when it's already on Preview. Another tab is left alone.
-  const compared = running && lastRun.compare && !lastRun.compare.running ? lastRun.compare.pages.length : 0;
+  const compared =
+    running && lastRun.compare && !lastRun.compare.running
+      ? lastRun.compare.pages.length
+      : 0;
   useOnRise(compared, () => {
-    if (!autoPanel || closedIn.current === turnCount || (panel.open && panel.tab !== "preview")) return;
+    if (
+      !autoPanel ||
+      closedIn.current === turnCount ||
+      (panel.open && panel.tab !== "preview")
+    )
+      return;
     setCompareAsk({ turn: turnCount - 1, page: 0, at: Date.now() });
     setPanel({ open: true, tab: "preview" });
   });
   // A preview starting is something the person asked for, so it shows even over another tab.
-  useOnRise(server?.url && serverRunning(server) ? 1 : 0, () => autoPanel && setPanel({ open: true, tab: "preview" }));
+  useOnRise(
+    server?.url && serverRunning(server) ? 1 : 0,
+    () => autoPanel && setPanel({ open: true, tab: "preview" }),
+  );
   // Read the project again whenever a run ends or edits a file, or Code opens.
   const ended = thread.turns.filter((t) => t.exit || t.error).length;
   const codeOpen = panel.open && panel.tab === "code";
@@ -327,23 +436,34 @@ export function ThreadView({
   const [comments, setComments] = useState<LineComment[]>([]);
   useEffect(() => setComments([]), [thread.id]);
   const [committing, setCommitting] = useState(false);
-  const [push, setPush] = useState<{ pushing: true } | { done: Pushed } | { error: string } | null>(null);
+  const [push, setPush] = useState<
+    { pushing: true } | { done: Pushed } | { error: string } | null
+  >(null);
   const [commitError, setCommitError] = useState<string | null>(null);
 
   // Stopped at its limit, so the way on is more to spend.
-  const stopped = lastWork.result?.status === "stopped" && !lastWork.result.limit;
+  const stopped =
+    lastWork.result?.status === "stopped" && !lastWork.result.limit;
   // A free tier or plan ran out, so the way on is another provider, or the same one once it opens again.
   const limited =
-    !running && !thread.committed && !thread.discarded && lastWork.result?.status === "stopped" && !!lastWork.result.limit;
-  const routes = limited && routesFor ? routesFor(lastWork.result!.limit!.provider) : [];
+    !running &&
+    !thread.committed &&
+    !thread.discarded &&
+    lastWork.result?.status === "stopped" &&
+    !!lastWork.result.limit;
+  const routes =
+    limited && routesFor ? routesFor(lastWork.result!.limit!.provider) : [];
   // Paused after the plan, for the person to build it or ask for a different one.
   const planned = lastWork.result?.status === "planned";
   // The review sent it back. Fixing can't help a check whose program isn't on this computer.
-  const fixable = lastWork.result?.status === "needs-work" && !lastWork.result.checks.some((c) => c.missing);
+  const fixable =
+    lastWork.result?.status === "needs-work" &&
+    !lastWork.result.checks.some((c) => c.missing);
   // The limit is spent. The thread isn't closed by that: what's sent next allows `more`, and says so.
   const spentOut = spent >= thread.cap;
   // The work can take changes: it has a plan and isn't committed.
-  const canChange = !running && !thread.committed && runs.some((run) => run.result?.plan);
+  const canChange =
+    !running && !thread.committed && runs.some((run) => run.result?.plan);
   const outcome = running
     ? undefined
     : lastWork.result
@@ -353,7 +473,13 @@ export function ThreadView({
         : "failed";
 
   // Ended before there was a plan, so there's nothing to carry on: the task can only start again.
-  const retryable = !running && !thread.committed && !thread.discarded && !hasPlan && !stopped;
+  const retryable =
+    !running &&
+    !thread.committed &&
+    !thread.discarded &&
+    !hasPlan &&
+    !stopped &&
+    outcome !== "answered";
   // Broke off or was stopped after the plan: the work so far can be picked up.
   const resumable =
     !running &&
@@ -382,6 +508,293 @@ export function ThreadView({
   };
 
   const now = lastRun.steps.findLast((s) => s.running);
+
+  // Notes the person leaves on lines of the plan that waits. They go to the planner with Plan again, and a new
+  // turn starts them over.
+  const [notes, setNotes] = useState<PlanNote[]>([]);
+  const [noting, setNoting] = useState<string | null>(null);
+  useEffect(() => {
+    setNotes([]);
+    setNoting(null);
+  }, [thread.turns.length]);
+  const planNoting: Noting | null =
+    planned && !running
+      ? {
+          onNote: setNoting,
+          marked: (quote) =>
+            noting === quote || notes.some((n) => n.quote === quote),
+          under: (quote) => {
+            const mine = notes.filter((n) => n.quote === quote);
+            if (!mine.length && noting !== quote) return null;
+            return (
+              <div className="notes">
+                {mine.map((note, i) => (
+                  <div key={i} className="note">
+                    <span>{note.text}</span>
+                    <button
+                      type="button"
+                      className="note-x"
+                      aria-label={`Remove the note “${note.text}”`}
+                      onClick={() =>
+                        setNotes((all) => all.filter((n) => n !== note))
+                      }
+                    >
+                      <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+                {noting === quote && (
+                  <NoteBox
+                    onKeep={(text) => {
+                      setNotes((all) => [...all, { quote, text }]);
+                      setNoting(null);
+                    }}
+                    onCancel={() => setNoting(null)}
+                  />
+                )}
+              </div>
+            );
+          },
+        }
+      : null;
+  /** Plans again from the notes on its lines, and whatever the person said with them. */
+  const replanWithNotes = (said = "", once?: Stack) => {
+    const sent = onReplan(withNotes(notes, said), once);
+    setNotes([]);
+    setNoting(null);
+    return sent;
+  };
+
+  // Where the thread stands decides the routes a message can take.
+  const where: Place = planned ? "planned" : hasPlan ? "work" : "fresh";
+  const reaches = useReaches();
+  // What the person has written, and the route they picked for it, if they did. The pick lasts until it's sent.
+  const [typed, setTyped] = useState("");
+  const [picked, setPicked] = useState<RouteKind | null>(null);
+  const [routeAt, setRouteAt] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (typed === "") setPicked(null);
+  }, [typed]);
+  const can = (move: Move): boolean => {
+    switch (move) {
+      case "commit":
+        return (
+          !running && !thread.committed && !!thread.branch && fileCount > 0
+        );
+      case "push":
+        return !running && !!thread.committed && !!thread.branch;
+      case "build":
+        return !running && planned;
+      case "retry":
+        return retryable;
+      case "resume":
+        return resumable;
+      case "keep-going":
+        return !running && stopped;
+      case "fix":
+        return !running && fixable;
+    }
+  };
+  const readingOf = (text: string, pick?: RouteKind) =>
+    readMessage(
+      text,
+      { place: where, can, reaches, noGuess: !routeForMe },
+      pick,
+    );
+  const reading = readingOf(typed, picked ?? undefined);
+  const moves: Record<Move, () => void> = {
+    commit: () => commit(),
+    push: () => pushBranch(),
+    build: onBuild,
+    retry: onRetry,
+    resume: onResume,
+    "keep-going": onKeepGoing,
+    fix: onFix,
+  };
+  /** Sends a message where it goes: to a route, or as a next step said in words. */
+  const say = (text: string, pick?: RouteKind) => {
+    const said = readingOf(text, pick);
+    if ("move" in said) {
+      moves[said.move]();
+      return;
+    }
+    const once = said.route.model
+      ? stackFor(said.route, thread.stack)
+      : undefined;
+    switch (said.route.kind) {
+      case "answer":
+        return onQuestion(said.text, once);
+      case "replan":
+        return notes.length
+          ? replanWithNotes(said.text, once)
+          : onReplan(said.text, once);
+      case "review":
+        return onReviewAgain(said.text, once);
+      default:
+        return onRequestChanges(said.text, once);
+    }
+  };
+  // The seats, as typing @ first in the box offers them, with the model each runs on in this thread.
+  const seats = SEAT_NAMES.map((name) => ({
+    name,
+    detail: `on ${labelOf(thread.stack[name].model)}`,
+  }));
+
+  // The ways the work moves on from here, as chips in the box or buttons under the conversation.
+  const nextStep = (
+    label: string,
+    run: () => void,
+    also: { key?: string; disabled?: boolean; lead?: boolean } = {},
+  ) =>
+    nextStepsInBox ? (
+      <button
+        key={also.key ?? label}
+        type="button"
+        className={also.lead ? "chip next lead" : "chip next"}
+        onClick={run}
+        disabled={also.disabled}
+      >
+        {label}
+      </button>
+    ) : (
+      <button
+        key={also.key ?? label}
+        type="button"
+        className={also.lead ? "btn solid" : "btn"}
+        onClick={run}
+        disabled={also.disabled}
+      >
+        {label}
+      </button>
+    );
+  const nextSteps: ReactNode[] =
+    running || thread.discarded
+      ? []
+      : thread.committed
+        ? [
+            ...(thread.branch
+              ? [
+                  nextStep(
+                    push && "pushing" in push ? "Pushing…" : "Push and open PR",
+                    pushBranch,
+                    {
+                      disabled: !!push && "pushing" in push,
+                      lead: !(push && "done" in push),
+                    },
+                  ),
+                ]
+              : []),
+            nextStep("Carry on in a new thread", onContinue),
+          ]
+        : planned
+          ? notes.length
+            ? [
+                nextStep(
+                  `Plan again with ${notes.length === 1 ? "1 note" : `${notes.length} notes`}`,
+                  () => replanWithNotes(),
+                  {
+                    lead: true,
+                  },
+                ),
+                nextStep("Build it as it is", onBuild),
+              ]
+            : [nextStep("Build it", onBuild, { lead: true })]
+          : [
+              ...(limited && onCarryOnWith
+                ? routes.map((route, i) =>
+                    nextStep(
+                      `Carry on with ${route.name}`,
+                      () => onCarryOnWith(route, !hasPlan),
+                      {
+                        key: route.name,
+                        lead: i === 0,
+                      },
+                    ),
+                  )
+                : []),
+              ...(retryable
+                ? [
+                    nextStep("Try again", onRetry, {
+                      lead: !(limited && routes.length),
+                    }),
+                    nextStep("Edit the task", onEditTask),
+                  ]
+                : []),
+              ...(resumable
+                ? [
+                    nextStep(
+                      `Pick up where it stopped${spentOut ? `, up to ${formatCost(more)} more` : ""}`,
+                      onResume,
+                      {
+                        lead: !(limited && routes.length),
+                      },
+                    ),
+                  ]
+                : []),
+              ...(stopped
+                ? [
+                    nextStep(
+                      `Keep going, up to ${formatCost(more)} more`,
+                      onKeepGoing,
+                      { lead: true },
+                    ),
+                  ]
+                : []),
+              ...(fixable
+                ? [
+                    nextStep(`Fix it, up to ${formatCost(more)} more`, onFix, {
+                      lead: true,
+                    }),
+                  ]
+                : []),
+              ...(thread.branch && fileCount > 0
+                ? [
+                    nextStep("Accept and commit", commit, {
+                      disabled: committing,
+                      lead: !(stopped || fixable || limited),
+                    }),
+                  ]
+                : []),
+            ];
+
+  // What the person wrote to the running step that no step has read yet, and what waits for the run to end.
+  const steers = last?.steers ?? [];
+  const waiting = running ? steers.slice(lastRun.heard) : [];
+  const queued = thread.queued ?? [];
+  /** Sends what waited for the run as one message, by the route its words take. */
+  const sendQueued = () => {
+    const text = queued.join("\n\n");
+    onUnqueue();
+    if (text) say(text);
+  };
+  // Once a run the person watched ends by itself, what they queued, and what they wrote too late for any step to
+  // read, goes on as their next message. A run they stopped, or one that broke, keeps it in line for them to send.
+  const watched = useRef<number | null>(null);
+  if (running) watched.current = turnCount;
+  const unheard = !running ? (lastRun.result?.unheard ?? []) : [];
+  useEffect(() => {
+    if (running || watched.current !== turnCount) return;
+    watched.current = null;
+    const ended = lastRun.result?.status;
+    if (
+      last?.stoppedByYou ||
+      !ended ||
+      ended === "failed" ||
+      ended === "stopped"
+    ) {
+      unheard.forEach(onQueue);
+      return;
+    }
+    if (!queued.length && !unheard.length) return;
+    const text = [...unheard, ...queued].join("\n\n");
+    onUnqueue();
+    say(text);
+    // Only the run's end sends; the rest is read as it stands then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, turnCount]);
+
   const stage = running ? (
     lastRun.asking ? (
       "Waiting for you"
@@ -410,7 +823,10 @@ export function ThreadView({
   return (
     <section
       className="thread"
-      {...(panel.open && panelWidth !== null && { style: { gridTemplateColumns: panelColumns(panelWidth) } })}
+      {...(panel.open &&
+        panelWidth !== null && {
+          style: { gridTemplateColumns: panelColumns(panelWidth) },
+        })}
     >
       <div className="convo">
         <div className="tbar solid">
@@ -419,7 +835,12 @@ export function ThreadView({
           ) : (
             <h1 title={thread.task}>
               {onStartRename ? (
-                <button type="button" className="name" title="Rename (F2)" onClick={onStartRename}>
+                <button
+                  type="button"
+                  className="name"
+                  title="Rename (F2)"
+                  onClick={onStartRename}
+                >
                   {title}
                 </button>
               ) : (
@@ -441,7 +862,14 @@ export function ThreadView({
               </svg>
             </button>
           )}
-          {menu && menuAt && <Menu at={menuAt} label="Thread actions" items={menu} onClose={() => setMenuAt(null)} />}
+          {menu && menuAt && (
+            <Menu
+              at={menuAt}
+              label="Thread actions"
+              items={menu}
+              onClose={() => setMenuAt(null)}
+            />
+          )}
           <span className="stage" data-outcome={outcome}>
             <span className="dot live" aria-hidden="true" />
             {stage}
@@ -449,18 +877,20 @@ export function ThreadView({
         </div>
         <div className="scroll" ref={scroller.ref}>
           <div className="tcol">
-            {thread.turns.map((turn, i) => (
-              <TurnView
-                key={i}
-                turn={turn}
-                run={runs[i]}
-                live={running && i === thread.turns.length - 1}
-                waiting={planned && i === thread.turns.length - 1}
-                {...(i === workAt && redoable && { redo: redoFor, onRedo })}
-                onOpenFile={openFile}
-                onCompare={(page) => openCompare(i, page)}
-              />
-            ))}
+            <PlanNoting.Provider value={planNoting}>
+              {thread.turns.map((turn, i) => (
+                <TurnView
+                  key={i}
+                  turn={turn}
+                  run={runs[i]}
+                  live={running && i === thread.turns.length - 1}
+                  waiting={planned && i === thread.turns.length - 1}
+                  {...(i === workAt && redoable && { redo: redoFor, onRedo })}
+                  onOpenFile={openFile}
+                  onCompare={(page) => openCompare(i, page)}
+                />
+              ))}
+            </PlanNoting.Provider>
           </div>
         </div>
         {running && scroller.away && (
@@ -479,214 +909,236 @@ export function ThreadView({
             tool={!!lastRun.askingTool}
             step={now ? ROLE_NAMES[now.role].label : undefined}
             project={fileName(thread.repo)}
-            onAnswer={(allow, always) => onAnswer(lastRun.asking!, allow, always)}
+            onAnswer={(allow, always) =>
+              onAnswer(lastRun.asking!, allow, always)
+            }
           />
         )}
 
-        {!running &&
-          (thread.discarded ? (
-            <div className="review">
-              <span className="done">This thread's work was discarded. What it cost stays in Receipts.</span>
-            </div>
-          ) : planned ? (
-            <div className="review">
-              <button type="button" className="btn solid" onClick={onBuild}>
-                Build it
-              </button>
-              <span className="sum">
-                {dotted([
-                  showCosts && (
-                    <>
-                      <b>{formatCost(spent)}</b> so far
-                    </>
-                  ),
-                ])}
-              </span>
-            </div>
-          ) : (
-            <>
-            {showCosts && routing?.line && (thread.committed || (thread.branch && fileCount > 0)) && (
-              <p className="routed">
-                {dotted([
-                  routing.line,
-                  routing.oneModel - routing.spent >= 0.005 &&
-                    `about ${formatCost(routing.oneModel - routing.spent)} less than ${routing.baseline === "Claude" ? "on Claude" : `${routing.baseline} alone`}`,
-                ])}
-                {onViewReceipt && (
-                  <button type="button" className="link" onClick={onViewReceipt}>
-                    View receipt
-                  </button>
-                )}
-              </p>
-            )}
-            <div className="review">
-              {thread.committed ? (
-                <>
-                  {thread.branch && (
+        {!running && thread.discarded && (
+          <div className="review">
+            <span className="done">
+              This thread's work was discarded. What it cost stays in Receipts.
+            </span>
+          </div>
+        )}
+        {!running && !thread.discarded && (
+          <>
+            {showCosts &&
+              routing?.line &&
+              (thread.committed || (thread.branch && fileCount > 0)) && (
+                <p className="routed">
+                  {dotted([
+                    routing.line,
+                    routing.oneModel - routing.spent >= 0.005 &&
+                      `about ${formatCost(routing.oneModel - routing.spent)} less than ${routing.baseline === "Claude" ? "on Claude" : `${routing.baseline} alone`}`,
+                  ])}
+                  {onViewReceipt && (
                     <button
                       type="button"
-                      className={push && "done" in push ? "btn" : "btn solid"}
-                      onClick={pushBranch}
-                      disabled={!!push && "pushing" in push}
+                      className="link"
+                      onClick={onViewReceipt}
                     >
-                      {push && "pushing" in push ? "Pushing…" : "Push and open PR"}
+                      View receipt
                     </button>
                   )}
-                  <span className="done">
-                    {push && "done" in push ? (
-                      <>
-                        Pushed {thread.branch} to {push.done.remote}
-                        {!push.done.url && ". Open a pull request for it on your git host"}
-                      </>
-                    ) : (
-                      <>
-                        Committed{" "}
-                        <Copy text={thread.committed} what="the commit id">
-                          <b>{thread.committed}</b>
-                        </Copy>{" "}
-                        on{" "}
-                        {thread.branch && (
-                          <Copy text={thread.branch} what="the branch name">
-                            {thread.branch}
-                          </Copy>
-                        )}
-                      </>
-                    )}
-                  </span>
-                  {push && "error" in push && <span className="err">{push.error}</span>}
-                  <button type="button" className="btn carry" onClick={onContinue}>
-                    Carry on in a new thread
-                  </button>
-                </>
-              ) : (
-                <>
-                  {limited &&
-                    onCarryOnWith &&
-                    routes.map((route, i) => (
-                      <button
-                        key={route.name}
-                        type="button"
-                        className={i === 0 ? "btn solid" : "btn"}
-                        onClick={() => onCarryOnWith(route, !hasPlan)}
-                      >
-                        Carry on with {route.name}
-                      </button>
-                    ))}
-                  {retryable && (
-                    <>
-                      <button type="button" className={limited && routes.length ? "btn" : "btn solid"} onClick={onRetry}>
-                        Try again
-                      </button>
-                      <button type="button" className="btn" onClick={onEditTask}>
-                        Edit the task
-                      </button>
-                    </>
-                  )}
-                  {resumable && (
-                    <button type="button" className={limited && routes.length ? "btn" : "btn solid"} onClick={onResume}>
-                      Pick up where it stopped{spentOut && `, up to ${formatCost(more)} more`}
-                    </button>
-                  )}
-                  {stopped && (
-                    <button type="button" className="btn solid" onClick={onKeepGoing}>
-                      Keep going, up to {formatCost(more)} more
-                    </button>
-                  )}
-                  {fixable && (
-                    <button type="button" className="btn solid" onClick={onFix}>
-                      Fix it, up to {formatCost(more)} more
-                    </button>
-                  )}
-                  {thread.branch && fileCount > 0 && (
-                    <button
-                      type="button"
-                      className={stopped || fixable || limited ? "btn" : "btn solid"}
-                      onClick={commit}
-                      disabled={committing}
-                    >
-                      Accept and commit
-                    </button>
-                  )}
-                  {commitError && <span className="err">{commitError}</span>}
-                </>
+                </p>
               )}
+            <div className="review">
+              {!nextStepsInBox && nextSteps}
+              {thread.committed && (
+                <span className="done">
+                  {push && "done" in push ? (
+                    <>
+                      Pushed {thread.branch} to {push.done.remote}
+                      {!push.done.url &&
+                        ". Open a pull request for it on your git host"}
+                    </>
+                  ) : (
+                    <>
+                      Committed{" "}
+                      <Copy text={thread.committed} what="the commit id">
+                        <b>{thread.committed}</b>
+                      </Copy>{" "}
+                      on{" "}
+                      {thread.branch && (
+                        <Copy text={thread.branch} what="the branch name">
+                          {thread.branch}
+                        </Copy>
+                      )}
+                    </>
+                  )}
+                </span>
+              )}
+              {push && "error" in push && (
+                <span className="err">{push.error}</span>
+              )}
+              {commitError && <span className="err">{commitError}</span>}
               <span className="sum">
                 {dotted([
                   !thread.committed && checksSummary(lastWork.result?.checks),
                   showCosts && (
                     <>
-                      <b>{formatCost(spent)}</b> in all
+                      <b>{formatCost(spent)}</b> {planned ? "so far" : "in all"}
                     </>
                   ),
-                  !thread.committed && spentOut && `the ${formatCost(thread.cap)} limit is spent`,
+                  !thread.committed &&
+                    spentOut &&
+                    `the ${formatCost(thread.cap)} limit is spent`,
                 ])}
               </span>
             </div>
-            </>
-          ))}
+          </>
+        )}
+
+        {talking && (waiting.length > 0 || queued.length > 0) && (
+          <div className="tray" aria-label="Your messages to this run">
+            {waiting.map((text, i) => (
+              <span key={`w${i}`} className="msg on" title={text}>
+                {now ? `For ${ROLE_NAMES[now.role].label}` : "Waiting"}: “{text}
+                ”
+              </span>
+            ))}
+            {queued.map((text, i) => (
+              <span key={`q${i}`} className="msg" title={text}>
+                Next: “{text}”
+                <button
+                  type="button"
+                  className="x"
+                  aria-label={`Take “${text}” out of line`}
+                  onClick={() => onUnqueue(i)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {!running && queued.length > 0 && (
+              <button type="button" className="chip" onClick={sendQueued}>
+                Send {queued.length === 1 ? "it" : "them"} now
+              </button>
+            )}
+          </div>
+        )}
 
         {talking && (
           <Composer
             key={thread.id ?? "new"}
-            label={
-              running
-                ? "What's next"
-                : say === "question" || thread.committed
-                  ? "Question"
-                  : planned
-                    ? "Plan changes"
-                    : "Changes"
-            }
+            label="Message"
             placeholder={
               running
-                ? "Shoji is working. Write what's next, and send it when this run ends."
-                : say === "question" || thread.committed
-                  ? "Ask about this work. Nothing will change."
-                  : planned
-                    ? "What should the plan do differently?"
-                    : "Describe the changes you want…"
-            }
-            {...(spentOut && !running && { sendLabel: `Send, up to ${formatCost(more)} more` })}
-            onSend={(notes) =>
-              (say === "question" || thread.committed || readsAsQuestion(notes)
-                ? onQuestion
+                ? now
+                  ? `Write to ${ROLE_NAMES[now.role].label} while it works, or queue what's next.`
+                  : "Write what's next. It's sent when this step can read it."
                 : planned
-                  ? onReplan
-                  : onRequestChanges)(notes)
+                  ? "Change the plan, ask about it, or say build it…"
+                  : "Ask, change something, or say what's next…"
             }
+            {...(spentOut &&
+              !running && {
+                sendLabel: `Send, up to ${formatCost(more)} more`,
+              })}
+            onSend={(text) => say(text, picked ?? undefined)}
+            onText={setTyped}
             files={files}
             commands={commands}
+            seats={seats}
             {...(thread.id !== undefined && { draft: `thread:${thread.id}` })}
-            {...(running && { onStop, stopping: last.stoppedByYou })}
+            {...(running && {
+              onStop,
+              stopping: last.stoppedByYou,
+              onSteer,
+              onQueue,
+              queueFirst,
+            })}
+            above={
+              nextStepsInBox && !running && nextSteps.length > 0 ? (
+                <div className="next">{nextSteps}</div>
+              ) : undefined
+            }
             rests={!running}
           >
-            {!running && !thread.committed && (
-              <div className="seg" role="radiogroup" aria-label="What to send">
-                <button type="button" role="radio" aria-checked={say === "changes"} onClick={() => setSay("changes")}>
-                  {planned ? "Change the plan" : "Request changes"}
+            {running ? (
+              <span className="runkeys">
+                <kbd>Enter</kbd>{" "}
+                {queueFirst
+                  ? "queues for after"
+                  : now
+                    ? `steers ${ROLE_NAMES[now.role].label}`
+                    : "steers"}
+                {" · "}
+                <kbd>{MAC ? "⌥" : "Alt"} Enter</kbd>{" "}
+                {queueFirst
+                  ? now
+                    ? `steers ${ROLE_NAMES[now.role].label}`
+                    : "steers"
+                  : "queues for after"}
+              </span>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className={picked ? "chip route" : "chip route guessed"}
+                  aria-haspopup="menu"
+                  aria-expanded={!!routeAt}
+                  title={
+                    "move" in reading
+                      ? "A next step, said in words"
+                      : `${ROUTE_NAMES[reading.route.kind].does}. Pick another route`
+                  }
+                  onClick={(e) =>
+                    setRouteAt(routeAt ? null : under(e.currentTarget))
+                  }
+                >
+                  {"move" in reading
+                    ? MOVE_NAMES[reading.move]
+                    : routeMark(reading.route, thread.stack)}
+                  <svg viewBox="0 0 12 12" aria-hidden="true">
+                    <path d="m3 4.5 3 3 3-3" />
+                  </svg>
                 </button>
-                <button type="button" role="radio" aria-checked={say === "question"} onClick={() => setSay("question")}>
-                  Ask a question
-                </button>
-              </div>
+                {routeAt && (
+                  <Menu
+                    at={routeAt}
+                    label="Route this message"
+                    items={ROUTES[where].map((kind) => ({
+                      label: ROUTE_NAMES[kind].label,
+                      hint: modelName(thread.stack[LEADS[kind]].model),
+                      ...("route" in reading &&
+                        reading.route.kind === kind && { hint: "✓" }),
+                      run: () => setPicked(kind),
+                    }))}
+                    onClose={() => setRouteAt(null)}
+                  />
+                )}
+                {!thread.committed &&
+                  onTier &&
+                  ("move" in reading
+                    ? reading.move !== "commit" && reading.move !== "push"
+                    : reading.route.kind !== "answer") && (
+                    <div
+                      className="seg tier"
+                      role="radiogroup"
+                      aria-label="Quality"
+                    >
+                      {(Object.keys(TIERS) as Tier[]).map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          role="radio"
+                          aria-checked={tier === id}
+                          title={`${TIERS[id].does}, from the next run`}
+                          onClick={() => onTier(id)}
+                        >
+                          {TIERS[id].label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                {spentOut && (
+                  <span className="est">Up to {formatCost(more)} more</span>
+                )}
+              </>
             )}
-            {!running && !thread.committed && onTier && say !== "question" && (
-              <div className="seg tier" role="radiogroup" aria-label="Quality">
-                {(Object.keys(TIERS) as Tier[]).map((id) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="radio"
-                    aria-checked={tier === id}
-                    title={`${TIERS[id].does}, from the next run`}
-                    onClick={() => onTier(id)}
-                  >
-                    {TIERS[id].label}
-                  </button>
-                ))}
-              </div>
-            )}
-            {spentOut && !running && <span className="est">Up to {formatCost(more)} more</span>}
           </Composer>
         )}
       </div>
@@ -724,7 +1176,9 @@ export function ThreadView({
                   onClick={() => changePanel({ open: true, tab: p.id })}
                 >
                   {p.label}
-                  {p.id === "code" && fileCount > 0 && <span className="cnt">{count(fileCount, "file")}</span>}
+                  {p.id === "code" && fileCount > 0 && (
+                    <span className="cnt">{count(fileCount, "file")}</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -746,7 +1200,8 @@ export function ThreadView({
                 onRevert={(path) => act(bridge.revertFile(place, path))}
                 onRead={(path) => bridge.readFile(place, path)}
                 {...(!thread.committed && {
-                  onSave: (path: string, text: string) => act(bridge.writeFile(place, path, text)),
+                  onSave: (path: string, text: string) =>
+                    act(bridge.writeFile(place, path, text)),
                 })}
                 comments={comments}
                 {...(canChange && { onComments: setComments })}
@@ -812,29 +1267,53 @@ function CommandAsk({
     onAnswer(allow, always).catch(() => setSent(false));
   };
   return (
-    <div className="review cmdask" role="alertdialog" aria-label={tool ? "Allow this tool?" : "Allow this command?"}>
+    <div
+      className="review cmdask"
+      role="alertdialog"
+      aria-label={tool ? "Allow this tool?" : "Allow this command?"}
+    >
       {tool ? (
         <p>
-          {step ?? "Shoji"} wants to use <code>{command}</code> from an MCP server. Tools that only look run on their
-          own; anything that could change something waits for you.
+          {step ?? "Shoji"} wants to use <code>{command}</code> from an MCP
+          server. Tools that only look run on their own; anything that could
+          change something waits for you.
         </p>
       ) : command.includes("\n") || command.length > 80 ? (
         <>
-          <p>{step ?? "Shoji"} wants to run this command. Checks run on their own; anything else waits for you.</p>
+          <p>
+            {step ?? "Shoji"} wants to run this command. Checks run on their
+            own; anything else waits for you.
+          </p>
           <pre className="cmd">{command}</pre>
         </>
       ) : (
         <p>
-          {step ?? "Shoji"} wants to run <code>{command}</code>. Checks run on their own; anything else waits for you.
+          {step ?? "Shoji"} wants to run <code>{command}</code>. Checks run on
+          their own; anything else waits for you.
         </p>
       )}
-      <button type="button" className="btn solid" onClick={() => answer(true)} disabled={sent}>
+      <button
+        type="button"
+        className="btn solid"
+        onClick={() => answer(true)}
+        disabled={sent}
+      >
         Allow
       </button>
-      <button type="button" className="btn" onClick={() => answer(true, true)} disabled={sent}>
+      <button
+        type="button"
+        className="btn"
+        onClick={() => answer(true, true)}
+        disabled={sent}
+      >
         Always allow in {project}
       </button>
-      <button type="button" className="btn" onClick={() => answer(false)} disabled={sent}>
+      <button
+        type="button"
+        className="btn"
+        onClick={() => answer(false)}
+        disabled={sent}
+      >
         Don't allow
       </button>
     </div>
@@ -890,18 +1369,27 @@ function TurnView({
                   index={i}
                   live={live}
                   showPlan={waiting}
-                  {...(onRedo && redo?.(run.steps, i) && { redo: redo(run.steps, i), onRedo })}
+                  {...(onRedo &&
+                    redo?.(run.steps, i) && {
+                      redo: redo(run.steps, i),
+                      onRedo,
+                    })}
                   onOpenFile={onOpenFile}
                 />
               ))}
               {run.compare && (live || !run.compare.running) && (
-                <CompareRow compare={run.compare} live={live} onCompare={onCompare} />
+                <CompareRow
+                  compare={run.compare}
+                  live={live}
+                  onCompare={onCompare}
+                />
               )}
             </ol>
           )}
           {run.unreached?.map((u) => (
             <p key={u.server} className="esc">
-              Couldn't reach the {u.server} MCP server, so this run went on without it. {u.error}
+              Couldn't reach the {u.server} MCP server, so this run went on
+              without it. {u.error}
             </p>
           ))}
           <Outcome turn={turn} run={run} live={live} />
@@ -932,7 +1420,10 @@ function StepRow({
   const reaches = useReaches();
   const step = steps[index];
   const label = stepLabel(steps, index);
-  const about = step.cost > 0 ? `${labelOf(step.model)} · ${formatCost(step.cost)}` : labelOf(step.model);
+  const about =
+    step.cost > 0
+      ? `${labelOf(step.model)} · ${formatCost(step.cost)}`
+      : labelOf(step.model);
   const now = live && step.running;
   const finished = !step.running && !step.unfinished;
   return (
@@ -957,7 +1448,9 @@ function StepRow({
                 aria-label={`${label} with ${labelOf(step.model)}. Do it again on another model`}
                 aria-haspopup="menu"
                 aria-expanded={!!menuAt}
-                onClick={(e) => setMenuAt(menuAt ? null : under(e.currentTarget))}
+                onClick={(e) =>
+                  setMenuAt(menuAt ? null : under(e.currentTarget))
+                }
               >
                 {modelName(step.model)}
               </button>
@@ -984,13 +1477,23 @@ function StepRow({
             Moved up to {labelOf(step.escalation.to)}. {step.escalation.reason}
           </p>
         )}
+        {step.steers?.map((said, i) => (
+          <p key={i} className="steered">
+            <span className="k">You, while it worked</span>
+            {said}
+          </p>
+        ))}
         <Work step={step} showPlan={showPlan} onOpenFile={onOpenFile} />
       </div>
     </li>
   );
 }
 
-const AGAIN: Record<Redo, string> = { plan: "Plan again", build: "Build again", review: "Review again" };
+const AGAIN: Record<Redo, string> = {
+  plan: "Plan again",
+  build: "Build again",
+  review: "Review again",
+};
 
 /** The models a step can be done again on: the newest of each family, other than the one it ran on. */
 const redoModels = (ran: ModelId, reaches: (model: ModelId) => boolean) =>
@@ -1009,7 +1512,10 @@ function CompareRow({
   onCompare: (page: number) => void;
 }) {
   const now = live && compare.running;
-  const widths = (page: ComparedPage) => listed(page.shots.filter((s) => s.before || s.after).map((s) => `${s.width}`));
+  const widths = (page: ComparedPage) =>
+    listed(
+      page.shots.filter((s) => s.before || s.after).map((s) => `${s.width}`),
+    );
   return (
     <li className={now ? "st now" : "st done"}>
       <span className="c" aria-hidden="true">
@@ -1022,21 +1528,34 @@ function CompareRow({
         )}
       </span>
       <div className="sb">
-        <div className="sl">{now ? "Comparing the pages before and after" : "Compared the pages before and after"}</div>
+        <div className="sl">
+          {now
+            ? "Comparing the pages before and after"
+            : "Compared the pages before and after"}
+        </div>
         {compare.problem && <p className="esc">{compare.problem}</p>}
         {!now && compare.pages.some((p) => widths(p)) && (
           <div className="work">
             {compare.pages.map(
               (page, i) =>
                 widths(page) && (
-                  <button key={page.path} type="button" className="wk wkbtn" onClick={() => onCompare(i)}>
+                  <button
+                    key={page.path}
+                    type="button"
+                    className="wk wkbtn"
+                    onClick={() => onCompare(i)}
+                  >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d={ICONS.compare} />
                     </svg>
                     <span>
                       {page.path} at {widths(page)} px
                     </span>
-                    <svg className="chev" viewBox="0 0 24 24" aria-hidden="true">
+                    <svg
+                      className="chev"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
                       <path d="M9 6l6 6-6 6" />
                     </svg>
                   </button>
@@ -1051,7 +1570,55 @@ function CompareRow({
 
 /** "360", "360 and 768", "360, 768 and 1280". */
 function listed(items: string[]): string {
-  return items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}` : (items[0] ?? "");
+  return items.length > 1
+    ? `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`
+    : (items[0] ?? "");
+}
+
+/** Notes on the lines of the plan that waits for the person, when it waits. */
+const PlanNoting = createContext<Noting | null>(null);
+
+/** The box a note on one plan line is written in. Enter keeps it, Escape lets it go. */
+function NoteBox({
+  onKeep,
+  onCancel,
+}: {
+  onKeep: (text: string) => void;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState("");
+  const keep = () => text.trim() && onKeep(text.trim());
+  return (
+    <div className="note-box">
+      <textarea
+        aria-label="Note on this line"
+        placeholder="What should change here?"
+        rows={2}
+        autoFocus
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            keep();
+          } else if (e.key === "Escape") onCancel();
+        }}
+      />
+      <div className="note-acts">
+        <button type="button" className="btn sm" onClick={onCancel}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn sm"
+          onClick={keep}
+          disabled={!text.trim()}
+        >
+          Add note
+        </button>
+      </div>
+    </div>
+  );
 }
 
 const READS = new Set(["read_file", "list_files", "search"]);
@@ -1067,14 +1634,25 @@ function Work({
   onOpenFile: (path: string) => void;
 }) {
   const reads = step.tools.filter((t) => READS.has(t.tool));
-  const edits = unique(step.tools.filter((t) => EDITS.has(t.tool)).map((t) => t.target));
-  const commands = step.tools.filter((t) => t.tool === "run_command").map((t) => t.target);
+  const edits = unique(
+    step.tools.filter((t) => EDITS.has(t.tool)).map((t) => t.target),
+  );
+  const commands = step.tools
+    .filter((t) => t.tool === "run_command")
+    .map((t) => t.target);
   // MCP tools come named as "server: tool".
-  const used = step.tools.filter((t) => t.tool.startsWith("mcp__")).map((t) => t.target);
-  const skills = unique(step.tools.filter((t) => t.tool === "read_skill").map((t) => t.target));
+  const used = step.tools
+    .filter((t) => t.tool.startsWith("mcp__"))
+    .map((t) => t.target);
+  const skills = unique(
+    step.tools.filter((t) => t.tool === "read_skill").map((t) => t.target),
+  );
   // Pages seen in the headless browser, as "/pricing at 360px".
-  const looks = step.tools.filter((t) => t.tool === "look_at_page").map((t) => t.target);
+  const looks = step.tools
+    .filter((t) => t.tool === "look_at_page")
+    .map((t) => t.target);
   const output = step.output?.trim();
+  const noting = useContext(PlanNoting);
 
   const items = [
     reads.length > 0 && (
@@ -1087,11 +1665,20 @@ function Work({
       </Item>
     ),
     edits.length > 0 && (
-      <Item key="edits" icon={ICONS.edit} summary={listSummary("Edited", edits)}>
+      <Item
+        key="edits"
+        icon={ICONS.edit}
+        summary={listSummary("Edited", edits)}
+      >
         <ul className="files">
           {edits.map((path) => (
             <li key={path}>
-              <button type="button" className="open" title="Open in Code" onClick={() => onOpenFile(path)}>
+              <button
+                type="button"
+                className="open"
+                title="Open in Code"
+                onClick={() => onOpenFile(path)}
+              >
                 {path}
               </button>
             </li>
@@ -1100,7 +1687,11 @@ function Work({
       </Item>
     ),
     commands.length > 0 && (
-      <Item key="commands" icon={ICONS.term} summary={listSummary("Ran", unique(commands))}>
+      <Item
+        key="commands"
+        icon={ICONS.term}
+        summary={listSummary("Ran", unique(commands))}
+      >
         <ul className="files">
           {commands.map((c, i) => (
             <li key={i}>{c}</li>
@@ -1109,7 +1700,11 @@ function Work({
       </Item>
     ),
     used.length > 0 && (
-      <Item key="mcp" icon={ICONS.term} summary={listSummary("Used", unique(used))}>
+      <Item
+        key="mcp"
+        icon={ICONS.term}
+        summary={listSummary("Used", unique(used))}
+      >
         <ul className="files">
           {used.map((c, i) => (
             <li key={i}>{c}</li>
@@ -1143,7 +1738,9 @@ function Work({
         </ul>
       </Item>
     ),
-    step.checks && step.checks.length > 0 && <Checks key="checks" checks={step.checks} />,
+    step.checks && step.checks.length > 0 && (
+      <Checks key="checks" checks={step.checks} />
+    ),
     output && step.role === "scout" && step.name !== "answer" && (
       <Item key="out" icon={ICONS.note} summary="What the scout found">
         <Markdown className="text" text={output} />
@@ -1152,23 +1749,39 @@ function Work({
     output && step.role === "plan" && step.name === "plan" && (
       <Item key="out" icon={ICONS.note} summary="The plan" open={showPlan}>
         <Copy text={output} what="the plan" />
-        <Markdown className="text" text={output} />
+        <Markdown
+          className="text"
+          text={output}
+          noting={(showPlan && noting) || undefined}
+        />
       </Item>
     ),
     output &&
       step.role === "review" &&
       (approves(output) ? (
-        <Item key="out" icon={ICONS.note} summary={`The review approved it${lookSaid(output)}`}>
-          {reviewNotes(output) && <Markdown className="text" text={reviewNotes(output)} />}
+        <Item
+          key="out"
+          icon={ICONS.note}
+          summary={`The review approved it${lookSaid(output)}`}
+        >
+          {reviewNotes(output) && (
+            <Markdown className="text" text={reviewNotes(output)} />
+          )}
         </Item>
       ) : (
-        <Item key="out" icon={ICONS.note} summary={`The review asked for fixes${lookSaid(output)}`} open>
+        <Item
+          key="out"
+          icon={ICONS.note}
+          summary={`The review asked for fixes${lookSaid(output)}`}
+          open
+        >
           <Markdown className="text" text={reviewNotes(output)} />
         </Item>
       )),
   ].filter(Boolean);
 
-  const said = output && (step.role === "build" || step.name === "answer") ? output : null;
+  const said =
+    output && (step.role === "build" || step.name === "answer") ? output : null;
   if (items.length === 0 && !said) return null;
   return (
     <div className="work">
@@ -1191,16 +1804,22 @@ function Checks({ checks }: { checks: CheckResult[] }) {
         {checks.map((c) => (
           <span key={c.command}>
             <b>
-              <i className={c.ok ? "good" : "bad"}>{c.ok ? "✓" : "✗"}</i> {c.command}
-              {c.failedBefore && <span className="was"> · failed before the change too</span>}
+              <i className={c.ok ? "good" : "bad"}>{c.ok ? "✓" : "✗"}</i>{" "}
+              {c.command}
+              {c.failedBefore && (
+                <span className="was"> · failed before the change too</span>
+              )}
               {c.newFailures && (
                 <span className="was">
                   {" "}
-                  · failed before the change too, with {count(c.newFailures.length, "new failure")}
+                  · failed before the change too, with{" "}
+                  {count(c.newFailures.length, "new failure")}
                 </span>
               )}
             </b>
-            {!c.ok && c.output.trim() && <Copy text={c.output.trim()} what={`what ${c.command} printed`} />}
+            {!c.ok && c.output.trim() && (
+              <Copy text={c.output.trim()} what={`what ${c.command} printed`} />
+            )}
             {"\n"}
             {c.ok ? "" : `${c.output.trim()}\n`}
           </span>
@@ -1210,7 +1829,12 @@ function Checks({ checks }: { checks: CheckResult[] }) {
   );
 }
 
-function Item(props: { icon: string; summary: string; open?: boolean; children: ReactNode }) {
+function Item(props: {
+  icon: string;
+  summary: string;
+  open?: boolean;
+  children: ReactNode;
+}) {
   return (
     <details className="wk" open={props.open}>
       <summary>
@@ -1227,16 +1851,31 @@ function Item(props: { icon: string; summary: string; open?: boolean; children: 
   );
 }
 
-function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean }) {
+function Outcome({
+  turn,
+  run,
+  live,
+}: {
+  turn: Turn;
+  run: RunView;
+  live: boolean;
+}) {
   if (live) return null;
   if (turn.cleared)
-    return <p className="outcome">This run's steps were cleared with old data. Receipts still have what it cost.</p>;
+    return (
+      <p className="outcome">
+        This run's steps were cleared with old data. Receipts still have what it
+        cost.
+      </p>
+    );
   if (run.result?.status === "answered") return null;
   const result = run.result;
   let text: string;
   if (turn.error) text = turn.error;
   else if (!result)
-    text = turn.stoppedByYou ? "You stopped this thread." : turn.exit?.error || "The runtime quit before it finished.";
+    text = turn.stoppedByYou
+      ? "You stopped this thread."
+      : turn.exit?.error || "The runtime quit before it finished.";
   else if (result.status === "ready")
     text = result.reason
       ? `Ready to accept. ${result.reason}`
@@ -1248,16 +1887,23 @@ function Outcome({ turn, run, live }: { turn: Turn; run: RunView; live: boolean 
       result.reason ??
       "The review found problems, listed above. Fix it has Shoji work through them. You can also ask for changes of your own, or accept the work as it is.";
   else if (result.status === "planned")
-    text = "Here's the plan. Build it as it is, or say what to change first. Nothing in the project has changed yet.";
+    text =
+      "Here's the plan. Build it as it is, or say what to change first. Nothing in the project has changed yet.";
   else if (result.status === "stopped" && result.limit)
     text = `${result.reason ?? "The provider's limit ran out for now."}${
-      result.limit.resetsAt ? ` It opens again ${opensAt(result.limit.resetsAt)}.` : ""
+      result.limit.resetsAt
+        ? ` It opens again ${opensAt(result.limit.resetsAt)}.`
+        : ""
     }${result.plan ? " The work so far is kept." : ""}`;
   else if (result.status === "stopped")
     text =
       "Shoji stopped before the next step could take this thread past its limit. Keep going gives it more to spend, or you can accept the work as it is.";
   else text = result.reason ?? STATUS[result.status];
-  return <p className={result?.status === "ready" ? "outcome" : "outcome warn"}>{text}</p>;
+  return (
+    <p className={result?.status === "ready" ? "outcome" : "outcome warn"}>
+      {text}
+    </p>
+  );
 }
 
 /** Ctrl+2, Ctrl+3 and Ctrl+4 (⌘ on a Mac) open the side panel on Code, Preview or Terminal, or close it when
@@ -1268,7 +1914,12 @@ function usePanelKeys(setPanel: (change: SetStateAction<Panel>) => void) {
       if (!(MAC ? e.metaKey : e.ctrlKey) || e.altKey || e.shiftKey) return;
       const tab = PANES.find((p) => p.key === e.key)?.id;
       if (e.key === "1") setPanel((now) => ({ ...now, open: false }));
-      else if (tab) setPanel((now) => (now.open && now.tab === tab ? { ...now, open: false } : { open: true, tab }));
+      else if (tab)
+        setPanel((now) =>
+          now.open && now.tab === tab
+            ? { ...now, open: false }
+            : { open: true, tab },
+        );
       else return;
       e.preventDefault();
     };
@@ -1299,7 +1950,8 @@ function useFollow(thread: Thread) {
     const onScroll = () => {
       // Only the person moving up leaves the end. New work landing below also leaves a gap for a moment, and
       // taking that for leaving stopped the follow whenever several steps arrived at once.
-      if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) atEnd.current = true;
+      if (el.scrollHeight - el.scrollTop - el.clientHeight < 80)
+        atEnd.current = true;
       else if (el.scrollTop < top) atEnd.current = false;
       top = el.scrollTop;
       setAway(!atEnd.current);
@@ -1347,8 +1999,10 @@ function checksText(checks: CheckResult[]): string {
   const failed = checks.filter((c) => !c.ok && !c.failedBefore).length;
   const before = checks.filter((c) => c.failedBefore).length;
   if (failed) return `${failed} of ${count(checks.length, "check")} failed`;
-  if (before === checks.length) return `${count(before, "check")} failing, as before`;
-  if (before) return `${count(checks.length - before, "check")} passed, ${before} failing as before`;
+  if (before === checks.length)
+    return `${count(before, "check")} failing, as before`;
+  if (before)
+    return `${count(checks.length - before, "check")} passed, ${before} failing as before`;
   return `${count(checks.length, "check")} passed`;
 }
 
@@ -1356,23 +2010,32 @@ function checksSummary(checks: CheckResult[] | undefined): ReactNode {
   if (!checks?.length) return null;
   const failed = checks.some((c) => !c.ok && !c.failedBefore);
   const before = checks.some((c) => c.failedBefore);
-  return <span className={failed ? "bad" : before ? undefined : "good"}>{checksText(checks)}</span>;
+  return (
+    <span className={failed ? "bad" : before ? undefined : "good"}>
+      {checksText(checks)}
+    </span>
+  );
 }
 
 function readSummary(reads: ToolUse[]): string {
-  const files = unique(reads.filter((t) => t.tool === "read_file").map((t) => t.target));
+  const files = unique(
+    reads.filter((t) => t.tool === "read_file").map((t) => t.target),
+  );
   return files.length ? listSummary("Read", files) : "Looked through the code";
 }
 
 function readTarget(t: ToolUse): string {
   if (t.tool === "search") return `search  ${t.target}`;
-  if (t.tool === "list_files") return `list    ${t.target === "." ? "./" : `${t.target}/`}`;
+  if (t.tool === "list_files")
+    return `list    ${t.target === "." ? "./" : `${t.target}/`}`;
   return `read    ${t.target}`;
 }
 
 function listSummary(verb: string, items: string[]): string {
   const name = items[0].split("/").pop();
-  return items.length > 1 ? `${verb} ${name} and ${items.length - 1} more` : `${verb} ${name}`;
+  return items.length > 1
+    ? `${verb} ${name} and ${items.length - 1} more`
+    : `${verb} ${name}`;
 }
 
 function count(n: number, noun: string): string {

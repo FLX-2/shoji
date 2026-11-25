@@ -322,6 +322,15 @@ struct RunRequest {
     /// Stop once the plan is written, for the person to build or change it.
     #[serde(default)]
     plan_only: bool,
+    /// A small change: skip Scout and Plan, build the task as written, then check and review it.
+    #[serde(default)]
+    quick: bool,
+    /// A lead on the Scout seat's model runs the task, calling the seats it needs. Check and Review still run.
+    #[serde(default)]
+    lead: bool,
+    /// A new thread that starts with a question: Scout answers it and nothing changes.
+    #[serde(default)]
+    answer: bool,
     /// Screenshots and files the person attached to the thread's task.
     #[serde(default)]
     attachments: Vec<String>,
@@ -496,6 +505,17 @@ fn start_run(
     if request.plan_only {
         args.push("--plan-only".into());
     }
+    if request.quick && request.changes.is_none() {
+        args.push("--quick".into());
+    }
+    if request.lead && request.changes.is_none() {
+        args.push("--lead".into());
+    }
+    // A thread can start with a question, which needs no plan.
+    let answering = request.answer && request.changes.is_none();
+    if answering {
+        args.extend(["--question".into(), task.clone()]);
+    }
     args.extend(request.attachments.iter().map(|file| format!("--attach={file}")));
     args.extend(request.allowed_commands.iter().map(|command| format!("--allow={command}")));
     args.extend(private_args(&request.private_files));
@@ -523,7 +543,8 @@ fn start_run(
         match changes.kind() {
             "build" => args.push("--build".into()),
             "rebuild" => args.extend(["--build".into(), "--fresh".into()]),
-            "review" => args.push("--review".into()),
+            "review" if changes.notes.is_empty() => args.push("--review".into()),
+            "review" => args.extend(["--review".into(), "--review-notes".into(), changes.notes]),
             kind => args.extend([format!("--{kind}"), changes.notes]),
         }
     }
@@ -533,7 +554,7 @@ fn start_run(
         Some((thread, kind)) => Ok((thread, kind)),
         None => ledger.start_thread(&task, &repo, &branch, &stack, stamp).and_then(|thread| {
             ledger.note_workdir(thread, &dir)?;
-            Ok((thread, "task".to_string()))
+            Ok((thread, if answering { "question" } else { "task" }.to_string()))
         }),
     }
     .and_then(|(thread, kind)| {
@@ -771,6 +792,15 @@ fn answer_ask(run: State<Run>, id: u64, allow: bool) -> Result<(), String> {
         .child
         .write(format!("{{\"allow\":{allow}}}\n").as_bytes())
         .map_err(|e| e.to_string())
+}
+
+/// Hands what the person wrote to a running thread to the step that's working, which reads it at its next turn.
+#[tauri::command]
+fn steer_run(run: State<Run>, id: u64, text: String) -> Result<(), String> {
+    let mut live = run.live.lock().unwrap();
+    let going = live.get_mut(&id).ok_or("That thread isn't running.")?;
+    let line = format!("{}\n", serde_json::json!({ "steer": text }));
+    going.child.write(line.as_bytes()).map_err(|e| e.to_string())
 }
 
 /// Ends a run's runtime and everything the runtime started: a check that's mid-run, the dev server Build
@@ -1425,6 +1455,7 @@ pub fn run() {
             start_notes,
             stop_run,
             answer_ask,
+            steer_run,
             changes,
             project_files,
             slash::project_commands,

@@ -18,6 +18,13 @@ export interface Prefs {
   dailyLimit: number;
   /** Threads pause after the plan, for the person to build it or change it. */
   planFirst: boolean;
+  /** While a run works, Enter keeps a message for after the run, and Alt+Enter hands it to the working step.
+   *  Off, the other way round. */
+  queueFirst: boolean;
+  /** Shoji picks the route for each message from its words. Off, the person picks it. */
+  routeForMe: boolean;
+  /** The ways a thread's work moves on are chips in the box, rather than buttons under the conversation. */
+  nextStepsInBox: boolean;
   /** Darkroom, paper, or whichever the system uses. */
   theme: ThemeId;
   /** Interface motion. Off removes every transition and holds the background still. */
@@ -104,6 +111,9 @@ export const DEFAULT_PREFS: Prefs = {
   cap: 0.5,
   dailyLimit: 1,
   planFirst: true,
+  queueFirst: false,
+  routeForMe: true,
+  nextStepsInBox: true,
   theme: "dark",
   motion: true,
   field: "code",

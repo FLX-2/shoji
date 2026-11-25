@@ -24,6 +24,8 @@ export const STEP_NAMES: Record<string, string> = {
   "fix-2": "Second fix",
   review: "Review",
   notes: "Project notes",
+  lead: "Lead",
+  answer: "Answer",
 };
 
 /** The most step lines a card holds before the rest are counted. */

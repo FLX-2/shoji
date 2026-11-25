@@ -22,6 +22,8 @@ export interface StepView {
   checks?: CheckResult[];
   /** Set when the step moved up to a stronger model. */
   escalation?: { from: ModelId; to: ModelId; reason: string };
+  /** What the person wrote to the run that this step took in, in order. */
+  steers?: string[];
   cost: number;
 }
 
@@ -39,6 +41,8 @@ export interface RunView {
   compare?: { running: boolean; pages: ComparedPage[]; problem?: string };
   /** The name Scout gave the task, on its brief's TITLE: line. */
   title?: string;
+  /** How many of the person's steers a step has taken in so far. */
+  heard: number;
 }
 
 /** The name on a brief's TITLE: line, as the ledger reads it too. */
@@ -77,6 +81,7 @@ export function foldRun(events: RuntimeEvent[]): RunView {
   let title: string | undefined;
   const unreached: { server: string; error: string }[] = [];
   let compare: RunView["compare"];
+  let heard = 0;
 
   for (const event of events) {
     switch (event.type) {
@@ -107,6 +112,12 @@ export function foldRun(events: RuntimeEvent[]): RunView {
       case "checks": {
         const step = last(event.step);
         if (step) step.checks = event.results;
+        break;
+      }
+      case "steered": {
+        heard++;
+        const step = last(event.step);
+        if (step) step.steers = [...(step.steers ?? []), event.said];
         break;
       }
       case "escalate":
@@ -150,6 +161,7 @@ export function foldRun(events: RuntimeEvent[]): RunView {
     steps,
     result,
     cost,
+    heard,
     ...(asking !== undefined && { asking, ...(askingTool && { askingTool }) }),
     ...(unreached.length && { unreached }),
     ...(compare && { compare }),
@@ -173,6 +185,8 @@ export function stepLabel(steps: StepView[], index: number): string {
       return tense("Making your changes", "Made your changes");
     case "answer":
       return tense("Reading the work to answer", "Answered");
+    case "lead":
+      return tense("Leading the work", "Led the work");
     case "review":
       return before.some((s) => s.name === "review")
         ? tense("Reviewing again", "Reviewed again")

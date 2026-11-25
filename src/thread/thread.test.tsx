@@ -221,8 +221,8 @@ describe("a thread in the app", () => {
     expect(document.querySelector(".app")?.getAttribute("data-state")).toBe("idle");
     expect(screen.getByText("You stopped this thread.")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
-    // Nothing was planned yet, so there's no work to change.
-    expect(screen.queryByRole("textbox", { name: "Changes" })).toBeNull();
+    // The box stays open after a stop, to say what's next.
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeTruthy();
   });
 
   it("leaves the cost off the review bar when costs are hidden", async () => {
@@ -241,9 +241,10 @@ describe("a thread in the app", () => {
     expect(screen.getByText(/^Ready to accept\. The checks pass/)).toBeTruthy();
     expect(document.querySelector(".review .sum")?.textContent).toBe("1 check passed · $0.12 in all");
 
-    fireEvent.click(screen.getByRole("radio", { name: "Request changes" }));
-    const notes = screen.getByRole("textbox", { name: "Changes" });
+    const notes = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(notes, { target: { value: "Make the badge smaller" } });
+    // The words read as a change, built on top of the work, and the box says so before it's sent.
+    expect(document.querySelector(".chip.route")?.textContent).toBe("Change · Build on Sonnet 5.5");
     await act(async () => {
       fireEvent.keyDown(notes, { key: "Enter" });
     });
@@ -259,23 +260,37 @@ describe("a thread in the app", () => {
   it("keeps the box at the bottom while running, with Stop inside it", async () => {
     const fake = await startThread();
     fake.emit(running("build", "build", SONNET));
-    const box = screen.getByRole("textbox", { name: "What's next" });
+    const box = screen.getByRole("textbox", { name: "Message" });
     const stop = screen.getByRole("button", { name: "Stop" });
     expect(stop.closest(".composer")).toBe(box.closest(".composer"));
-    // What's written waits for the run to end: there's nothing to send it with yet.
-    fireEvent.change(box, { target: { value: "Make the badge smaller" } });
+    expect(document.querySelector(".composer .runkeys")?.textContent).toBe("Enter steers Build · Alt Enter queues for after");
+
+    // Enter tells the working step at its next turn, without stopping the run.
+    fireEvent.change(box, { target: { value: "Keep the badge lowercase" } });
     await act(async () => {
       fireEvent.keyDown(box, { key: "Enter" });
     });
+    expect(fake.calls.steers).toEqual([{ run: 1, text: "Keep the badge lowercase" }]);
     expect(fake.calls.starts.length).toBe(1);
+    expect(document.querySelector(".tray .msg.on")?.textContent).toBe("For Build: “Keep the badge lowercase”");
+    fake.emit({ type: "steered", step: "build", said: "Keep the badge lowercase" });
+    expect(document.querySelector(".tray")).toBeNull();
+    expect(document.querySelector(".steered")?.textContent).toBe("You, while it workedKeep the badge lowercase");
 
+    // Alt+Enter keeps a message for after the run.
+    fireEvent.change(box, { target: { value: "Make the badge smaller" } });
+    await act(async () => {
+      fireEvent.keyDown(box, { key: "Enter", altKey: true });
+    });
+    expect(fake.calls.steers.length).toBe(1);
+    expect(document.querySelector(".tray .msg:not(.on)")?.textContent).toBe("Next: “Make the badge smaller”×");
+
+    // When the run ends by itself, what waited goes on as the next message, by the route its words take.
     fake.emit(result("ready", 0.12));
-    fake.exit(0);
-    expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
-    // The same box carries on, now for changes, with what was written still in it.
-    const notes = screen.getByRole("textbox", { name: "Changes" });
-    expect((notes as HTMLTextAreaElement).value).toBe("Make the badge smaller");
-    expect(screen.getByRole("radio", { name: "Request changes" }).getAttribute("aria-checked")).toBe("true");
+    await act(async () => fake.exit(0));
+    expect(fake.calls.starts[1]).toMatchObject({ changes: { notes: "Make the badge smaller" } });
+    expect(screen.getByText("Make the badge smaller").className).toBe("umsg");
+    expect(document.querySelector(".tray")).toBeNull();
   });
 
   it("accepts the thread's work as one commit on its branch", async () => {
@@ -302,12 +317,10 @@ describe("a thread in the app", () => {
         thread: 1,
       },
     ]);
-    expect(document.querySelector(".review")?.textContent).toBe(
-      "Push and open PRCommitted a1b2c3d on shoji/threadCarry on in a new thread$0.12 in all",
-    );
-    expect(screen.queryByRole("radio", { name: "Request changes" })).toBeNull();
-    // Committed work still takes questions.
-    expect(screen.getByRole("textbox", { name: "Question" })).toBeTruthy();
+    expect(document.querySelector(".review")?.textContent).toBe("Committed a1b2c3d on shoji/thread$0.12 in all");
+    // The next steps sit in the box, which stays open: committed work can still change, in the same thread.
+    expect(document.querySelector(".composer .next")?.textContent).toBe("Push and open PRCarry on in a new thread");
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeTruthy();
     // Nothing is pushed until the person presses the button.
     expect(fake.calls.pushes).toEqual([]);
 
@@ -342,6 +355,124 @@ describe("a thread in the app", () => {
     );
     expect(screen.getByText("Pushed shoji/thread to origin")).toBeTruthy();
     expect(screen.queryByText(/terminal prompts disabled/)).toBeNull();
+  });
+
+  it("carries committed work on in the same thread, which waits to be committed again", async () => {
+    const fake = await startThread();
+    fake.project.diff = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b\n";
+    fake.emit(result("ready", 0.12));
+    await act(async () => fake.exit(0));
+    fake.ledger.push(acceptedRecord());
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("button", { name: "Accept and commit" }));
+    });
+    expect(document.querySelector(".review")?.textContent).toContain("Committed a1b2c3d");
+
+    const box = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(box, { target: { value: "Make the badge smaller" } });
+    await act(async () => {
+      fireEvent.keyDown(box, { key: "Enter" });
+    });
+    expect(fake.calls.starts[1]).toMatchObject({
+      changes: { thread: 1, notes: "Make the badge smaller", branch: "shoji/thread" },
+    });
+    fake.project.diff = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-b\n+c\n";
+    fake.emit(result("ready", 0.05));
+    await act(async () => fake.exit(0));
+    expect(document.querySelector(".review")?.textContent).not.toContain("Committed");
+    expect(await screen.findByRole("button", { name: "Accept and commit" })).toBeTruthy();
+  });
+
+  it("hands a message to the seat named first, on the model named with it, for that message only", async () => {
+    const fake = await startThread();
+    fake.emit(result("ready", 0.12));
+    await act(async () => fake.exit(0));
+    const box = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(box, { target: { value: "@review on opus: is the toggle keyboard friendly?" } });
+    expect(document.querySelector(".chip.route")?.textContent).toBe("Review again · Review on Opus 5.5");
+    await act(async () => {
+      fireEvent.keyDown(box, { key: "Enter" });
+    });
+    expect(fake.calls.starts[1].changes).toMatchObject({ kind: "review", notes: "is the toggle keyboard friendly?" });
+    expect(fake.calls.starts[1].stack).toEqual({ ...STACKS.balanced, review: { ...STACKS.balanced.review, model: OPUS } });
+    fake.emit(result("ready", 0.01));
+    await act(async () => fake.exit(0));
+    // The next message runs on the thread's own stack again.
+    fireEvent.change(box, { target: { value: "Make the badge smaller" } });
+    await act(async () => {
+      fireEvent.keyDown(box, { key: "Enter" });
+    });
+    expect(fake.calls.starts[2].stack).toEqual(STACKS.balanced);
+  });
+
+  it("takes a route picked in the box over the one the words suggest", async () => {
+    const fake = await startThread();
+    fake.emit(result("ready", 0.12));
+    await act(async () => fake.exit(0));
+    const box = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(box, { target: { value: "The badge looks too big" } });
+    expect(document.querySelector(".chip.route.guessed")?.textContent).toBe("Change · Build on Sonnet 5.5");
+    fireEvent.click(document.querySelector(".chip.route")!);
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Answer/ }));
+    expect(document.querySelector(".chip.route:not(.guessed)")?.textContent).toBe("Answer · Scout on Haiku 5.5");
+    await act(async () => {
+      fireEvent.keyDown(box, { key: "Enter" });
+    });
+    expect(fake.calls.starts[1].changes).toMatchObject({ kind: "question", notes: "The badge looks too big" });
+  });
+
+  it("does a next step said in words, as its chip does", async () => {
+    const fake = await startThread();
+    fake.emit(running("plan", "plan", OPUS), done("plan", "plan", OPUS, "1. Add a billing toggle."));
+    fake.emit(result("planned", 0.04));
+    fake.exit(0);
+    const box = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(box, { target: { value: "go ahead" } });
+    expect(document.querySelector(".chip.route")?.textContent).toBe("Build it");
+    await act(async () => {
+      fireEvent.keyDown(box, { key: "Enter" });
+    });
+    expect(fake.calls.starts[1]).toMatchObject({ changes: { kind: "build", plan: "1. Add a billing toggle." } });
+  });
+
+  it("queues with Enter and steers with Alt+Enter when Settings says so", async () => {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", cap: 0.5, queueFirst: true }));
+    const fake = await startThread();
+    fake.emit(running("build", "build", SONNET));
+    expect(document.querySelector(".composer .runkeys")?.textContent).toBe("Enter queues for after · Alt Enter steers Build");
+    const box = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(box, { target: { value: "Then add a FAQ" } });
+    await act(async () => {
+      fireEvent.keyDown(box, { key: "Enter" });
+    });
+    expect(fake.calls.steers).toEqual([]);
+    fireEvent.change(box, { target: { value: "Use the old client" } });
+    await act(async () => {
+      fireEvent.keyDown(box, { key: "Enter", altKey: true });
+    });
+    expect(fake.calls.steers).toEqual([{ run: 1, text: "Use the old client" }]);
+    // A run the person stops keeps the queue for them to send.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    });
+    fake.emit(result("stopped", 0.1));
+    await act(async () => fake.exit(null));
+    expect(fake.calls.starts).toHaveLength(1);
+    expect(document.querySelector(".tray .msg")?.textContent).toBe("Next: “Then add a FAQ”×");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Send it now" }));
+    });
+    expect(fake.calls.starts[1]).toMatchObject({ changes: { notes: "Then add a FAQ" } });
+  });
+
+  it("puts the next steps under the conversation when Settings takes them out of the box", async () => {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", cap: 0.5, nextStepsInBox: false }));
+    const fake = await startThread();
+    fake.emit(running("plan", "plan", OPUS), done("plan", "plan", OPUS, "1. Add a billing toggle."));
+    fake.emit(result("planned", 0.04));
+    fake.exit(0);
+    expect(document.querySelector(".composer .next")).toBeNull();
+    expect(screen.getByRole("button", { name: "Build it" }).className).toBe("btn solid");
   });
 
   it("leaves the receipt out of the pull request when Settings says so", async () => {
@@ -387,9 +518,9 @@ describe("a thread in the app", () => {
     expect(screen.getByText("The plan").closest("details")?.open).toBe(true);
     expect(screen.queryByRole("button", { name: "Accept and commit" })).toBeNull();
 
-    fireEvent.click(screen.getByRole("radio", { name: "Change the plan" }));
-    const notes = screen.getByRole("textbox", { name: "Plan changes" });
+    const notes = screen.getByRole("textbox", { name: "Message" });
     fireEvent.change(notes, { target: { value: "Keep the monthly price visible" } });
+    expect(document.querySelector(".chip.route")?.textContent).toBe("Rethink the plan · Plan on Opus 5.5");
     await act(async () => {
       fireEvent.keyDown(notes, { key: "Enter" });
     });
@@ -409,6 +540,57 @@ describe("a thread in the app", () => {
     });
     expect(fake.calls.starts[2].planOnly).toBeUndefined();
     expect(screen.getByText("Build it").className).toBe("umsg");
+  });
+
+  it("takes notes on lines of the plan, and plans again from them", async () => {
+    const fake = await startThread();
+    const plan = "1. Add a billing toggle to `Pricing.tsx`.\n2. Show yearly prices.";
+    fake.emit(running("plan", "plan", OPUS), done("plan", "plan", OPUS, plan));
+    fake.emit(call("plan", "plan", OPUS, 0.04), result("planned", 0.04, { plan }));
+    fake.exit(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Note on “Add a billing toggle to Pricing.tsx.”" }));
+    const box = screen.getByRole("textbox", { name: "Note on this line" });
+    fireEvent.change(box, { target: { value: "Put it above the cards" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(screen.getByText("Put it above the cards")).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Note on this line" })).toBeNull();
+    // A second note, then one taken back.
+    fireEvent.click(screen.getByRole("button", { name: "Note on “Show yearly prices.”" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Note on this line" }), { target: { value: "Monthly too" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add note" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove the note “Monthly too”" }));
+    expect(screen.queryByText("Monthly too")).toBeNull();
+
+    // The notes move the work on: plan again with them, or build the plan as it is.
+    expect(screen.getByRole("button", { name: "Build it as it is" })).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Plan again with 1 note" }));
+    });
+    expect(fake.calls.starts[1]).toMatchObject({
+      planOnly: true,
+      changes: { kind: "replan", notes: "Notes on lines of the plan:\n- On “Add a billing toggle to Pricing.tsx.”: Put it above the cards" },
+    });
+  });
+
+  it("sends the notes on the plan with what the person writes", async () => {
+    const fake = await startThread();
+    const plan = "1. Add a billing toggle.";
+    fake.emit(running("plan", "plan", OPUS), done("plan", "plan", OPUS, plan));
+    fake.emit(call("plan", "plan", OPUS, 0.04), result("planned", 0.04, { plan }));
+    fake.exit(0);
+    fireEvent.click(screen.getByRole("button", { name: "Note on “Add a billing toggle.”" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Note on this line" }), { target: { value: "As a switch" } });
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Note on this line" }), { key: "Enter" });
+    const message = screen.getByRole("textbox", { name: "Message" });
+    fireEvent.change(message, { target: { value: "Keep the monthly price visible" } });
+    await act(async () => {
+      fireEvent.keyDown(message, { key: "Enter" });
+    });
+    expect(fake.calls.starts[1].changes).toMatchObject({
+      kind: "replan",
+      notes: "Notes on lines of the plan:\n- On “Add a billing toggle.”: As a switch\n\nKeep the monthly price visible",
+    });
   });
 
   it("builds straight away when the plan check is off on Home", async () => {
@@ -432,7 +614,7 @@ describe("a thread in the app", () => {
 
     expect(screen.getByText(/^Shoji stopped before the next step could take this thread past its limit/)).toBeTruthy();
     const keep = screen.getByRole("button", { name: "Keep going, up to $0.50 more" });
-    expect(keep.className).toBe("btn solid");
+    expect(keep.className).toBe("chip next lead");
     await act(async () => {
       fireEvent.click(keep);
     });
@@ -475,7 +657,7 @@ describe("a thread in the app", () => {
     expect(screen.getByText(/^The review found problems/)).toBeTruthy();
     expect(screen.getByText("· failed before the change too")).toBeTruthy();
     const fix = screen.getByRole("button", { name: "Fix it, up to $0.50 more" });
-    expect(fix.className).toBe("btn solid");
+    expect(fix.className).toBe("chip next lead");
     await act(async () => {
       fireEvent.click(fix);
     });
