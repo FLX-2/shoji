@@ -53,11 +53,13 @@ export function changedFiles(thread: Thread): { path: string; how?: "new" | "rem
   return [...files].map(([path, how]) => (how ? { path, how } : { path }));
 }
 
-/** The cost, in one short line at the end: what the thread spent on which models, what one model would have
- *  cost, and Review's verdict. */
-function costLine(record: LedgerThread): string | null {
-  const r = receipt(record);
-  if (!r.lines.length) return null;
+const MADE_WITH = `Made with [Shoji](${SITE})`;
+
+/** The last line: Made with Shoji, and with the cost, what the thread spent on which models, what one model
+ *  would have cost, and Review's verdict. */
+function lastLine(record: LedgerThread | null, withCost: boolean): string {
+  const r = withCost && record ? receipt(record) : null;
+  if (!record || !r?.lines.length) return MADE_WITH;
   const models = [...new Set(r.lines.map((line) => modelLabel(line.model)))];
   const named = models.length > 1 ? `${models.slice(0, -1).join(", ")} and ${models.at(-1)}` : models[0];
   const compared = cardOf(record).compared;
@@ -65,22 +67,22 @@ function costLine(record: LedgerThread): string | null {
     `${dollars(r.total)} on ${named}`,
     compared && `${compared[0]}: ${compared[1]}`,
     verdict(record),
-    `Made with [Shoji](${SITE})`,
+    MADE_WITH,
   ]
     .filter(Boolean)
     .join(" · ");
 }
 
 /**
- * A pull request's description: what changed, in the builder's words, then the files it changed, and with
- * `withCost`, one short line at the end with what it cost. Null when there's nothing to say, so the host
- * fills it in from the commit.
+ * A pull request's description: what changed, in the builder's words, then the files it changed, and one
+ * short line at the end that says it was made with Shoji, and with `withCost`, what it cost. Null when
+ * there's nothing to say, so the host fills it in from the commit.
  */
 export function prBody(thread: Thread, record: LedgerThread | null, withCost: boolean): string | null {
   const said = summaries(thread);
   const files = changedFiles(thread);
-  const cost = withCost && record ? costLine(record) : null;
-  if (!said.length && !files.length) return cost && `<sub>${cost}</sub>`;
+  const last = lastLine(record, withCost);
+  if (!said.length && !files.length) return last === MADE_WITH ? null : `<sub>${last}</sub>`;
   const listed = files
     .slice(0, MOST_FILES)
     .map((f) => `- \`${f.path}\`${f.how ? ` (${f.how})` : ""}`);
@@ -88,7 +90,9 @@ export function prBody(thread: Thread, record: LedgerThread | null, withCost: bo
   return [
     ...(said.length ? [cut(said.join("\n\n")), ""] : []),
     ...(files.length ? ["### Files changed", "", ...listed, ""] : []),
-    ...(cost ? ["---", "", `<sub>${cost}</sub>`, ""] : []),
+    "---",
+    "",
+    `<sub>${last}</sub>`,
   ]
     .join("\n")
     .trimEnd();

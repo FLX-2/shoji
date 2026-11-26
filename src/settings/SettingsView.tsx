@@ -301,10 +301,10 @@ export function SettingsView({
                   <>
                     <PrivateRow prefs={prefs} onChange={onChange} />
                     <SwitchRow
-                      label="Cost in pull requests"
-                      description="Push and open PR describes what changed and lists the files, for you to change before you open it. With this on, one short line at the end adds what it cost, on which models, and Review's verdict."
-                      on={prefs.receiptInPR}
-                      onToggle={() => onChange({ receiptInPR: !prefs.receiptInPR })}
+                      label="Cost in commits and pull requests"
+                      description="Push and open PR describes what changed and lists the files, for you to change before you open it, and ends with Made with Shoji. With this on, that last line adds what the work cost, on which models, and Review's verdict, and each commit ends with a Shoji-Cost line."
+                      on={prefs.costInGit}
+                      onToggle={() => onChange({ costInGit: !prefs.costInGit })}
                     />
                     <SwitchRow
                       label="Keep models current"

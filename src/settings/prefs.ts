@@ -40,8 +40,9 @@ export interface Prefs {
   density: "comfortable" | "compact";
   /** The bar along the bottom of the window. */
   statusBar: boolean;
-  /** Push and open PR ends the pull request's description with a short line on what the thread cost. */
-  receiptInPR: boolean;
+  /** Commits and pull requests say what the thread cost. Off by default: the cost is for the app, and a
+   *  project's history is for the people who read it. (It replaced `receiptInPR`, which was on by default.) */
+  costInGit: boolean;
   /** What threads cost, shown as they run and on the review bar. */
   showCosts: boolean;
   /** Which model takes each step, shown beside it. */
@@ -123,7 +124,7 @@ export const DEFAULT_PREFS: Prefs = {
   density: "comfortable",
   statusBar: true,
   showCosts: true,
-  receiptInPR: true,
+  costInGit: false,
   showModels: true,
   autoPanel: true,
   setupDone: false,
