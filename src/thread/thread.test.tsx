@@ -337,7 +337,7 @@ describe("a thread in the app", () => {
         branch: "shoji/thread",
         message:
           "Add an annual toggle to the pricing cards\n\n" +
-          "Shoji-Models: Opus 5.5 plan; Sonnet 5.5 build; Haiku 5.5 review\nShoji-Cost: $0.1200",
+          "Shoji-Models: Opus 5.5 plan; Sonnet 5.5 build; Haiku 5.5 review",
         thread: 1,
       },
     ]);
@@ -361,7 +361,7 @@ describe("a thread in the app", () => {
       { repo: "/work/pricing-page", branch: "shoji/thread" },
       { repo: "/work/pricing-page", branch: "shoji/thread" },
     ]);
-    // The pull request's description leads with what changed and the files, and ends with one line on the cost.
+    // The pull request's description leads with what changed and the files, and ends with Made with Shoji, no cost.
     expect(fake.calls.pushes[1].body).toBe(
       [
         "Added a monthly and annual toggle above the pricing cards.",
@@ -372,7 +372,7 @@ describe("a thread in the app", () => {
         "",
         "---",
         "",
-        "<sub>$0.120 on Opus 5.5 and Sonnet 5.5 · Review passed · Made with [Shoji](https://shoji-app.vercel.app/)</sub>",
+        "<sub>Made with [Shoji](https://shoji-app.vercel.app/)</sub>",
       ].join("\n"),
     );
     expect(screen.getByText("Pushed shoji/thread to origin")).toBeTruthy();
@@ -497,8 +497,8 @@ describe("a thread in the app", () => {
     expect(screen.getByRole("button", { name: "Build it" }).className).toBe("btn solid");
   });
 
-  it("leaves the cost out of the pull request when Settings says so", async () => {
-    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", cap: 0.5, receiptInPR: false }));
+  it("puts the cost in the commit and the pull request when Settings says so", async () => {
+    localStorage.setItem("shoji.prefs", JSON.stringify({ repo: "/work/pricing-page", cap: 0.5, costInGit: true }));
     const fake = await startThread();
     fake.project.diff = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b\n";
     fake.emit(result("ready", 0.12));
@@ -510,7 +510,9 @@ describe("a thread in the app", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Push and open PR" }));
     });
-    expect(fake.calls.pushes).toEqual([{ repo: "/work/pricing-page", branch: "shoji/thread", body: null }]);
+    expect(fake.calls.commits[0].message).toMatch(/\nShoji-Cost: \$0\.1200$/);
+    expect(fake.calls.pushes).toHaveLength(1);
+    expect(fake.calls.pushes[0].body).toMatch(/^<sub>\$.+ · Made with \[Shoji\]\(https:\/\/shoji-app\.vercel\.app\/\)<\/sub>$/);
   });
 
   it("says why a commit failed and lets it be tried again", async () => {

@@ -81,8 +81,8 @@ export function threadCost(thread: Thread): number {
   return thread.turns.reduce((sum, turn) => sum + foldRun(turn.events).cost, 0);
 }
 
-/** The commit's message: the task, then which models did the work and what it cost. */
-export function commitMessage(thread: Thread): string {
+/** The commit's message: the task, then which models did the work, and with `withCost`, what it cost. */
+export function commitMessage(thread: Thread, withCost = false): string {
   const [subject, ...body] = thread.task.trim().split("\n");
   const roles = new Map<string, Set<string>>();
   for (const turn of thread.turns) {
@@ -92,7 +92,7 @@ export function commitMessage(thread: Thread): string {
     }
   }
   const models = [...roles].map(([label, did]) => `${label} ${[...did].join(", ")}`).join("; ");
-  const trailers = [models && `Shoji-Models: ${models}`, `Shoji-Cost: $${threadCost(thread).toFixed(4)}`];
+  const trailers = [models && `Shoji-Models: ${models}`, withCost && `Shoji-Cost: $${threadCost(thread).toFixed(4)}`];
   return [subject.trim(), body.join("\n").trim(), trailers.filter(Boolean).join("\n")].filter(Boolean).join("\n\n");
 }
 
@@ -461,10 +461,10 @@ export function useThreads(bridge: Bridge, allowedIn: (repo: string) => string[]
   );
 
   /** Accepts all of the thread's work as one commit on its branch. */
-  const commit = useCallback(async () => {
+  const commit = useCallback(async (withCost = false) => {
     if (!shown?.thread.branch || shown.thread.id === undefined) return;
     const { key, thread } = shown;
-    const sha = await bridge.commitThread(thread.repo, thread.branch!, commitMessage(thread), thread.id!);
+    const sha = await bridge.commitThread(thread.repo, thread.branch!, commitMessage(thread, withCost), thread.id!);
     update(key, (t) => ({ ...t, committed: sha }));
   }, [bridge, shown, update]);
 

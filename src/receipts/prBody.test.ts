@@ -88,9 +88,21 @@ describe("a pull request's description", () => {
     );
   });
 
-  it("leaves the cost out when Settings says so", () => {
+  it("leaves the cost out unless Settings says so, and still says it was made with Shoji", () => {
     const thread = live(ran("Fixed the basket total.", diff(["src/basket.ts", "changed"])));
-    expect(prBody(thread, record(), false)).toBe(["Fixed the basket total.", "", "### Files changed", "", "- `src/basket.ts`"].join("\n"));
+    expect(prBody(thread, record(), false)).toBe(
+      [
+        "Fixed the basket total.",
+        "",
+        "### Files changed",
+        "",
+        "- `src/basket.ts`",
+        "",
+        "---",
+        "",
+        "<sub>Made with [Shoji](https://shoji-app.vercel.app/)</sub>",
+      ].join("\n"),
+    );
   });
 
   it("sums up every run that changed the work, and lists each file once, as the last run left it", () => {
@@ -112,7 +124,7 @@ describe("a pull request's description", () => {
     const many = Array.from({ length: 45 }, (_, i): [string, "changed"] => [`src/f${i}.ts`, "changed"]);
     const body = prBody(live(ran("Renamed the helpers.", diff(...many))), null, false)!;
     expect(body.split("\n").filter((l) => l.startsWith("- `"))).toHaveLength(30);
-    expect(body.endsWith("- and 15 more")).toBe(true);
+    expect(body).toContain("- and 15 more\n");
     expect(prBody(live([]), null, false)).toBeNull();
   });
 });

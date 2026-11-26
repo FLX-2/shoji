@@ -1110,12 +1110,12 @@ function App({ bridge: given = tauriBridge }: { bridge?: Bridge }) {
                       withinDay("Doing this step again", prefs.cap, () => redo(role, model, prefs.cap))
                     }
                     onQuestion={sending(question)}
-                    onCommit={commit}
+                    onCommit={() => commit(prefs.costInGit)}
                     onPush={() =>
                       bridge.pushThread(
                         thread.repo,
                         thread.branch!,
-                        prBody(thread, shownRecord ?? null, prefs.receiptInPR),
+                        prBody(thread, shownRecord ?? null, prefs.costInGit),
                       )
                     }
                     onAnswer={(command, allow, always) => {
