@@ -136,11 +136,11 @@ Pick the installer for your system. Each link downloads it straight away.
 <!-- downloads: scripts/packages.mjs writes this table when a release is published -->
 | System | Download |
 | --- | --- |
-| macOS 12 or later | [Apple silicon](https://github.com/FLX-2/shoji/releases/download/v0.5.1/Shoji_0.5.1_aarch64.dmg) (M chips) · [Intel](https://github.com/FLX-2/shoji/releases/download/v0.5.1/Shoji_0.5.1_x64.dmg) |
-| Windows 10 or 11 | [Installer](https://github.com/FLX-2/shoji/releases/download/v0.5.1/Shoji_0.5.1_x64-setup.exe) · [.msi](https://github.com/FLX-2/shoji/releases/download/v0.5.1/Shoji_0.5.1_x64_en-US.msi) |
-| Linux | [AppImage](https://github.com/FLX-2/shoji/releases/download/v0.5.1/Shoji_0.5.1_amd64.AppImage) · [.deb](https://github.com/FLX-2/shoji/releases/download/v0.5.1/Shoji_0.5.1_amd64.deb) · [.rpm](https://github.com/FLX-2/shoji/releases/download/v0.5.1/Shoji-0.5.1-1.x86_64.rpm) |
+| macOS 12 or later | [Apple silicon](https://github.com/FLX-2/shoji/releases/download/v0.5.2/Shoji_0.5.2_aarch64.dmg) (M chips) · [Intel](https://github.com/FLX-2/shoji/releases/download/v0.5.2/Shoji_0.5.2_x64.dmg) |
+| Windows 10 or 11 | [Installer](https://github.com/FLX-2/shoji/releases/download/v0.5.2/Shoji_0.5.2_x64-setup.exe) · [.msi](https://github.com/FLX-2/shoji/releases/download/v0.5.2/Shoji_0.5.2_x64_en-US.msi) |
+| Linux | [AppImage](https://github.com/FLX-2/shoji/releases/download/v0.5.2/Shoji_0.5.2_amd64.AppImage) · [.deb](https://github.com/FLX-2/shoji/releases/download/v0.5.2/Shoji_0.5.2_amd64.deb) · [.rpm](https://github.com/FLX-2/shoji/releases/download/v0.5.2/Shoji-0.5.2-1.x86_64.rpm) |
 
-This is Shoji 0.5.1. Every version is on the [releases page](https://github.com/FLX-2/shoji/releases).
+This is Shoji 0.5.2. Every version is on the [releases page](https://github.com/FLX-2/shoji/releases).
 <!-- /downloads -->
 
 **The first time you open it:** the builds aren't signed yet, so your system asks once.

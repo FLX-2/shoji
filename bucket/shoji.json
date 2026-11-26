@@ -1,13 +1,13 @@
 {
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Plans, builds and checks code changes with a team of AI models, each chosen for its step.",
   "homepage": "https://shoji-app.vercel.app",
   "license": "MIT",
   "notes": "Shoji came from Scoop, so update it with: scoop update shoji",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/FLX-2/shoji/releases/download/v0.5.1/Shoji_0.5.1_x64_en-US.msi",
-      "hash": "34618af8fb891de2cc9758d73a1b4c55cfd1d5747bb967d8de3e51ca21f74600",
+      "url": "https://github.com/FLX-2/shoji/releases/download/v0.5.2/Shoji_0.5.2_x64_en-US.msi",
+      "hash": "623c30ed038ed0576b0a1e6433c4ebd6851660f911c5a62b4c48f7cdfc889271",
       "extract_dir": "PFiles\\Shoji"
     }
   },
